@@ -1,0 +1,11 @@
+# Python Ön Bellek Dosyaları
+__pycache__/
+*.py[cod]
+
+# Log Dosyaları
+*.log
+grid_robot_log.txt
+
+# Sanal Ortamlar
+venv/
+.venv/
