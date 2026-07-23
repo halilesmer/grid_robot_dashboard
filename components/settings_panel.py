@@ -2,9 +2,9 @@
 import streamlit as st
 from constants.tooltips import SETTINGS_TOOLTIPS
 
-def render_settings_panel():
+def render_settings_panel(current_settings):
     """
-    Grid ve Risk Ayarları Form Bileşeni (Tooltip Destekli)
+    JSON'dan beslenen Grid ve Risk Ayarları Form Bileşeni
     """
     st.subheader("⚙️ Robot Parametreleri")
     
@@ -15,22 +15,22 @@ def render_settings_panel():
             st.markdown("##### 📐 Grid Ayarları")
             grid_step = st.number_input(
                 "Grid Adımı (GRID_STEP)", 
-                value=0.05, step=0.01, format="%.2f", 
+                value=float(current_settings["GRID_STEP"]), step=0.01, format="%.2f", 
                 help=SETTINGS_TOOLTIPS["GRID_STEP"]
             )
             take_profit = st.number_input(
                 "Kâr Al (TAKE_PROFIT)", 
-                value=0.05, step=0.01, format="%.2f", 
+                value=float(current_settings["TAKE_PROFIT"]), step=0.01, format="%.2f", 
                 help=SETTINGS_TOOLTIPS["TAKE_PROFIT"]
             )
             levels_below = st.number_input(
                 "Alt Seviye Sayısı (LEVELS_BELOW)", 
-                value=6, step=1, 
+                value=int(current_settings["LEVELS_BELOW"]), step=1, 
                 help=SETTINGS_TOOLTIPS["LEVELS_BELOW"]
             )
             levels_above = st.number_input(
                 "Üst Seviye Sayısı (LEVELS_ABOVE)", 
-                value=6, step=1, 
+                value=int(current_settings["LEVELS_ABOVE"]), step=1, 
                 help=SETTINGS_TOOLTIPS["LEVELS_ABOVE"]
             )
 
@@ -38,27 +38,38 @@ def render_settings_panel():
             st.markdown("##### 🛡️ Risk & Lot Ayarları")
             default_lot = st.number_input(
                 "Varsayılan Lot (DEFAULT_LOT)", 
-                value=0.01, step=0.01, format="%.2f", 
+                value=float(current_settings["DEFAULT_LOT"]), step=0.01, format="%.2f", 
                 help=SETTINGS_TOOLTIPS["DEFAULT_LOT"]
             )
             max_positions = st.number_input(
                 "Maks. Açık Pozisyon (MAX_OPEN_POSITIONS)", 
-                value=999, step=1, 
+                value=int(current_settings["MAX_OPEN_POSITIONS"]), step=1, 
                 help=SETTINGS_TOOLTIPS["MAX_OPEN_POSITIONS"]
             )
             max_price = st.number_input(
                 "Tavan Fiyat (MAX_PRICE_LIMIT)", 
-                value=120.00, step=1.0, 
+                value=float(current_settings["MAX_PRICE_LIMIT"]), step=1.0, 
                 help=SETTINGS_TOOLTIPS["MAX_PRICE_LIMIT"]
             )
             min_price = st.number_input(
                 "Taban Fiyat (MIN_PRICE_LIMIT)", 
-                value=20.00, step=1.0, 
+                value=float(current_settings["MIN_PRICE_LIMIT"]), step=1.0, 
                 help=SETTINGS_TOOLTIPS["MIN_PRICE_LIMIT"]
             )
 
-        submitted = st.form_submit_button("💾 Ayarları Güncelle", use_container_width=True)
-        
+# Tooltip için açıklama metnini hazırlayalım
+        buton_aciklamasi = """
+        Bu buton girdiğiniz ayarları sisteme kaydeder. 
+        Eğer robot arka planda çalışıyorsa; durdurmanıza gerek kalmadan 
+        yeni kuralları anında okur ve stratejisini saniyesinde günceller.
+        """
+
+        submitted = st.form_submit_button(
+            "💾 Ayarları Güncelle", 
+            use_container_width=True,
+            help=buton_aciklamasi # 👈 Soru işareti (tooltip) ekleyen parametre
+        )
+                
         if submitted:
             return {
                 "GRID_STEP": grid_step,

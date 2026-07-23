@@ -9,12 +9,139 @@ Açıklama: Manuel tetiklemeli, dinamik lotlu, kayan (trailing) grid sistemi
 ================================================================================
 """
 
-import MetaTrader5 as mt5
 import time
 import datetime
 import sys
 import os
+import platform
 from statistics import median
+import json
+import threading
+
+# Global Değişkenleri Başlangıç İçin Tanımlayalım
+GRID_STEP = 0.05
+TAKE_PROFIT = 0.05
+LEVELS_BELOW = 6
+LEVELS_ABOVE = 6
+DEFAULT_LOT = 0.01
+MAX_OPEN_POSITIONS = 999
+MAX_PRICE_LIMIT = 120.00
+MIN_PRICE_LIMIT = 20.00
+
+def load_dynamic_settings():
+    """Her döngüde arayüzden gelen güncel settings.json dosyasını okur"""
+    global GRID_STEP, TAKE_PROFIT, LEVELS_BELOW, LEVELS_ABOVE
+    global DEFAULT_LOT, MAX_OPEN_POSITIONS, MAX_PRICE_LIMIT, MIN_PRICE_LIMIT
+    try:
+        with open("settings.json", "r", encoding="utf-8") as f:
+            settings = json.load(f)
+            GRID_STEP = settings.get("GRID_STEP", 0.05)
+            TAKE_PROFIT = settings.get("TAKE_PROFIT", 0.05)
+            LEVELS_BELOW = settings.get("LEVELS_BELOW", 6)
+            LEVELS_ABOVE = settings.get("LEVELS_ABOVE", 6)
+            DEFAULT_LOT = settings.get("DEFAULT_LOT", 0.01)
+            MAX_OPEN_POSITIONS = settings.get("MAX_OPEN_POSITIONS", 999)
+            MAX_PRICE_LIMIT = settings.get("MAX_PRICE_LIMIT", 120.00)
+            MIN_PRICE_LIMIT = settings.get("MIN_PRICE_LIMIT", 20.00)
+    except Exception as e:
+        pass # Dosya yoksa veya hata olursa varsayılan değerlerle devam et
+
+# ===============================================================================
+# 🍏🪟 MAC / WINDOWS UYUMLULUK KÖPRÜSÜ
+# ===============================================================================
+if platform.system() == "Windows":
+    import MetaTrader5 as mt5
+    IS_MAC_TEST_MODE = False
+else:
+    IS_MAC_TEST_MODE = True
+    print("⚠️ UYARI: Mac işletim sistemi algılandı. MT5 Sahte (Mock) modda çalışıyor!")
+    
+class DummyMT5:
+        """Mac üzerinde test yapabilmek için HAFIZALI sahte MT5 motoru"""
+        def __init__(self):
+            self.dummy_orders = [] # Robotun emirleri hatırlayacağı hafıza
+            self.ticket_counter = 1
+
+        TRADE_ACTION_PENDING = 5
+        TRADE_ACTION_REMOVE = 8
+        TRADE_ACTION_SLTP = 6
+        ORDER_TYPE_BUY_LIMIT = 2
+        ORDER_TYPE_BUY_STOP = 4
+        ORDER_TYPE_SELL_LIMIT = 3
+        ORDER_TYPE_SELL_STOP = 5
+        POSITION_TYPE_BUY = 0
+        POSITION_TYPE_SELL = 1
+        ORDER_TIME_GTC = 0
+        ORDER_FILLING_IOC = 1
+        ORDER_FILLING_FOK = 0
+        ORDER_FILLING_RETURN = 2
+        TRADE_RETCODE_DONE = 10009
+
+        def initialize(self): return True
+        def shutdown(self): pass
+        def last_error(self): return (1, "Mock Error")
+
+        def symbol_info(self, symbol):
+            class SymbolInfo:
+                visible = True
+                trade_mode = 4
+                filling_mode = 1
+                point = 0.01
+                digits = 2
+                volume_min = 0.01
+                volume_max = 100.0
+                volume_step = 0.01
+            return SymbolInfo()
+
+        def symbol_select(self, symbol, visible): return True
+
+        def symbol_info_tick(self, symbol):
+            class Tick:
+                bid = 75.00
+                ask = 75.05
+            return Tick()
+
+        # HAFIZADAKİ EMİRLERİ GÖNDER
+        def orders_get(self, symbol=None): 
+            return self.dummy_orders
+            
+        def positions_get(self, symbol=None): 
+            return []
+
+        def order_check(self, request):
+            class CheckResult:
+                retcode = 0
+            return CheckResult()
+
+        def order_send(self, request):
+            class SendResult:
+                retcode = 10009
+            
+            # Eğer yeni emir ekleniyorsa, hafızaya kaydet
+            if request.get("action") == self.TRADE_ACTION_PENDING:
+                class DummyOrder:
+                    def __init__(self, ticket, magic, price):
+                        self.ticket = ticket
+                        self.magic = magic
+                        self.price_open = price
+                
+                new_order = DummyOrder(
+                    self.ticket_counter, 
+                    request.get("magic"), 
+                    request.get("price")
+                )
+                self.dummy_orders.append(new_order)
+                self.ticket_counter += 1
+                
+            # Eğer emir siliniyorsa, hafızadan çıkar
+            elif request.get("action") == self.TRADE_ACTION_REMOVE:
+                ticket_to_remove = request.get("order")
+                self.dummy_orders = [o for o in self.dummy_orders if o.ticket != ticket_to_remove]
+                
+            return SendResult()
+
+mt5 = DummyMT5()
+# ===============================================================================
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # # ═══════════════════════════════════════════════════════════════════════════════
@@ -416,6 +543,30 @@ def run_startup_checks():
     log_message("Tum baslangic kontrolleri basarili!")
     return True
 
+def get_live_metrics():
+    """Web arayüzü (Streamlit) için canlı piyasa ve hesap metriklerini toplar."""
+    current_price = get_current_market_price()
+    robot_positions = get_all_robot_positions()
+    robot_orders = get_all_robot_orders()
+    
+    profit = 0.0
+    open_positions = 0
+    pending_orders = 0
+    
+    if robot_positions:
+        open_positions = len(robot_positions)
+        # Bütün açık pozisyonların anlık kâr/zararını topla
+        profit = sum(pos.profit for pos in robot_positions)
+        
+    if robot_orders:
+        pending_orders = len(robot_orders)
+        
+    return {
+        "profit": profit,
+        "open_positions": open_positions,
+        "pending_orders": pending_orders,
+        "current_price": current_price if current_price else 0.0
+    }
 
 def main_loop():
     global IS_RUNNING, INITIAL_CLEANUP_DONE
@@ -429,6 +580,7 @@ def main_loop():
 
     try:
         while IS_RUNNING:
+            load_dynamic_settings() # 👈 YENİ: Her döngüde güncel ayarları yükle!
             if not is_market_open():
                 time.sleep(MARKET_CLOSED_CHECK_INTERVAL)
                 continue
