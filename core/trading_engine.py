@@ -1,11 +1,13 @@
 """
 ================================================================================
-🛠️ USOUSD Yarı-Otomatik Dinamik Grid Robotu v2.2
+🛠️ USOUSD Yarı-Otomatik Dinamik Grid Robotu v2.2 (MODEL 1)
 MetaTrader 5 Python API ile çalışan algoritmik ticaret robotu
 ================================================================================
-Yazar: AI Assistant
-Versiyon: 2.2 (Dinamik/Kayan Grid & Hayalet Emir Temizliği)
-Açıklama: Manuel tetiklemeli, dinamik lotlu, kayan (trailing) grid sistemi
+Açıklama: 
+- 5 ALTIN KURAL UYGULANMIŞTIR.
+- Açık işlemlere KESİNLİKLE müdahale edemez, kapatamaz.
+- Sadece bekleyen emirleri (Pending Orders) dizebilir, silebilir ve TP/SL atayabilir.
+- İlk manuel tetiklemeden sonra sürekli güncel fiyatı takip ederek ağ örer.
 ================================================================================
 """
 
@@ -14,7 +16,6 @@ import datetime
 import sys
 import os
 import platform
-from statistics import median
 import json
 import threading
 
@@ -44,7 +45,7 @@ def load_dynamic_settings():
             MAX_PRICE_LIMIT = settings.get("MAX_PRICE_LIMIT", 120.00)
             MIN_PRICE_LIMIT = settings.get("MIN_PRICE_LIMIT", 20.00)
     except Exception as e:
-        pass # Dosya yoksa veya hata olursa varsayılan değerlerle devam et
+        pass
 
 # ===============================================================================
 # 🍏🪟 MAC / WINDOWS UYUMLULUK KÖPRÜSÜ
@@ -57,9 +58,8 @@ else:
     print("⚠️ UYARI: Mac işletim sistemi algılandı. MT5 Sahte (Mock) modda çalışıyor!")
     
 class DummyMT5:
-        """Mac üzerinde test yapabilmek için HAFIZALI sahte MT5 motoru"""
         def __init__(self):
-            self.dummy_orders = [] # Robotun emirleri hatırlayacağı hafıza
+            self.dummy_orders = [] 
             self.ticket_counter = 1
 
         TRADE_ACTION_PENDING = 5
@@ -101,7 +101,6 @@ class DummyMT5:
                 ask = 75.05
             return Tick()
 
-        # HAFIZADAKİ EMİRLERİ GÖNDER
         def orders_get(self, symbol=None): 
             return self.dummy_orders
             
@@ -117,7 +116,6 @@ class DummyMT5:
             class SendResult:
                 retcode = 10009
             
-            # Eğer yeni emir ekleniyorsa, hafızaya kaydet
             if request.get("action") == self.TRADE_ACTION_PENDING:
                 class DummyOrder:
                     def __init__(self, ticket, magic, price):
@@ -133,79 +131,55 @@ class DummyMT5:
                 self.dummy_orders.append(new_order)
                 self.ticket_counter += 1
                 
-            # Eğer emir siliniyorsa, hafızadan çıkar
             elif request.get("action") == self.TRADE_ACTION_REMOVE:
                 ticket_to_remove = request.get("order")
                 self.dummy_orders = [o for o in self.dummy_orders if o.ticket != ticket_to_remove]
                 
             return SendResult()
 
-# ===============================================================================
-# HIER IST DIE KORREKTUR: Überschreibe den echten Markt NUR auf dem Mac!
 if IS_MAC_TEST_MODE:
     mt5 = DummyMT5()
-# ===============================================================================
-# ===============================================================================
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# # ═══════════════════════════════════════════════════════════════════════════════
-# 1. KULLANICI AYARLARI PANELİ (DETAYLI AÇIKLAMALI)
+# KULLANICI AYARLARI
 # ═══════════════════════════════════════════════════════════════════════════════
 
-# --- GENEL BAĞLANTI AYARLARI ---
-BROKER_SERVER = "Eightcap-Demo"   # Sadece bilgi amaçlı log (kayıt) ekranında görünen sunucu adıdır. Kodun çalışmasını etkilemez.
-SYMBOL        = "USOUSD"          # Robotun işlem yapacağı enstrüman. Grafiğin sol üstünde yazan isimle birebir aynı olmalıdır (Örn: XAUUSD).
-ORDER_TYPE    = "BUY"             # İşlem yönü ("BUY" veya "SELL"). Yükselişten kâr için "BUY", düşüş için "SELL". Robot tek yönlü çalışır.
-MAGIC_NUMBER  = 123456            # Robotun T.C. Kimlik Numarası. Robot sadece bu mührü taşıyan kendi işlemlerini yönetir, manuel işlemlerine karışmaz.
+BROKER_SERVER = "Eightcap-Demo"   
+SYMBOL        = "USOUSD"          
+ORDER_TYPE    = "BUY"             
+MAGIC_NUMBER  = 123456            
 
-# --- GRID (IZGARA) VE İŞLEM AYARLARI ---
-GRID_STEP    = 0.05   # Ağın delik genişliği. Emirlerin birbirinden kaç dolar/cent uzaklıkta olacağını belirler (Örn: 0.20 yaparsan her 20 centte bir açar).
-TAKE_PROFIT  = 0.05   # Kâr al (TP) mesafesi. Açılan işlemin kaç dolarlık bir kâr gördüğünde otomatik kapanacağını belirler.
-STOP_LOSS    = 0      # Zarar kesme (SL) mesafesi. Grid sistemleri maliyet düşürdüğü için genelde "0" (yok) bırakılır.
-LEVELS_BELOW = 6      # Merkezin (canlı işlemin) ALTINA kaç tane hazır nöbetçi emir dizileceğini belirler.
-LEVELS_ABOVE = 6      # Merkezin (canlı işlemin) ÜSTÜNE kaç tane hazır nöbetçi emir dizileceğini belirler.
+STOP_LOSS    = 0      
+MAX_DEVIATION   =  20      
 
-# --- GÜVENLİK VE SINIRLANDIRMA AYARLARI ---
-MAX_OPEN_POSITIONS = 999     # KALKAN: Robotun aynı anda açabileceği maksimum işlem sayısı. Bu sayıya ulaşırsa yeni emir dizmeyi durdurur.
-MAX_PRICE_LIMIT = 120.00   # Tavan Fiyat. Enstrüman bu fiyatın üstüne çıkarsa robot yeni emir açmayı durdurur.
-MIN_PRICE_LIMIT =  20.00   # Taban Fiyat. Enstrüman bu fiyatın altına düşerse robot yeni emir açmayı durdurur.
-MAX_DEVIATION   =  20      # Fiyat kayması (Slippage) toleransı. Ani haberlerde fiyat zıplarsa emrin reddedilmesini önleyen esneklik payıdır.
-
-# --- DİNAMİK LOT VE KASA YÖNETİMİ ---
-DEFAULT_LOT = 0.01   # Aşağıdaki ekstrem eşiklere ulaşılmadığı sürece kullanılacak standart "Güvenli Bölge" lot miktarıdır.
-
-# 🔽 AŞAĞI YÖNLÜ EŞİKLER (fiyat düştükçe artan lot)
 DOWN_THRESHOLDS = [
-    (60.00, 0.02),   # Fiyat 60 doların altına inerse açılacak limit emirlerin lotunu 0.02 yap (alt alta virgülle yeni satırlar eklenebilir).
+    (60.00, 0.02),   
 ]
 
-# 🔼 YUKARI YÖNLÜ EŞİKLER (fiyat yükseldikçe artan lot)
 UP_THRESHOLDS = [
-    (90.00,  0.01),  # Fiyat 90 doların üstüne çıkarsa açılacak stop emirlerin lotunu 0.01 yap.
+    (90.00,  0.01),  
 ]
 
-# --- DÖNGÜ VE KAYIT AYARLARI ---
-LOOP_INTERVAL_SECONDS = 1            # Robotun piyasayı kontrol etme ve eksik emir tarama hızı (Saniye cinsinden). 5 saniye idealdir.
-MARKET_CLOSED_CHECK_INTERVAL = 60    # Hafta sonu/Piyasa kapalıyken aracı kurumu yormamak için tarama hızını 60 saniyeye (1 dakikaya) düşürür.
-LOG_TO_FILE = True                   # Robotun yaptığı işlemleri kalıcı bir metin dosyasına kaydedip kaydetmeyeceği (True=Evet).
-LOG_FILE_PATH = "grid_robot_log.txt" # Kayıtların tutulacağı dosyanın adı. Robotun olduğu klasörde otomatik oluşur.
+LOOP_INTERVAL_SECONDS = 1            
+MARKET_CLOSED_CHECK_INTERVAL = 60    
+LOG_TO_FILE = True                   
+LOG_FILE_PATH = "grid_robot_log.txt" 
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # GLOBAL DEĞİŞKENLER
 # ═══════════════════════════════════════════════════════════════════════════════
 
-REFERENCE_PRICE = None      # Ana referans seviyesi
-SYMBOL_INFO = None          # Sembol bilgisi
-FILLING_MODE = None         # Broker fill politikası
+REFERENCE_PRICE = None      
+SYMBOL_INFO = None          
+FILLING_MODE = None         
 IS_RUNNING = True
-INITIAL_CLEANUP_DONE = False # Robot ilk açıldığında eski emirleri temizledi mi?
+INITIAL_CLEANUP_DONE = False 
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # YARDIMCI FONKSİYONLAR
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def log_message(msg, level="INFO"):
-    """Log mesajını konsola ve dosyaya yazar."""
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     formatted = f"[{timestamp}] [{level}] {msg}"
     print(formatted)
@@ -213,11 +187,10 @@ def log_message(msg, level="INFO"):
         try:
             with open(LOG_FILE_PATH, "a", encoding="utf-8") as f:
                 f.write(formatted + "\n")
-        except Exception as e:
-            print(f"[HATA] Log dosyasına yazılamadı: {e}")
+        except Exception:
+            pass
 
 def normalize_price(price):
-    """Fiyatı sembolün point değerine göre normalize eder."""
     if SYMBOL_INFO is None:
         return round(price, 2)
     point = SYMBOL_INFO.point
@@ -227,7 +200,6 @@ def normalize_price(price):
     return round(round(price / point) * point, digits)
 
 def normalize_volume(volume):
-    """Lot değerini broker limitlerine göre normalize eder."""
     if SYMBOL_INFO is None:
         return volume
     min_vol = SYMBOL_INFO.volume_min
@@ -243,7 +215,6 @@ def normalize_volume(volume):
     return round(volume, 8)
 
 def get_current_market_price():
-    """Güncel piyasa fiyatını döndürür."""
     tick = mt5.symbol_info_tick(SYMBOL)
     if tick is None:
         return None
@@ -253,14 +224,12 @@ def get_current_market_price():
         return tick.bid
 
 def is_market_open():
-    """Piyasanın açık olup olmadığını kontrol eder."""
     info = mt5.symbol_info(SYMBOL)
     if info is None:
         return False
     return info.trade_mode == 4
 
 def determine_fill_mode():
-    """Broker'ın desteklediği fill politikasını tespit eder."""
     global FILLING_MODE
     if SYMBOL_INFO is None:
         return None
@@ -277,7 +246,6 @@ def determine_fill_mode():
     return FILLING_MODE
 
 def get_lot_for_price(price):
-    """Hedef fiyat seviyesine göre dinamik lot belirler."""
     for threshold_price, threshold_lot in reversed(UP_THRESHOLDS):
         if price >= threshold_price:
             return normalize_volume(threshold_lot)
@@ -294,20 +262,20 @@ def get_pending_order_type(target_price, current_price):
 
 def get_all_robot_orders():
     orders = mt5.orders_get(symbol=SYMBOL)
-    if orders is None: return None  # HATA ÇÖZÜMÜ 2: API Hatası varsa listeyi boşaltma, None dön
+    if orders is None: return None  
     return [o for o in orders if o.magic == MAGIC_NUMBER]
 
 def get_all_robot_positions():
     positions = mt5.positions_get(symbol=SYMBOL)
     if positions is None: return None
-    # KURAL 2: Sadece BUY işlemlerini gör, SELL işlemlerini tamamen yok say!
-    return [p for p in positions if p.magic == MAGIC_NUMBER and p.type == mt5.POSITION_TYPE_BUY]
+    target_type = mt5.POSITION_TYPE_BUY if ORDER_TYPE.upper() == "BUY" else mt5.POSITION_TYPE_SELL
+    return [p for p in positions if p.magic == MAGIC_NUMBER and p.type == target_type]
 
 def get_all_manual_positions():
     positions = mt5.positions_get(symbol=SYMBOL)
     if positions is None: return None
-    # KURAL 2: Sadece BUY işlemlerini gör, SELL işlemlerini tamamen yok say!
-    return [p for p in positions if p.magic != MAGIC_NUMBER and p.type == mt5.POSITION_TYPE_BUY]
+    target_type = mt5.POSITION_TYPE_BUY if ORDER_TYPE.upper() == "BUY" else mt5.POSITION_TYPE_SELL
+    return [p for p in positions if p.magic != MAGIC_NUMBER and p.type == target_type]
 
 def get_existing_levels():
     levels = set()
@@ -323,7 +291,11 @@ def get_existing_levels():
         for pos in m_pos: levels.add(normalize_price(pos.price_open))
     return levels
 
+# KURAL 4 UYARINCA `close_position` FONKSİYONU KODDAN TAMAMEN SİLİNMİŞTİR.
+# Yalnızca bekleyen emirleri silecek olan fonksiyon (cancel_order) bırakılmıştır.
+
 def cancel_order(order):
+    """SADECE ve SADECE bekleyen emirleri (Pending Orders) iptal eder."""
     request = {
         "action": mt5.TRADE_ACTION_REMOVE,
         "order": order.ticket,
@@ -334,42 +306,13 @@ def cancel_order(order):
         return True
     return False
 
-def close_position(position):
-    """Patron işlemi kapattığında, robotun açık olan pozisyonlarını anında kapatır."""
-    tick = mt5.symbol_info_tick(SYMBOL)
-    if tick is None: return False
-    
-    request = {
-        "action": 1, # mt5.TRADE_ACTION_DEAL
-        "position": position.ticket,
-        "symbol": SYMBOL,
-        "volume": position.volume,
-        "type": 1 if position.type == 0 else 0, # 0: BUY, 1: SELL
-        "price": tick.bid if position.type == 0 else tick.ask,
-        "deviation": MAX_DEVIATION,
-        "magic": MAGIC_NUMBER,
-        "comment": "Robot_Temizlik",
-        "type_time": 0, # mt5.ORDER_TIME_GTC
-        "type_filling": FILLING_MODE,
-    }
-    result = mt5.order_send(request)
-    if result and result.retcode == 10009: # TRADE_RETCODE_DONE
-        return True
-    return False
-
 def calculate_reference_price():
     current_price = get_current_market_price()
     if current_price is None: return None
-    
-    # KURAL 1: Merkez HER ZAMAN güncel piyasa fiyatı olacak.
-    # Spam Koruması (Mıknatıs): Fiyat 1-2 cent oynadığında ağ bozulmasın diye, 
-    # güncel fiyatı Grid Adımına (örn: 0.50'nin katlarına) sabitliyoruz.
     snapped_price = round(current_price / GRID_STEP) * GRID_STEP
     return normalize_price(snapped_price)
 
-
 def calculate_grid_levels(reference_price):
-    """Merkez fiyata göre KAYAN grid seviyelerini hesaplar."""
     levels = []
     for i in range(1, LEVELS_BELOW + 1):
         levels.append(normalize_price(reference_price - (i * GRID_STEP)))
@@ -405,7 +348,6 @@ def send_pending_order(price, lot, tp_price, sl_price=None):
 
     result = mt5.order_send(request)
     if result is None or result.retcode != mt5.TRADE_RETCODE_DONE:
-    # MT5'in döndürdüğü son hatayı alıyoruz
         last_err = mt5.last_error()
         log_message(f"❌ MT5 Emir Hatası! Kodu: {result.retcode if result else 'Yok'}, Hata: {last_err}", "ERROR")
         return False
@@ -428,7 +370,7 @@ def modify_position_tp_sl(position, tp_price, sl_price=None):
     return True
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# ANA DİNAMİK YÖNETİM MOTORU (KATİ KURAL: AÇIK İŞLEMLERE DOKUNULMAZ)
+# ANA DİNAMİK YÖNETİM MOTORU 
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def manage_dynamic_grid():
@@ -438,47 +380,43 @@ def manage_dynamic_grid():
     manual_positions = get_all_manual_positions()
     robot_orders = get_all_robot_orders()
     
-    # 0. KORUMA: API KÖRLÜĞÜ KONTROLÜ
     if robot_positions is None or manual_positions is None or robot_orders is None:
         return False 
         
     total_positions = len(robot_positions) + len(manual_positions)
 
-    # 1. KATI KURAL: BEKLEME (STANDBY) KİLİDİ
-    # Eğer referans fiyatımız yoksa (robot yeni başlatıldıysa)
+    # 1. KURAL: BEKLEME (STANDBY) KİLİDİ 
     if REFERENCE_PRICE is None:
-        # Ortamda ne senin ne de robotun hiçbir AÇIK İŞLEMİ yoksa, sessizce bekle! Emir verme!
         if not manual_positions and not robot_positions:
-            return True
+            return True # Piyasada işlem yok, sessizce bekle (Bekleme Modu)
             
-        # Eğer açık bir işlem görürse (senin yeni açtığın veya eskiden kalan), kilidi aç!
         yeni_referans = calculate_reference_price()
         if yeni_referans is None: return False
         REFERENCE_PRICE = yeni_referans
-        log_message(f"🎯 Hedef Kilitlendi: Ağ Güncel Fiyata Kuruluyor -> {REFERENCE_PRICE}")
+        log_message(f"🎯 Hedef Kilitlendi: İlk islem saptandi. Ağ Güncel Fiyata Kuruluyor -> {REFERENCE_PRICE}")
 
-    # 2. YENİ MERKEZİ GÜNCELLEME (KAYAN AĞ)
+    # 2. VE 5. KURAL: KESİNTİSİZ KÖR TAKİP (Kayan Ağ)
+    # Robot işlem kapansa da, açılsa da buralara bakmaz. Sadece REFERENCE_PRICE (Güncel Fiyat) üzerinden ağ örer.
     yeni_referans = calculate_reference_price()
     if yeni_referans is not None and REFERENCE_PRICE != yeni_referans:
         log_message(f"🌊 DİNAMİK AĞ: Fiyat Hareket Etti, Yeni Merkez -> {yeni_referans}")
         REFERENCE_PRICE = yeni_referans
 
-    # 3. MANUEL İŞLEME TP EKLEME
+    # 3. KURAL: MANUEL İŞLEME TP EKLENMESİ (Kapatmaz, Sadece TP Günceller)
     if manual_positions and not robot_positions:
         pos = manual_positions[0]
         if pos.tp == 0.0:
             tp_price = normalize_price(pos.price_open + TAKE_PROFIT) if ORDER_TYPE.upper() == "BUY" else normalize_price(pos.price_open - TAKE_PROFIT)
             if modify_position_tp_sl(pos, tp_price):
-                log_message(f"✅ Manuel BUY işleme Kar Al (TP) eklendi: {tp_price}")
+                log_message(f"✅ Manuel {ORDER_TYPE} islemine Kar Al (TP) eklendi: {tp_price}")
 
-    # 4. MAKSİMUM POZİSYON KONTROLÜ (GÜVENLİK KALKANI)
+    # GÜVENLİK KALKANI: LIMIT AŞILDIYSA SADECE BEKLEYEN EMİRLERİ SİL
     if total_positions >= MAX_OPEN_POSITIONS:
         if robot_orders:
             log_message(f"🚨 KALKAN AKTİF: Maksimum açık pozisyon limitine ({MAX_OPEN_POSITIONS}) ulaşıldı!")
-            log_message("🛡️ Riski sınırlamak için bekleyen tüm ufuk emirleri iptal ediliyor.")
             silinen_kalkan = 0
             for order in robot_orders:
-                if cancel_order(order): # SADECE BEKLEYEN EMRİ SİLER, AÇIK İŞLEME ASLA DOKUNMAZ
+                if cancel_order(order): 
                     silinen_kalkan += 1
             if silinen_kalkan > 0:
                 log_message(f"✅ Marjin koruması için {silinen_kalkan} adet bekleyen emir silindi.")
@@ -489,7 +427,7 @@ def manage_dynamic_grid():
 
     # 6. UZAKTA KALAN (SINIR DIŞI) BEKLEYEN EMİRLERİ SİL
     silinen_emir_sayisi = 0
-    tolerance = GRID_STEP / 2.0  # Dinamik tolerans
+    tolerance = GRID_STEP / 2.0  
     
     for order in robot_orders:
         order_price = normalize_price(order.price_open)
@@ -500,13 +438,13 @@ def manage_dynamic_grid():
                 break
                 
         if not is_valid:
-            if cancel_order(order): # SADECE BEKLEYEN EMRİ SİLER
+            if cancel_order(order): # Yalnızca Bekleyen Emirlere Dokunur
                 silinen_emir_sayisi += 1
                 
     if silinen_emir_sayisi > 0:
-        log_message(f"🧹 Ağ kaydı: Uzakta kalan/Gereksiz {silinen_emir_sayisi} adet emir silindi.")
+        log_message(f"🧹 Ağ kaydı: Uzakta kalan/Gereksiz {silinen_emir_sayisi} adet bekleyen emir silindi.")
 
-    # 7. EKSİK OLAN YENİ UFUK KADEMELERİNİ DOLDUR (SADECE EMİR VERİR)
+    # 7. EKSİK OLAN YENİ UFUK KADEMELERİNİ DOLDUR (EMİR DİZME)
     doldurulan = 0
     mevcut_seviyeler = get_existing_levels() 
     
@@ -580,7 +518,6 @@ def run_startup_checks():
     return True
 
 def get_live_metrics():
-    """Web arayüzü (Streamlit) için canlı piyasa ve hesap metriklerini toplar."""
     current_price = get_current_market_price()
     robot_positions = get_all_robot_positions()
     robot_orders = get_all_robot_orders()
@@ -591,7 +528,6 @@ def get_live_metrics():
     
     if robot_positions:
         open_positions = len(robot_positions)
-        # Bütün açık pozisyonların anlık kâr/zararını topla
         profit = sum(pos.profit for pos in robot_positions)
         
     if robot_orders:
@@ -616,12 +552,12 @@ def main_loop():
 
     try:
         while IS_RUNNING:
-            load_dynamic_settings() # 👈 YENİ: Her döngüde güncel ayarları yükle!
+            load_dynamic_settings() 
             if not is_market_open():
                 time.sleep(MARKET_CLOSED_CHECK_INTERVAL)
                 continue
 
-            # --- YENİ EKLENEN OTOMATİK TEMİZLİK RİTÜELİ ---
+            # 4. KURAL (ŞİDDETLİ KONTROL): İLK AÇILIŞTA YALNIZCA EMİRLER TEMİZLENİR
             if not INITIAL_CLEANUP_DONE:
                 eski_emirler = get_all_robot_orders()
                 if eski_emirler:
@@ -630,7 +566,6 @@ def main_loop():
                         cancel_order(emir)
                     log_message("✅ Temizlik bitti. Ağ, yeni ayarlarınızla güncel merkeze göre sıfırdan örülecek.")
                 INITIAL_CLEANUP_DONE = True
-            # ----------------------------------------------
 
             manage_dynamic_grid()
             
@@ -639,7 +574,8 @@ def main_loop():
     except KeyboardInterrupt:
         log_message("Kullanici tarafindan durduruldu.", "WARN")
     finally:
-        log_message("🛑 Robot durduruldu. Bekleyen tüm nöbetçi emirler temizleniyor...")
+        # KAPANIŞ RİTÜELİ: KESİNLİKLE POZİSYONLARA DOKUNULMAZ, SADECE EMİRLER SİLİNİR
+        log_message("🛑 Robot durduruldu. Sadece bekleyen nöbetçi emirler temizleniyor. AÇIK POZİSYONLAR BIRAKILDI.")
         eski_emirler = get_all_robot_orders()
         if eski_emirler:
             for emir in eski_emirler:
@@ -647,7 +583,6 @@ def main_loop():
         log_message("MT5 baglantisi kapatiliyor...")
         mt5.shutdown()
         log_message("Robot sonlandirildi.")
-
 
 if __name__ == "__main__":
     main_loop()
