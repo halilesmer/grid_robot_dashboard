@@ -30,7 +30,7 @@ if "selected_model" not in st.session_state:
 # Aktif olan modeli seç
 bot_engine = model_1 if st.session_state.selected_model == "Model 1" else model_2
 
-current_settings = load_settings()
+current_settings = load_settings(st.session_state.selected_model)
 
 render_header(symbol="USOUSD", broker="Eightcap-Demo", is_market_open=True)
 
@@ -75,10 +75,10 @@ if action == "TOGGLE":
         
     st.rerun()
 
-updated_settings = render_settings_panel(current_settings)
+updated_settings = render_settings_panel(current_settings, st.session_state.selected_model)
 
 if updated_settings:
-    save_settings(updated_settings)
+    save_settings(updated_settings, st.session_state.selected_model)
     st.success("✅ Ayarlar başarıyla güncellendi ve sisteme kaydedildi!")
     st.rerun()
 

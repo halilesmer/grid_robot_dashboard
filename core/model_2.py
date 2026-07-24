@@ -1,13 +1,12 @@
 """
 ================================================================================
-🛠️ USOUSD Yarı-Otomatik Dinamik Grid Robotu v2.2 (MODEL 1)
+🛠️ USOUSD Yarı-Otomatik Dinamik Grid Robotu v2.2 (MODEL 2)
 MetaTrader 5 Python API ile çalışan algoritmik ticaret robotu
 ================================================================================
 Açıklama: 
 - 5 ALTIN KURAL UYGULANMIŞTIR.
 - Açık işlemlere KESİNLİKLE müdahale edemez, kapatamaz.
-- Sadece bekleyen emirleri (Pending Orders) dizebilir, silebilir ve TP/SL atayabilir.
-- İlk manuel tetiklemeden sonra sürekli güncel fiyatı takip ederek ağ örer.
+- Çoklu-Bölge (Multi-Zone) ve Otonom yapıya sahiptir.
 ================================================================================
 """
 
@@ -20,31 +19,33 @@ import json
 import threading
 
 # Global Değişkenleri Başlangıç İçin Tanımlayalım
-GRID_STEP = 0.05
-TAKE_PROFIT = 0.05
-LEVELS_BELOW = 6
-LEVELS_ABOVE = 6
-DEFAULT_LOT = 0.01
+GLOBAL_GRID_STEP = 0.05
+GLOBAL_TAKE_PROFIT = 0.05
+GLOBAL_DEFAULT_LOT = 0.01
 MAX_OPEN_POSITIONS = 999
 MAX_PRICE_LIMIT = 120.00
 MIN_PRICE_LIMIT = 20.00
+LOOP_INTERVAL_SECONDS = 1.0
+CLEAR_ON_ZONE_EXIT = True
+ZONES = []
 
 def load_dynamic_settings():
-    """Her döngüde arayüzden gelen güncel settings.json dosyasını okur"""
-    global GRID_STEP, TAKE_PROFIT, LEVELS_BELOW, LEVELS_ABOVE
-    global DEFAULT_LOT, MAX_OPEN_POSITIONS, MAX_PRICE_LIMIT, MIN_PRICE_LIMIT, LOOP_INTERVAL_SECONDS
+    """Her döngüde arayüzden gelen güncel settings_model2.json dosyasını okur"""
+    global GLOBAL_GRID_STEP, GLOBAL_TAKE_PROFIT, GLOBAL_DEFAULT_LOT
+    global MAX_OPEN_POSITIONS, MAX_PRICE_LIMIT, MIN_PRICE_LIMIT
+    global LOOP_INTERVAL_SECONDS, CLEAR_ON_ZONE_EXIT, ZONES
     try:
-        with open("settings.json", "r", encoding="utf-8") as f:
+        with open("settings_model2.json", "r", encoding="utf-8") as f:
             settings = json.load(f)
-            GRID_STEP = settings.get("GRID_STEP", 0.05)
-            TAKE_PROFIT = settings.get("TAKE_PROFIT", 0.05)
-            LEVELS_BELOW = settings.get("LEVELS_BELOW", 6)
-            LEVELS_ABOVE = settings.get("LEVELS_ABOVE", 6)
-            DEFAULT_LOT = settings.get("DEFAULT_LOT", 0.01)
+            GLOBAL_GRID_STEP = settings.get("GLOBAL_GRID_STEP", 0.05)
+            GLOBAL_TAKE_PROFIT = settings.get("GLOBAL_TAKE_PROFIT", 0.05)
+            GLOBAL_DEFAULT_LOT = settings.get("GLOBAL_DEFAULT_LOT", 0.01)
             MAX_OPEN_POSITIONS = settings.get("MAX_OPEN_POSITIONS", 999)
             MAX_PRICE_LIMIT = settings.get("MAX_PRICE_LIMIT", 120.00)
             MIN_PRICE_LIMIT = settings.get("MIN_PRICE_LIMIT", 20.00)
             LOOP_INTERVAL_SECONDS = settings.get("LOOP_INTERVAL_SECONDS", 1.0)
+            CLEAR_ON_ZONE_EXIT = settings.get("CLEAR_ON_ZONE_EXIT", True)
+            ZONES = settings.get("ZONES", [])
     except Exception as e:
         pass
 
@@ -153,15 +154,6 @@ MAGIC_NUMBER  = 123456
 STOP_LOSS    = 0      
 MAX_DEVIATION   =  20      
 
-DOWN_THRESHOLDS = [
-    (60.00, 0.02),   
-]
-
-UP_THRESHOLDS = [
-    (90.00,  0.01),  
-]
-
-LOOP_INTERVAL_SECONDS = 1            
 MARKET_CLOSED_CHECK_INTERVAL = 60    
 LOG_TO_FILE = True                   
 LOG_FILE_PATH = "grid_robot_log.txt" 
@@ -175,6 +167,7 @@ SYMBOL_INFO = None
 FILLING_MODE = None         
 IS_RUNNING = True
 INITIAL_CLEANUP_DONE = False 
+ACTIVE_ZONE = None
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # YARDIMCI FONKSİYONLAR
@@ -246,15 +239,6 @@ def determine_fill_mode():
         log_message("Fill politikası: ORDER_FILLING_RETURN")
     return FILLING_MODE
 
-def get_lot_for_price(price):
-    for threshold_price, threshold_lot in reversed(UP_THRESHOLDS):
-        if price >= threshold_price:
-            return normalize_volume(threshold_lot)
-    for threshold_price, threshold_lot in reversed(DOWN_THRESHOLDS):
-        if price < threshold_price:
-            return normalize_volume(threshold_lot)
-    return normalize_volume(DEFAULT_LOT)
-
 def get_pending_order_type(target_price, current_price):
     if ORDER_TYPE.upper() == "BUY":
         return mt5.ORDER_TYPE_BUY_LIMIT if target_price < current_price else mt5.ORDER_TYPE_BUY_STOP
@@ -292,9 +276,6 @@ def get_existing_levels():
         for pos in m_pos: levels.add(normalize_price(pos.price_open))
     return levels
 
-# KURAL 4 UYARINCA `close_position` FONKSİYONU KODDAN TAMAMEN SİLİNMİŞTİR.
-# Yalnızca bekleyen emirleri silecek olan fonksiyon (cancel_order) bırakılmıştır.
-
 def cancel_order(order):
     """SADECE ve SADECE bekleyen emirleri (Pending Orders) iptal eder."""
     request = {
@@ -307,18 +288,43 @@ def cancel_order(order):
         return True
     return False
 
-def calculate_reference_price():
+def calculate_reference_price(grid_step):
     current_price = get_current_market_price()
     if current_price is None: return None
-    snapped_price = round(current_price / GRID_STEP) * GRID_STEP
+    snapped_price = round(current_price / grid_step) * grid_step
     return normalize_price(snapped_price)
 
-def calculate_grid_levels(reference_price):
+def get_active_zone(price):
+    for zone in ZONES:
+        if float(zone.get("min_price", 0)) <= price <= float(zone.get("max_price", 0)):
+            return zone
+    return None
+
+def calculate_grid_levels(reference_price, zone_info):
     levels = []
-    for i in range(1, LEVELS_BELOW + 1):
-        levels.append(normalize_price(reference_price - (i * GRID_STEP)))
-    for i in range(1, LEVELS_ABOVE + 1):
-        levels.append(normalize_price(reference_price + (i * GRID_STEP)))
+    if zone_info is not None:
+        grid_step = float(zone_info["grid_step"])
+        z_min = float(zone_info["min_price"])
+        z_max = float(zone_info["max_price"])
+        
+        # From reference price to max
+        p = reference_price + grid_step
+        while p <= z_max:
+            levels.append(normalize_price(p))
+            p += grid_step
+            
+        # From reference price to min
+        p = reference_price - grid_step
+        while p >= z_min:
+            levels.append(normalize_price(p))
+            p -= grid_step
+    else:
+        grid_step = GLOBAL_GRID_STEP
+        for i in range(1, 7):
+            levels.append(normalize_price(reference_price - (i * grid_step)))
+        for i in range(1, 7):
+            levels.append(normalize_price(reference_price + (i * grid_step)))
+            
     return sorted(set(levels))
 
 def send_pending_order(price, lot, tp_price, sl_price=None):
@@ -330,12 +336,12 @@ def send_pending_order(price, lot, tp_price, sl_price=None):
     request = {
         "action": mt5.TRADE_ACTION_PENDING,
         "symbol": SYMBOL,
-        "volume": lot,
+        "volume": normalize_volume(lot),
         "type": order_type,
         "price": price,
         "deviation": MAX_DEVIATION,
         "magic": MAGIC_NUMBER,
-        "comment": f"GridBot_{ORDER_TYPE}",
+        "comment": f"GridBot_M2_{ORDER_TYPE}",
         "type_time": mt5.ORDER_TIME_GTC,
         "type_filling": FILLING_MODE,
         "tp": tp_price,
@@ -371,11 +377,11 @@ def modify_position_tp_sl(position, tp_price, sl_price=None):
     return True
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# ANA DİNAMİK YÖNETİM MOTORU 
+# ANA DİNAMİK YÖNETİM MOTORU (MODEL 2)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def manage_dynamic_grid():
-    global REFERENCE_PRICE
+    global REFERENCE_PRICE, ACTIVE_ZONE
 
     robot_positions = get_all_robot_positions()
     manual_positions = get_all_manual_positions()
@@ -385,51 +391,67 @@ def manage_dynamic_grid():
         return False 
         
     total_positions = len(robot_positions) + len(manual_positions)
+    current_price = get_current_market_price()
+    if current_price is None: return False
 
-    # 1. KURAL: BEKLEME (STANDBY) KİLİDİ 
-    if REFERENCE_PRICE is None:
-        if not manual_positions and not robot_positions:
-            return True # Piyasada işlem yok, sessizce bekle (Bekleme Modu)
+    current_zone = get_active_zone(current_price)
+
+    # BÖLGE DEĞİŞİMİ / ÇIKIŞI
+    if current_zone != ACTIVE_ZONE:
+        if ACTIVE_ZONE is not None and CLEAR_ON_ZONE_EXIT:
+            log_message("🧹 Bölge dışına çıkıldı veya bölge değişti. Eski emirler temizleniyor...")
+            for order in robot_orders:
+                cancel_order(order)
+            robot_orders = get_all_robot_orders()
+        ACTIVE_ZONE = current_zone
+
+    # BÖLGE İÇİ VS GLOBAL STANDBY KONTROLÜ
+    if ACTIVE_ZONE is not None:
+        # Senaryo A: Fiyat bölge içinde (Otonom mod)
+        grid_step = float(ACTIVE_ZONE.get("grid_step", GLOBAL_GRID_STEP))
+        tp_val = float(ACTIVE_ZONE.get("take_profit", GLOBAL_TAKE_PROFIT))
+        lot_val = float(ACTIVE_ZONE.get("lot_size", GLOBAL_DEFAULT_LOT))
+        
+        yeni_referans = calculate_reference_price(grid_step)
+        if REFERENCE_PRICE != yeni_referans:
+            REFERENCE_PRICE = yeni_referans
+            log_message(f"📍 BÖLGE İÇİ OTONOM AĞ: Yeni Merkez -> {REFERENCE_PRICE}")
+    else:
+        # Senaryo B: Bölge dışı (Standby veya Manuel tetikleme)
+        grid_step = GLOBAL_GRID_STEP
+        tp_val = GLOBAL_TAKE_PROFIT
+        lot_val = GLOBAL_DEFAULT_LOT
+        
+        # KESİN KURAL: Ölü bölgede (bölge dışı) KESİNLİKLE otomatik işlem alınamaz/ağ örülemez. 
+        # Sadece manuel bir işlem açılmışsa Global/Standby ağı örülür.
+        if not manual_positions:
+            REFERENCE_PRICE = None
+            return True # Sessizce bekle (Standby)
             
-        yeni_referans = calculate_reference_price()
-        if yeni_referans is None: return False
-        REFERENCE_PRICE = yeni_referans
-        log_message(f"🎯 Hedef Kilitlendi: İlk islem saptandi. Ağ Güncel Fiyata Kuruluyor -> {REFERENCE_PRICE}")
+        yeni_referans = calculate_reference_price(grid_step)
+        if REFERENCE_PRICE != yeni_referans:
+            REFERENCE_PRICE = yeni_referans
+            log_message(f"🌐 GLOBAL AĞ: Manuel tetikleme algılandı, Yeni Merkez -> {REFERENCE_PRICE}")
 
-    # 2. VE 5. KURAL: KESİNTİSİZ KÖR TAKİP (Kayan Ağ)
-    # Robot işlem kapansa da, açılsa da buralara bakmaz. Sadece REFERENCE_PRICE (Güncel Fiyat) üzerinden ağ örer.
-    yeni_referans = calculate_reference_price()
-    if yeni_referans is not None and REFERENCE_PRICE != yeni_referans:
-        log_message(f"🌊 DİNAMİK AĞ: Fiyat Hareket Etti, Yeni Merkez -> {yeni_referans}")
-        REFERENCE_PRICE = yeni_referans
-
-    # 3. KURAL: MANUEL İŞLEME TP EKLENMESİ (Kapatmaz, Sadece TP Günceller)
+    # MANUEL İŞLEME TP EKLENMESİ
     if manual_positions and not robot_positions:
         pos = manual_positions[0]
         if pos.tp == 0.0:
-            tp_price = normalize_price(pos.price_open + TAKE_PROFIT) if ORDER_TYPE.upper() == "BUY" else normalize_price(pos.price_open - TAKE_PROFIT)
+            tp_price = normalize_price(pos.price_open + tp_val) if ORDER_TYPE.upper() == "BUY" else normalize_price(pos.price_open - tp_val)
             if modify_position_tp_sl(pos, tp_price):
                 log_message(f"✅ Manuel {ORDER_TYPE} islemine Kar Al (TP) eklendi: {tp_price}")
 
-    # GÜVENLİK KALKANI: LIMIT AŞILDIYSA SADECE BEKLEYEN EMİRLERİ SİL
+    # GÜVENLİK KALKANI
     if total_positions >= MAX_OPEN_POSITIONS:
         if robot_orders:
-            log_message(f"🚨 KALKAN AKTİF: Maksimum açık pozisyon limitine ({MAX_OPEN_POSITIONS}) ulaşıldı!")
-            silinen_kalkan = 0
             for order in robot_orders:
-                if cancel_order(order): 
-                    silinen_kalkan += 1
-            if silinen_kalkan > 0:
-                log_message(f"✅ Marjin koruması için {silinen_kalkan} adet bekleyen emir silindi.")
+                cancel_order(order)
         return True
 
-    # 5. İSTENEN DİNAMİK SEVİYELERİ HESAPLA
-    desired_levels = calculate_grid_levels(REFERENCE_PRICE)
-
-    # 6. UZAKTA KALAN (SINIR DIŞI) BEKLEYEN EMİRLERİ SİL
-    silinen_emir_sayisi = 0
-    tolerance = GRID_STEP / 2.0  
+    desired_levels = calculate_grid_levels(REFERENCE_PRICE, ACTIVE_ZONE)
+    tolerance = grid_step / 2.0  
     
+    # UZAKTA KALAN BEKLEYEN EMİRLERİ SİL
     for order in robot_orders:
         order_price = normalize_price(order.price_open)
         is_valid = False
@@ -439,16 +461,10 @@ def manage_dynamic_grid():
                 break
                 
         if not is_valid:
-            if cancel_order(order): # Yalnızca Bekleyen Emirlere Dokunur
-                silinen_emir_sayisi += 1
-                
-    if silinen_emir_sayisi > 0:
-        log_message(f"🧹 Ağ kaydı: Uzakta kalan/Gereksiz {silinen_emir_sayisi} adet bekleyen emir silindi.")
+            cancel_order(order)
 
-    # 7. EKSİK OLAN YENİ UFUK KADEMELERİNİ DOLDUR (EMİR DİZME)
-    doldurulan = 0
+    # EKSİK OLAN SEVİYELERİ DOLDUR
     mevcut_seviyeler = get_existing_levels() 
-    
     for level_price in desired_levels:
         if level_price > MAX_PRICE_LIMIT or level_price < MIN_PRICE_LIMIT:
             continue
@@ -460,20 +476,15 @@ def manage_dynamic_grid():
                 break
                  
         if not is_occupied:
-            lot = get_lot_for_price(level_price)
             if ORDER_TYPE.upper() == "BUY":
-                tp_price = normalize_price(level_price + TAKE_PROFIT)
+                tp_price = normalize_price(level_price + tp_val)
                 sl_price = normalize_price(level_price - STOP_LOSS) if STOP_LOSS > 0 else None
             else:
-                tp_price = normalize_price(level_price - TAKE_PROFIT)
+                tp_price = normalize_price(level_price - tp_val)
                 sl_price = normalize_price(level_price + STOP_LOSS) if STOP_LOSS > 0 else None
                 
-            if send_pending_order(level_price, lot, tp_price, sl_price):
-                doldurulan += 1
+            send_pending_order(level_price, lot_val, tp_price, sl_price)
 
-    if doldurulan > 0:
-        log_message(f"🌱 Ağ kaydı: {doldurulan} adet yeni nöbetçi emir ufuk çizgisine eklendi.")
-        
     return True
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -483,7 +494,7 @@ def manage_dynamic_grid():
 def run_startup_checks():
     global SYMBOL_INFO, FILLING_MODE
     log_message("=" * 60)
-    log_message("USOUSD Dinamik Grid Robot v2.2 Baslatiliyor...")
+    log_message("USOUSD Dinamik Grid Robot v2.2 (MODEL 2) Baslatiliyor...")
     log_message("=" * 60)
 
     log_message("MT5 baglantisi kuruluyor...")
@@ -549,7 +560,6 @@ def main_loop():
         return
 
     log_message("Robot calismaya basladi. (Durdurmak icin Ctrl+C)")
-    log_message("Manuel start bekleniyor... Lutfen manuel islem acin.")
 
     try:
         while IS_RUNNING:
@@ -558,7 +568,6 @@ def main_loop():
                 time.sleep(MARKET_CLOSED_CHECK_INTERVAL)
                 continue
 
-            # 4. KURAL (ŞİDDETLİ KONTROL): İLK AÇILIŞTA YALNIZCA EMİRLER TEMİZLENİR
             if not INITIAL_CLEANUP_DONE:
                 eski_emirler = get_all_robot_orders()
                 if eski_emirler:
@@ -575,7 +584,6 @@ def main_loop():
     except KeyboardInterrupt:
         log_message("Kullanici tarafindan durduruldu.", "WARN")
     finally:
-        # KAPANIŞ RİTÜELİ: KESİNLİKLE POZİSYONLARA DOKUNULMAZ, SADECE EMİRLER SİLİNİR
         log_message("🛑 Robot durduruldu. Sadece bekleyen nöbetçi emirler temizleniyor. AÇIK POZİSYONLAR BIRAKILDI.")
         eski_emirler = get_all_robot_orders()
         if eski_emirler:

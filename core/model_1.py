@@ -34,7 +34,7 @@ def load_dynamic_settings():
     global GRID_STEP, TAKE_PROFIT, LEVELS_BELOW, LEVELS_ABOVE
     global DEFAULT_LOT, MAX_OPEN_POSITIONS, MAX_PRICE_LIMIT, MIN_PRICE_LIMIT, LOOP_INTERVAL_SECONDS
     try:
-        with open("settings.json", "r", encoding="utf-8") as f:
+        with open("settings_model1.json", "r", encoding="utf-8") as f:
             settings = json.load(f)
             GRID_STEP = settings.get("GRID_STEP", 0.05)
             TAKE_PROFIT = settings.get("TAKE_PROFIT", 0.05)
