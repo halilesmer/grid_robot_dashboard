@@ -405,7 +405,11 @@ def send_pending_order(price, lot, tp_price, sl_price=None):
 
     result = mt5.order_send(request)
     if result is None or result.retcode != mt5.TRADE_RETCODE_DONE:
+    # MT5'in döndürdüğü son hatayı alıyoruz
+        last_err = mt5.last_error()
+        log_message(f"❌ MT5 Emir Hatası! Kodu: {result.retcode if result else 'Yok'}, Hata: {last_err}", "ERROR")
         return False
+    
     return True
 
 def modify_position_tp_sl(position, tp_price, sl_price=None):
@@ -441,27 +445,23 @@ def manage_dynamic_grid():
     total_positions = len(robot_positions) + len(manual_positions)
 
   # 1. ADIM: MANUEL START KONTROLÜ (PATRON MASADAN KALKTI MI?)
-    if not manual_positions:
-        silinen_emir = 0
-        kapanan_islem = 0
+def manage_dynamic_grid():
+    global REFERENCE_PRICE
+
+    robot_positions = get_all_robot_positions()
+    manual_positions = get_all_manual_positions()
+    robot_orders = get_all_robot_orders()
+    
+    # 0. KORUMA: API KÖRLÜĞÜ KONTROLÜ
+    if robot_positions is None or manual_positions is None or robot_orders is None:
+        return False 
         
-        # 1. Bekleyen ufuk emirlerini temizle
-        if robot_orders:
-            for order in robot_orders:
-                if cancel_order(order): silinen_emir += 1
-                
-        # 2. Aktif olan robot işlemlerini kapat
-        if robot_positions:
-            for pos in robot_positions:
-                if close_position(pos): kapanan_islem += 1
-                
-        if silinen_emir > 0 or kapanan_islem > 0:
-            log_message(f"🛑 Patron işlemi kapattı! Temizlik: {silinen_emir} emir iptal, {kapanan_islem} robot işlemi kapatıldı.")
-            log_message("✅ Sistem tamamen sıfırlandı. Yeni bir manuel start bekleniyor...")
-            
-        # DİKKAT: Bu iki satır if'in İÇİNDE DEĞİL, dışındadır. Her halükarda çalışıp robotu durdurur!
-        REFERENCE_PRICE = None
-        return True
+    total_positions = len(robot_positions) + len(manual_positions)
+
+    # 1. YENİ MERKEZİ (GÜNCEL FİYATI) BELİRLE VE GÜNCELLE
+    yeni_referans = calculate_reference_price()
+    if yeni_referans is None:
+        return False
     
     # 2. YENİ MERKEZİ (GÜNCEL FİYATI) BELİRLE VE GÜNCELLE
     yeni_referans = calculate_reference_price()
@@ -650,6 +650,11 @@ def main_loop():
     except KeyboardInterrupt:
         log_message("Kullanici tarafindan durduruldu.", "WARN")
     finally:
+        log_message("🛑 Robot durduruldu. Bekleyen tüm nöbetçi emirler temizleniyor...")
+        eski_emirler = get_all_robot_orders()
+        if eski_emirler:
+            for emir in eski_emirler:
+                cancel_order(emir)
         log_message("MT5 baglantisi kapatiliyor...")
         mt5.shutdown()
         log_message("Robot sonlandirildi.")
