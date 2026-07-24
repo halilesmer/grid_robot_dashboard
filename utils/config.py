@@ -13,7 +13,8 @@ DEFAULT_SETTINGS = {
     "DEFAULT_LOT": 0.01,
     "MAX_OPEN_POSITIONS": 999,
     "MAX_PRICE_LIMIT": 120.00,
-    "MIN_PRICE_LIMIT": 20.00
+    "MIN_PRICE_LIMIT": 20.00,
+    "LOOP_INTERVAL_SECONDS": 1.0  # 👈 Bu satırı ekleyin
 }
 
 def load_settings():
