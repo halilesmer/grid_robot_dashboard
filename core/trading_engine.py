@@ -334,6 +334,29 @@ def cancel_order(order):
         return True
     return False
 
+def close_position(position):
+    """Patron işlemi kapattığında, robotun açık olan pozisyonlarını anında kapatır."""
+    tick = mt5.symbol_info_tick(SYMBOL)
+    if tick is None: return False
+    
+    request = {
+        "action": 1, # mt5.TRADE_ACTION_DEAL
+        "position": position.ticket,
+        "symbol": SYMBOL,
+        "volume": position.volume,
+        "type": 1 if position.type == 0 else 0, # 0: BUY, 1: SELL
+        "price": tick.bid if position.type == 0 else tick.ask,
+        "deviation": MAX_DEVIATION,
+        "magic": MAGIC_NUMBER,
+        "comment": "Robot_Temizlik",
+        "type_time": 0, # mt5.ORDER_TIME_GTC
+        "type_filling": FILLING_MODE,
+    }
+    result = mt5.order_send(request)
+    if result and result.retcode == 10009: # TRADE_RETCODE_DONE
+        return True
+    return False
+
 def calculate_reference_price():
     current_price = get_current_market_price()
     if current_price is None: return None
@@ -417,9 +440,28 @@ def manage_dynamic_grid():
         
     total_positions = len(robot_positions) + len(manual_positions)
 
-    # (ESKİ 1. ADIM OLAN "İŞLEM YOKSA SIFIRLA VE BEKLE" BLOĞU TAMAMEN SİLİNDİ)
-    # KURAL 3: Robot artık beklemeden, doğrudan güncel piyasa fiyatına ağ örecek.
-
+   # 1. ADIM: MANUEL START KONTROLÜ (PATRON MASADAN KALKTI MI?)
+    if not manual_positions:
+        silinen_emir = 0
+        kapanan_islem = 0
+        
+        # 1. Bekleyen ufuk emirlerini temizle
+        if robot_orders:
+            for order in robot_orders:
+                if cancel_order(order): silinen_emir += 1
+                
+        # 2. Aktif olan robot işlemlerini kapat
+        if robot_positions:
+            for pos in robot_positions:
+                if close_position(pos): kapanan_islem += 1
+                
+        if silinen_emir > 0 or kapanan_islem > 0:
+            log_message(f"🛑 Patron işlemi kapattı! Temizlik: {silinen_emir} emir iptal, {kapanan_islem} robot işlemi kapatıldı.")
+            log_message("✅ Sistem tamamen sıfırlandı. Yeni bir manuel start bekleniyor...")
+            
+        REFERENCE_PRICE = None
+        return True
+    
     # 2. YENİ MERKEZİ (GÜNCEL FİYATI) BELİRLE VE GÜNCELLE
     yeni_referans = calculate_reference_price()
     if yeni_referans is None:
