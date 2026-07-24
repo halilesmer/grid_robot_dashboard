@@ -8,5 +8,6 @@ SETTINGS_TOOLTIPS = {
     "DEFAULT_LOT": "Ekstrem fiyat eşiklerine ulaşılmadığı sürece kullanılacak standart güvenli lot miktarıdır.",
     "MAX_OPEN_POSITIONS": "Güvenlik Kalkanı: Robotun aynı anda açabileceği maksimum işlem sayısı.",
     "MAX_PRICE_LIMIT": "Tavan Fiyat: Enstrüman bu fiyatın üstüne çıkarsa robot yeni emir açmayı durdurur.",
-    "MIN_PRICE_LIMIT": "Taban Fiyat: Enstrüman bu fiyatın altına düşerse robot yeni emir açmayı durdurur."
+    "MIN_PRICE_LIMIT": "Taban Fiyat: Enstrüman bu fiyatın altına düşerse robot yeni emir açmayı durdurur.",
+    "LOOP_INTERVAL_SECONDS": "Kontrol Sıklığı (Saniye): Robotun piyasayı ve MT5'i kaç saniyede bir kontrol edip emirleri güncelleyeceğini belirler (Örn: 0.5 veya 1.0)."
 }

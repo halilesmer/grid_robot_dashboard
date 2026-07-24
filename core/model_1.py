@@ -32,7 +32,7 @@ MIN_PRICE_LIMIT = 20.00
 def load_dynamic_settings():
     """Her döngüde arayüzden gelen güncel settings.json dosyasını okur"""
     global GRID_STEP, TAKE_PROFIT, LEVELS_BELOW, LEVELS_ABOVE
-    global DEFAULT_LOT, MAX_OPEN_POSITIONS, MAX_PRICE_LIMIT, MIN_PRICE_LIMIT
+    global DEFAULT_LOT, MAX_OPEN_POSITIONS, MAX_PRICE_LIMIT, MIN_PRICE_LIMIT, LOOP_INTERVAL_SECONDS
     try:
         with open("settings.json", "r", encoding="utf-8") as f:
             settings = json.load(f)
@@ -44,6 +44,7 @@ def load_dynamic_settings():
             MAX_OPEN_POSITIONS = settings.get("MAX_OPEN_POSITIONS", 999)
             MAX_PRICE_LIMIT = settings.get("MAX_PRICE_LIMIT", 120.00)
             MIN_PRICE_LIMIT = settings.get("MIN_PRICE_LIMIT", 20.00)
+            LOOP_INTERVAL_SECONDS = settings.get("LOOP_INTERVAL_SECONDS", 1.0)
     except Exception as e:
         pass
 

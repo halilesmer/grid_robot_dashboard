@@ -10,7 +10,8 @@ from components.controls import render_controls
 from components.log_viewer import render_log_viewer # 👈 Log bileşenini içeri aktardık
 from styles.custom_css import apply_custom_css
 from utils.config import load_settings, save_settings
-import core.trading_engine as bot_engine
+import core.model_1 as model_1
+import core.model_2 as model_2
 
 st.set_page_config(
     page_title="Grid Robot Control",
@@ -22,6 +23,12 @@ apply_custom_css()
 
 if "robot_running" not in st.session_state:
     st.session_state.robot_running = False
+
+if "selected_model" not in st.session_state:
+    st.session_state.selected_model = "Model 1"
+
+# Aktif olan modeli seç
+bot_engine = model_1 if st.session_state.selected_model == "Model 1" else model_2
 
 current_settings = load_settings()
 
@@ -45,7 +52,14 @@ render_metrics(
     current_price=live_data["current_price"],
 )
 
-action = render_controls(is_running=st.session_state.robot_running)
+action, chosen_model = render_controls(
+    is_running=st.session_state.robot_running,
+    current_model=st.session_state.selected_model
+)
+
+if chosen_model and chosen_model != st.session_state.selected_model:
+    st.session_state.selected_model = chosen_model
+    st.rerun()
 
 if action == "TOGGLE":
     st.session_state.robot_running = not st.session_state.robot_running

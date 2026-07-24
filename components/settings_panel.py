@@ -56,6 +56,11 @@ def render_settings_panel(current_settings):
                 value=float(current_settings["MIN_PRICE_LIMIT"]), step=1.0, 
                 help=SETTINGS_TOOLTIPS["MIN_PRICE_LIMIT"]
             )
+            loop_interval = st.number_input(
+                "Kontrol Sıklığı Saniye (LOOP_INTERVAL)", 
+                value=float(current_settings.get("LOOP_INTERVAL_SECONDS", 1.0)), step=0.1, format="%.1f",
+                help=SETTINGS_TOOLTIPS["LOOP_INTERVAL_SECONDS"]
+            )
 
 # Tooltip için açıklama metnini hazırlayalım
         buton_aciklamasi = """
@@ -79,7 +84,8 @@ def render_settings_panel(current_settings):
                 "DEFAULT_LOT": default_lot,
                 "MAX_OPEN_POSITIONS": max_positions,
                 "MAX_PRICE_LIMIT": max_price,
-                "MIN_PRICE_LIMIT": min_price
+                "MIN_PRICE_LIMIT": min_price,
+                "LOOP_INTERVAL_SECONDS": loop_interval
             }
             
     return None
