@@ -440,7 +440,7 @@ def manage_dynamic_grid():
         
     total_positions = len(robot_positions) + len(manual_positions)
 
-   # 1. ADIM: MANUEL START KONTROLÜ (PATRON MASADAN KALKTI MI?)
+  # 1. ADIM: MANUEL START KONTROLÜ (PATRON MASADAN KALKTI MI?)
     if not manual_positions:
         silinen_emir = 0
         kapanan_islem = 0
@@ -459,6 +459,7 @@ def manage_dynamic_grid():
             log_message(f"🛑 Patron işlemi kapattı! Temizlik: {silinen_emir} emir iptal, {kapanan_islem} robot işlemi kapatıldı.")
             log_message("✅ Sistem tamamen sıfırlandı. Yeni bir manuel start bekleniyor...")
             
+        # DİKKAT: Bu iki satır if'in İÇİNDE DEĞİL, dışındadır. Her halükarda çalışıp robotu durdurur!
         REFERENCE_PRICE = None
         return True
     
