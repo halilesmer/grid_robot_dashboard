@@ -428,7 +428,7 @@ def modify_position_tp_sl(position, tp_price, sl_price=None):
     return True
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# ANA DİNAMİK YÖNETİM MOTORU (TAMAMEN DÜZELTİLMİŞ KUSURSUZ VERSİYON)
+# ANA DİNAMİK YÖNETİM MOTORU (KATİ KURAL: AÇIK İŞLEMLERE DOKUNULMAZ)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def manage_dynamic_grid():
@@ -444,31 +444,26 @@ def manage_dynamic_grid():
         
     total_positions = len(robot_positions) + len(manual_positions)
 
-    # 1. BEKLEME (STANDBY) MODU: İlk manuel işlemi bekle
+    # 1. KATI KURAL: BEKLEME (STANDBY) KİLİDİ
+    # Eğer referans fiyatımız yoksa (robot yeni başlatıldıysa)
     if REFERENCE_PRICE is None:
-        if not manual_positions:
-            return True # Sen manuel işlem açana kadar robot sessizce bekler!
+        # Ortamda ne senin ne de robotun hiçbir AÇIK İŞLEMİ yoksa, sessizce bekle! Emir verme!
+        if not manual_positions and not robot_positions:
+            return True
             
-        # İlk işlemi gördüğü an hedefe kilitlenir
+        # Eğer açık bir işlem görürse (senin yeni açtığın veya eskiden kalan), kilidi aç!
         yeni_referans = calculate_reference_price()
         if yeni_referans is None: return False
         REFERENCE_PRICE = yeni_referans
         log_message(f"🎯 Hedef Kilitlendi: Ağ Güncel Fiyata Kuruluyor -> {REFERENCE_PRICE}")
 
-    # 2. SIFIRLAMA KONTROLÜ: Masada hiçbir işlem VE hiçbir emir kalmadıysa uyu
-    if total_positions == 0 and len(robot_orders) == 0:
-        if REFERENCE_PRICE is not None:
-            log_message("✅ Sistem tamamen sıfırlandı. Yeni bir manuel start bekleniyor...")
-            REFERENCE_PRICE = None
-        return True
-
-    # 3. YENİ MERKEZİ GÜNCELLEME (KAYAN AĞ)
+    # 2. YENİ MERKEZİ GÜNCELLEME (KAYAN AĞ)
     yeni_referans = calculate_reference_price()
     if yeni_referans is not None and REFERENCE_PRICE != yeni_referans:
         log_message(f"🌊 DİNAMİK AĞ: Fiyat Hareket Etti, Yeni Merkez -> {yeni_referans}")
         REFERENCE_PRICE = yeni_referans
 
-    # 4. MANUEL İŞLEME TP EKLEME
+    # 3. MANUEL İŞLEME TP EKLEME
     if manual_positions and not robot_positions:
         pos = manual_positions[0]
         if pos.tp == 0.0:
@@ -476,23 +471,23 @@ def manage_dynamic_grid():
             if modify_position_tp_sl(pos, tp_price):
                 log_message(f"✅ Manuel BUY işleme Kar Al (TP) eklendi: {tp_price}")
 
-    # 5. MAKSİMUM POZİSYON KONTROLÜ (GÜVENLİK KALKANI)
+    # 4. MAKSİMUM POZİSYON KONTROLÜ (GÜVENLİK KALKANI)
     if total_positions >= MAX_OPEN_POSITIONS:
         if robot_orders:
             log_message(f"🚨 KALKAN AKTİF: Maksimum açık pozisyon limitine ({MAX_OPEN_POSITIONS}) ulaşıldı!")
-            log_message("🛡️ Riski sınırlamak için bekleyen tüm ufuk emirleri iptal ediliyor. Yeni emir dizilmeyecek...")
+            log_message("🛡️ Riski sınırlamak için bekleyen tüm ufuk emirleri iptal ediliyor.")
             silinen_kalkan = 0
             for order in robot_orders:
-                if cancel_order(order):
+                if cancel_order(order): # SADECE BEKLEYEN EMRİ SİLER, AÇIK İŞLEME ASLA DOKUNMAZ
                     silinen_kalkan += 1
             if silinen_kalkan > 0:
                 log_message(f"✅ Marjin koruması için {silinen_kalkan} adet bekleyen emir silindi.")
         return True
 
-    # 6. İSTENEN DİNAMİK SEVİYELERİ HESAPLA
+    # 5. İSTENEN DİNAMİK SEVİYELERİ HESAPLA
     desired_levels = calculate_grid_levels(REFERENCE_PRICE)
 
-    # 7. UZAKTA KALAN (SINIR DIŞI) EMİRLERİ SİL
+    # 6. UZAKTA KALAN (SINIR DIŞI) BEKLEYEN EMİRLERİ SİL
     silinen_emir_sayisi = 0
     tolerance = GRID_STEP / 2.0  # Dinamik tolerans
     
@@ -505,13 +500,13 @@ def manage_dynamic_grid():
                 break
                 
         if not is_valid:
-            if cancel_order(order):
+            if cancel_order(order): # SADECE BEKLEYEN EMRİ SİLER
                 silinen_emir_sayisi += 1
                 
     if silinen_emir_sayisi > 0:
         log_message(f"🧹 Ağ kaydı: Uzakta kalan/Gereksiz {silinen_emir_sayisi} adet emir silindi.")
 
-    # 8. EKSİK OLAN YENİ UFUK KADEMELERİNİ DOLDUR
+    # 7. EKSİK OLAN YENİ UFUK KADEMELERİNİ DOLDUR (SADECE EMİR VERİR)
     doldurulan = 0
     mevcut_seviyeler = get_existing_levels() 
     
