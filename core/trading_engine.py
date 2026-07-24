@@ -428,23 +428,9 @@ def modify_position_tp_sl(position, tp_price, sl_price=None):
     return True
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# ANA DİNAMİK YÖNETİM MOTORU (YENİ)
+# ANA DİNAMİK YÖNETİM MOTORU (TAMAMEN DÜZELTİLMİŞ)
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def manage_dynamic_grid():
-    global REFERENCE_PRICE
-
-    robot_positions = get_all_robot_positions()
-    manual_positions = get_all_manual_positions()
-    robot_orders = get_all_robot_orders()
-    
-    # 0. KORUMA: API KÖRLÜĞÜ KONTROLÜ
-    if robot_positions is None or manual_positions is None or robot_orders is None:
-        return False 
-        
-    total_positions = len(robot_positions) + len(manual_positions)
-
-  # 1. ADIM: MANUEL START KONTROLÜ (PATRON MASADAN KALKTI MI?)
 def manage_dynamic_grid():
     global REFERENCE_PRICE
 
@@ -462,11 +448,6 @@ def manage_dynamic_grid():
     yeni_referans = calculate_reference_price()
     if yeni_referans is None:
         return False
-    
-    # 2. YENİ MERKEZİ (GÜNCEL FİYATI) BELİRLE VE GÜNCELLE
-    yeni_referans = calculate_reference_price()
-    if yeni_referans is None:
-        return False
 
     if REFERENCE_PRICE != yeni_referans:
         if REFERENCE_PRICE is None:
@@ -481,35 +462,36 @@ def manage_dynamic_grid():
         if pos.tp == 0.0:
             tp_price = normalize_price(pos.price_open + TAKE_PROFIT) if ORDER_TYPE.upper() == "BUY" else normalize_price(pos.price_open - TAKE_PROFIT)
             if modify_position_tp_sl(pos, tp_price):
-                 log_message(f"✅ Manuel BUY işleme Kar Al (TP) eklendi: {tp_price}")
+                log_message(f"✅ Manuel BUY işleme Kar Al (TP) eklendi: {tp_price}")
 
-        # 3. YENİ: MAKSİMUM POZİSYON KONTROLÜ (GÜVENLİK KALKANI)
+    # 2. MAKSİMUM POZİSYON KONTROLÜ (GÜVENLİK KALKANI)
     if total_positions >= MAX_OPEN_POSITIONS:
-            if robot_orders:
-                log_message(f"🚨 KALKAN AKTİF: Maksimum açık pozisyon limitine ({MAX_OPEN_POSITIONS}) ulaşıldı!")
-                log_message("🛡️ Riski sınırlamak için bekleyen tüm ufuk emirleri iptal ediliyor. Yeni emir dizilmeyecek...")
-                silinen_kalkan = 0
-                for order in robot_orders:
-                    if cancel_order(order):
-                        silinen_kalkan += 1
-                if silinen_kalkan > 0:
-                    log_message(f"✅ Marjin koruması için {silinen_kalkan} adet bekleyen emir silindi.")
-            return True # Aşağı inip yeni emir dizmesini engellemek için fonksiyonu burada kesiyoruz.
+        if robot_orders:
+            log_message(f"🚨 KALKAN AKTİF: Maksimum açık pozisyon limitine ({MAX_OPEN_POSITIONS}) ulaşıldı!")
+            log_message("🛡️ Riski sınırlamak için bekleyen tüm ufuk emirleri iptal ediliyor. Yeni emir dizilmeyecek...")
+            silinen_kalkan = 0
+            for order in robot_orders:
+                if cancel_order(order):
+                    silinen_kalkan += 1
+            if silinen_kalkan > 0:
+                log_message(f"✅ Marjin koruması için {silinen_kalkan} adet bekleyen emir silindi.")
+        return True
 
-    # 3. İSTENEN DİNAMİK SEVİYELERİ HESAPLA (5 Alt, 5 Üst vs.)
+    # 3. İSTENEN DİNAMİK SEVİYELERİ HESAPLA
     desired_levels = calculate_grid_levels(REFERENCE_PRICE)
 
-    # 4. HATA ÇÖZÜMÜ: UZAKTA KALAN (SINIR DIŞI) EMİRLERİ SİL
+    # 4. UZAKTA KALAN (SINIR DIŞI) EMİRLERİ SİL
     silinen_emir_sayisi = 0
+    tolerance = GRID_STEP / 2.0  # Dinamik tolerans
+    
     for order in robot_orders:
         order_price = normalize_price(order.price_open)
         is_valid = False
         for dl in desired_levels:
-            if abs(order_price - dl) <= (SYMBOL_INFO.point * 2 if SYMBOL_INFO else 0.02):
+            if abs(order_price - dl) <= tolerance:
                 is_valid = True
                 break
                 
-        # Eğer bu bekleyen emir, yeni merkezin hesapladığı ağın dışındaysa SİL!
         if not is_valid:
             if cancel_order(order):
                 silinen_emir_sayisi += 1
@@ -527,9 +509,9 @@ def manage_dynamic_grid():
             
         is_occupied = False
         for exist_lvl in mevcut_seviyeler:
-             if abs(level_price - exist_lvl) <= (SYMBOL_INFO.point * 2 if SYMBOL_INFO else 0.02):
-                 is_occupied = True
-                 break
+            if abs(level_price - exist_lvl) <= tolerance:
+                is_occupied = True
+                break
                  
         if not is_occupied:
             lot = get_lot_for_price(level_price)
@@ -547,7 +529,6 @@ def manage_dynamic_grid():
         log_message(f"🌱 Ağ kaydı: {doldurulan} adet yeni nöbetçi emir ufuk çizgisine eklendi.")
         
     return True
-
 # ═══════════════════════════════════════════════════════════════════════════════
 # BAŞLANGIÇ KONTROLLERİ VE ANA DÖNGÜ
 # ═══════════════════════════════════════════════════════════════════════════════
