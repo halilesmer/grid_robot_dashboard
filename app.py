@@ -2,6 +2,7 @@
 import streamlit as st
 import threading
 import time  # 👈 Bunu en üste ekle
+import platform # 👈 BARKOD: Bunu ekledik
 
 from components.header import render_header
 from components.settings_panel import render_settings_panel
@@ -20,6 +21,25 @@ st.set_page_config(
 )
 
 apply_custom_css()
+# ==========================================
+# 🧪 MAC TEST SİMÜLATÖRÜ (Sadece Mac'te Görünür)
+# ==========================================
+if platform.system() != "Windows":
+    st.warning("🧪 Mac Test Modu Aktif - Fiyat Simülatörü", icon="💻")
+    # Kullanıcıdan fiyatı kaydırıcı ile al
+    mock_price = st.slider(
+        "Canlı Fiyatı Belirle (USOUSD)", 
+        min_value=20.00, 
+        max_value=120.00, 
+        value=75.00, 
+        step=0.05,
+        help="Piyasa kapalıyken robotun tepkilerini test etmek için fiyatı sağa sola kaydırın."
+    )
+    # Yeni fiyatı her iki motora da gönder
+    model_1.set_mock_price(mock_price)
+    model_2.set_mock_price(mock_price)
+    st.divider()
+# ==========================================
 
 if "robot_running" not in st.session_state:
     st.session_state.robot_running = False

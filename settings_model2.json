@@ -7,5 +7,13 @@
     "MIN_PRICE_LIMIT": 20.0,
     "LOOP_INTERVAL_SECONDS": 1.0,
     "CLEAR_ON_ZONE_EXIT": true,
-    "ZONES": []
+    "ZONES": [
+        {
+            "min_price": 50.0,
+            "max_price": 60.0,
+            "grid_step": 0.05,
+            "lot_size": 0.01,
+            "take_profit": 0.05
+        }
+    ]
 }

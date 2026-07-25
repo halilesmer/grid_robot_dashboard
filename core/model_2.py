@@ -59,7 +59,29 @@ else:
     IS_MAC_TEST_MODE = True
     print("⚠️ UYARI: Mac işletim sistemi algılandı. MT5 Sahte (Mock) modda çalışıyor!")
     
-class DummyMT5:
+# ===============================================================================
+# 🍏🪟 MAC / WINDOWS UYUMLULUK KÖPRÜSÜ VE FİYAT SİMÜLATÖRÜ
+# ===============================================================================
+if platform.system() == "Windows":
+    import MetaTrader5 as mt5
+    IS_MAC_TEST_MODE = False
+    
+    # Windows'ta hata vermemesi için boş bir fonksiyon
+    def set_mock_price(new_price): 
+        pass 
+else:
+    IS_MAC_TEST_MODE = True
+    print("⚠️ UYARI: Mac işletim sistemi algılandı. MT5 Sahte (Mock) modda çalışıyor!")
+    
+    # Sahte motorun varsayılan fiyatı
+    MOCK_CURRENT_PRICE = 75.00
+    
+    # Arayüzden (slider) gelen yeni fiyatı motora ileten fonksiyon
+    def set_mock_price(new_price):
+        global MOCK_CURRENT_PRICE
+        MOCK_CURRENT_PRICE = new_price
+        
+    class DummyMT5:
         def __init__(self):
             self.dummy_orders = [] 
             self.ticket_counter = 1
@@ -97,10 +119,11 @@ class DummyMT5:
 
         def symbol_select(self, symbol, visible): return True
 
+        # Fiyat artık sabit değil, simülatörden (MOCK_CURRENT_PRICE) geliyor!
         def symbol_info_tick(self, symbol):
             class Tick:
-                bid = 75.00
-                ask = 75.05
+                bid = MOCK_CURRENT_PRICE
+                ask = MOCK_CURRENT_PRICE + 0.05
             return Tick()
 
         def orders_get(self, symbol=None): 
