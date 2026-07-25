@@ -3,10 +3,10 @@
     "LOOP_INTERVAL_SECONDS": 1.0,
     "ZONES": [
         {
-            "min_price": 89.8,
+            "min_price": 90.0,
             "max_price": 100.0,
             "direction": "BOTH",
-            "buy_grid": 0.09,
+            "buy_grid": 0.05,
             "buy_lot": 0.01,
             "buy_tp": 0.05,
             "use_buy_sl": false,
@@ -16,9 +16,9 @@
             "sell_tp": 0.05,
             "use_sell_sl": false,
             "sell_sl": 0.0,
-            "use_smart_sl": false,
+            "use_smart_sl": true,
             "smart_sl_tf": "H4",
-            "burn_on_sl": false,
+            "burn_on_sl": true,
             "is_burned": false
         }
     ]

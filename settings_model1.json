@@ -1,6 +1,6 @@
 {
-    "GRID_STEP": 0.05,
-    "TAKE_PROFIT": 0.05,
+    "GRID_STEP": 0.08,
+    "TAKE_PROFIT": 0.09,
     "LEVELS_BELOW": 8,
     "LEVELS_ABOVE": 10,
     "DEFAULT_LOT": 0.04,

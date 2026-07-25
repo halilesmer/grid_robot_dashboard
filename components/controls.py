@@ -10,10 +10,12 @@ def render_controls(is_running: bool, current_model: str = "Model 1"):
     col1, col2, col3 = st.columns([1, 1, 1])
     
     with col1:
+        # Model 3 listeye eklendi ve index mantığı dinamik hale getirildi
+        models = ["Model 1", "Model 2", "Model 3"]
         selected_model = st.selectbox(
             "⚙️ Motor Seçimi",
-            options=["Model 1", "Model 2"],
-            index=0 if current_model == "Model 1" else 1,
+            options=models,
+            index=models.index(current_model) if current_model in models else 0,
             disabled=is_running,
             help="Robot çalışırken motor değiştirilemez."
         )

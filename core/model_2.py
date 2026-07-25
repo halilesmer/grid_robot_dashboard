@@ -7,6 +7,7 @@ Açıklama:
 - 5 ALTIN KURAL UYGULANMIŞTIR.
 - Açık işlemlere KESİNLİKLE müdahale edemez, kapatamaz.
 - Çoklu-Bölge (Multi-Zone) ve Otonom yapıya sahiptir.
+- Ayarlar sadece ait olduğu bölgeye özeldir.
 ================================================================================
 """
 
@@ -18,34 +19,23 @@ import platform
 import json
 import threading
 
-# Global Değişkenleri Başlangıç İçin Tanımlayalım
-GLOBAL_GRID_STEP = 0.05
-GLOBAL_TAKE_PROFIT = 0.05
-GLOBAL_DEFAULT_LOT = 0.01
-MAX_OPEN_POSITIONS = 999
-MAX_PRICE_LIMIT = 120.00
-MIN_PRICE_LIMIT = 20.00
+# Temel Değişkenleri Başlangıç İçin Tanımlayalım
 LOOP_INTERVAL_SECONDS = 1.0
-CLEAR_ON_ZONE_EXIT = True
 ZONES = []
+ORDER_TYPE = "BUY"
+SYMBOL = "USOUSD"
 
 def load_dynamic_settings():
     """Her döngüde arayüzden gelen güncel settings_model2.json dosyasını okur"""
-    global GLOBAL_GRID_STEP, GLOBAL_TAKE_PROFIT, GLOBAL_DEFAULT_LOT
-    global MAX_OPEN_POSITIONS, MAX_PRICE_LIMIT, MIN_PRICE_LIMIT
-    global LOOP_INTERVAL_SECONDS, CLEAR_ON_ZONE_EXIT, ZONES
+    global LOOP_INTERVAL_SECONDS, ZONES, ORDER_TYPE, SYMBOL
+    
     try:
         with open("settings_model2.json", "r", encoding="utf-8") as f:
             settings = json.load(f)
-            GLOBAL_GRID_STEP = settings.get("GLOBAL_GRID_STEP", 0.05)
-            GLOBAL_TAKE_PROFIT = settings.get("GLOBAL_TAKE_PROFIT", 0.05)
-            GLOBAL_DEFAULT_LOT = settings.get("GLOBAL_DEFAULT_LOT", 0.01)
-            MAX_OPEN_POSITIONS = settings.get("MAX_OPEN_POSITIONS", 999)
-            MAX_PRICE_LIMIT = settings.get("MAX_PRICE_LIMIT", 120.00)
-            MIN_PRICE_LIMIT = settings.get("MIN_PRICE_LIMIT", 20.00)
             LOOP_INTERVAL_SECONDS = settings.get("LOOP_INTERVAL_SECONDS", 1.0)
-            CLEAR_ON_ZONE_EXIT = settings.get("CLEAR_ON_ZONE_EXIT", True)
             ZONES = settings.get("ZONES", [])
+            ORDER_TYPE = settings.get("ORDER_TYPE", "BUY")
+            SYMBOL = settings.get("SYMBOL", "USOUSD")
     except Exception as e:
         pass
 
@@ -55,28 +45,15 @@ def load_dynamic_settings():
 if platform.system() == "Windows":
     import MetaTrader5 as mt5
     IS_MAC_TEST_MODE = False
-else:
-    IS_MAC_TEST_MODE = True
-    print("⚠️ UYARI: Mac işletim sistemi algılandı. MT5 Sahte (Mock) modda çalışıyor!")
-    
-# ===============================================================================
-# 🍏🪟 MAC / WINDOWS UYUMLULUK KÖPRÜSÜ VE FİYAT SİMÜLATÖRÜ
-# ===============================================================================
-if platform.system() == "Windows":
-    import MetaTrader5 as mt5
-    IS_MAC_TEST_MODE = False
-    
-    # Windows'ta hata vermemesi için boş bir fonksiyon
+
     def set_mock_price(new_price): 
         pass 
 else:
     IS_MAC_TEST_MODE = True
     print("⚠️ UYARI: Mac işletim sistemi algılandı. MT5 Sahte (Mock) modda çalışıyor!")
     
-    # Sahte motorun varsayılan fiyatı
     MOCK_CURRENT_PRICE = 75.00
     
-    # Arayüzden (slider) gelen yeni fiyatı motora ileten fonksiyon
     def set_mock_price(new_price):
         global MOCK_CURRENT_PRICE
         MOCK_CURRENT_PRICE = new_price
@@ -119,7 +96,6 @@ else:
 
         def symbol_select(self, symbol, visible): return True
 
-        # Fiyat artık sabit değil, simülatörden (MOCK_CURRENT_PRICE) geliyor!
         def symbol_info_tick(self, symbol):
             class Tick:
                 bid = MOCK_CURRENT_PRICE
@@ -169,17 +145,11 @@ if IS_MAC_TEST_MODE:
 # KULLANICI AYARLARI
 # ═══════════════════════════════════════════════════════════════════════════════
 
-BROKER_SERVER = "Eightcap-Demo"   
-SYMBOL        = "USOUSD"          
-ORDER_TYPE    = "BUY"             
 MAGIC_NUMBER  = 123456            
-
-STOP_LOSS    = 0      
-MAX_DEVIATION   =  20      
-
+MAX_DEVIATION = 20      
 MARKET_CLOSED_CHECK_INTERVAL = 60    
 LOG_TO_FILE = True                   
-LOG_FILE_PATH = "grid_robot_log.txt" 
+LOG_FILE_PATH = "grid_robot_log.txt"
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # GLOBAL DEĞİŞKENLER
@@ -325,28 +295,24 @@ def get_active_zone(price):
 
 def calculate_grid_levels(reference_price, zone_info):
     levels = []
-    if zone_info is not None:
-        grid_step = float(zone_info["grid_step"])
-        z_min = float(zone_info["min_price"])
-        z_max = float(zone_info["max_price"])
+    if zone_info is None or reference_price is None:
+        return levels
         
-        # From reference price to max
-        p = reference_price + grid_step
-        while p <= z_max:
-            levels.append(normalize_price(p))
-            p += grid_step
-            
-        # From reference price to min
-        p = reference_price - grid_step
-        while p >= z_min:
-            levels.append(normalize_price(p))
-            p -= grid_step
-    else:
-        grid_step = GLOBAL_GRID_STEP
-        for i in range(1, 7):
-            levels.append(normalize_price(reference_price - (i * grid_step)))
-        for i in range(1, 7):
-            levels.append(normalize_price(reference_price + (i * grid_step)))
+    grid_step = float(zone_info["grid_step"])
+    z_min = float(zone_info["min_price"])
+    z_max = float(zone_info["max_price"])
+    
+    # From reference price to max
+    p = reference_price + grid_step
+    while p <= z_max:
+        levels.append(normalize_price(p))
+        p += grid_step
+        
+    # From reference price to min
+    p = reference_price - grid_step
+    while p >= z_min:
+        levels.append(normalize_price(p))
+        p -= grid_step
             
     return sorted(set(levels))
 
@@ -369,7 +335,8 @@ def send_pending_order(price, lot, tp_price, sl_price=None):
         "type_filling": FILLING_MODE,
         "tp": tp_price,
     }
-    if sl_price is not None and STOP_LOSS > 0:
+    # Artık STOP_LOSS dinamik ve bölgeden geldiği için sadece sl_price kontrolü yeterli
+    if sl_price is not None:
         request["sl"] = sl_price
         
     check = mt5.order_check(request)
@@ -391,7 +358,7 @@ def modify_position_tp_sl(position, tp_price, sl_price=None):
         "symbol": SYMBOL,
         "tp": tp_price,
     }
-    if sl_price is not None and STOP_LOSS > 0:
+    if sl_price is not None:
         request["sl"] = sl_price
         
     result = mt5.order_send(request)
@@ -413,7 +380,6 @@ def manage_dynamic_grid():
     if robot_positions is None or manual_positions is None or robot_orders is None:
         return False 
         
-    total_positions = len(robot_positions) + len(manual_positions)
     current_price = get_current_market_price()
     if current_price is None: return False
 
@@ -421,55 +387,36 @@ def manage_dynamic_grid():
 
     # BÖLGE DEĞİŞİMİ / ÇIKIŞI
     if current_zone != ACTIVE_ZONE:
-        if ACTIVE_ZONE is not None and CLEAR_ON_ZONE_EXIT:
-            log_message("🧹 Bölge dışına çıkıldı veya bölge değişti. Eski emirler temizleniyor...")
-            for order in robot_orders:
-                cancel_order(order)
-            robot_orders = get_all_robot_orders()
+        if ACTIVE_ZONE is not None:
+            zone_clear_flag = ACTIVE_ZONE.get("clear_on_exit", True)
+            if zone_clear_flag:
+                log_message(f"🧹 Bölge ({ACTIVE_ZONE.get('min_price')}-{ACTIVE_ZONE.get('max_price')}) dışına çıkıldı. Temizlik AÇIK: Eski emirler siliniyor...")
+                for order in robot_orders:
+                    cancel_order(order)
+                robot_orders = get_all_robot_orders()
+            else:
+                log_message(f"🪤 Bölge ({ACTIVE_ZONE.get('min_price')}-{ACTIVE_ZONE.get('max_price')}) dışına çıkıldı. Temizlik KAPALI: Mevcut bekleyen emirler tuzak olarak bırakıldı.")
+                
         ACTIVE_ZONE = current_zone
 
-    # BÖLGE İÇİ VS GLOBAL STANDBY KONTROLÜ
+    # BÖLGE KONTROLÜ
     if ACTIVE_ZONE is not None:
-        # Senaryo A: Fiyat bölge içinde (Otonom mod)
-        grid_step = float(ACTIVE_ZONE.get("grid_step", GLOBAL_GRID_STEP))
-        tp_val = float(ACTIVE_ZONE.get("take_profit", GLOBAL_TAKE_PROFIT))
-        lot_val = float(ACTIVE_ZONE.get("lot_size", GLOBAL_DEFAULT_LOT))
+        # Fiyat bir bölgenin içinde -> Ayarları bölgeden al
+        grid_step = float(ACTIVE_ZONE.get("grid_step", 0.05))
+        tp_val = float(ACTIVE_ZONE.get("take_profit", 0.05))
+        lot_val = float(ACTIVE_ZONE.get("lot_size", 0.01))
+        sl_val = float(ACTIVE_ZONE.get("stop_loss", 0.0))
         
         yeni_referans = calculate_reference_price(grid_step)
         if REFERENCE_PRICE != yeni_referans:
             REFERENCE_PRICE = yeni_referans
             log_message(f"📍 BÖLGE İÇİ OTONOM AĞ: Yeni Merkez -> {REFERENCE_PRICE}")
     else:
-        # Senaryo B: Bölge dışı (Standby veya Manuel tetikleme)
-        grid_step = GLOBAL_GRID_STEP
-        tp_val = GLOBAL_TAKE_PROFIT
-        lot_val = GLOBAL_DEFAULT_LOT
-        
-        # KESİN KURAL: Ölü bölgede (bölge dışı) KESİNLİKLE otomatik işlem alınamaz/ağ örülemez. 
-        # Sadece manuel bir işlem açılmışsa Global/Standby ağı örülür.
-        if not manual_positions:
-            REFERENCE_PRICE = None
-            return True # Sessizce bekle (Standby)
-            
-        yeni_referans = calculate_reference_price(grid_step)
-        if REFERENCE_PRICE != yeni_referans:
-            REFERENCE_PRICE = yeni_referans
-            log_message(f"🌐 GLOBAL AĞ: Manuel tetikleme algılandı, Yeni Merkez -> {REFERENCE_PRICE}")
+        # Fiyat hiçbir bölgede değilse robot işlem yapmaz. Standby (bekleme) modundadır.
+        REFERENCE_PRICE = None
+        return True 
 
-    # MANUEL İŞLEME TP EKLENMESİ
-    if manual_positions and not robot_positions:
-        pos = manual_positions[0]
-        if pos.tp == 0.0:
-            tp_price = normalize_price(pos.price_open + tp_val) if ORDER_TYPE.upper() == "BUY" else normalize_price(pos.price_open - tp_val)
-            if modify_position_tp_sl(pos, tp_price):
-                log_message(f"✅ Manuel {ORDER_TYPE} islemine Kar Al (TP) eklendi: {tp_price}")
-
-    # GÜVENLİK KALKANI
-    if total_positions >= MAX_OPEN_POSITIONS:
-        if robot_orders:
-            for order in robot_orders:
-                cancel_order(order)
-        return True
+    # GÜVENLİK KALKANI: Max Positions sildik. Maksimum işlem sayısını zaten bölge sınırları belirliyor.
 
     desired_levels = calculate_grid_levels(REFERENCE_PRICE, ACTIVE_ZONE)
     tolerance = grid_step / 2.0  
@@ -489,9 +436,7 @@ def manage_dynamic_grid():
     # EKSİK OLAN SEVİYELERİ DOLDUR
     mevcut_seviyeler = get_existing_levels() 
     for level_price in desired_levels:
-        if level_price > MAX_PRICE_LIMIT or level_price < MIN_PRICE_LIMIT:
-            continue
-            
+        # Taban ve Tavan fiyat kontrollerini sildik, çünkü level_price zaten desired_levels içinde, bu da direkt Zone ile sınırlandırılmış durumda.
         is_occupied = False
         for exist_lvl in mevcut_seviyeler:
             if abs(level_price - exist_lvl) <= tolerance:
@@ -501,10 +446,10 @@ def manage_dynamic_grid():
         if not is_occupied:
             if ORDER_TYPE.upper() == "BUY":
                 tp_price = normalize_price(level_price + tp_val)
-                sl_price = normalize_price(level_price - STOP_LOSS) if STOP_LOSS > 0 else None
+                sl_price = normalize_price(level_price - sl_val) if sl_val > 0 else None
             else:
                 tp_price = normalize_price(level_price - tp_val)
-                sl_price = normalize_price(level_price + STOP_LOSS) if STOP_LOSS > 0 else None
+                sl_price = normalize_price(level_price + sl_val) if sl_val > 0 else None
                 
             send_pending_order(level_price, lot_val, tp_price, sl_price)
 
