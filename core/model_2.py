@@ -161,6 +161,7 @@ FILLING_MODE = None
 IS_RUNNING = True
 INITIAL_CLEANUP_DONE = False 
 ACTIVE_ZONE = None
+SIMULATED_PRICE = None # 👈 YENİ: Arayüzden gelen sahte fiyatı (slider) tutacak değişken
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # YARDIMCI FONKSİYONLAR
@@ -202,6 +203,13 @@ def normalize_volume(volume):
     return round(volume, 8)
 
 def get_current_market_price():
+    global SIMULATED_PRICE
+    
+    # 👈 BARKOD: Eğer app.py üzerinden bir simülatör fiyatı enjekte edildiyse 
+    # MT5'e bağlanmak yerine doğrudan bizim belirlediğimiz bu sahte fiyatı kullan.
+    if SIMULATED_PRICE is not None:
+        return SIMULATED_PRICE
+        
     tick = mt5.symbol_info_tick(SYMBOL)
     if tick is None:
         return None

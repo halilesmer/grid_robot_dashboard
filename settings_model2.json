@@ -1,25 +1,16 @@
 {
+    "ORDER_TYPE": "BUY",
     "SYMBOL": "USOUSD",
     "LOOP_INTERVAL_SECONDS": 1.0,
     "ZONES": [
         {
-            "min_price": 89.8,
-            "max_price": 100.0,
-            "direction": "BOTH",
-            "buy_grid": 0.09,
-            "buy_lot": 0.01,
-            "buy_tp": 0.05,
-            "use_buy_sl": false,
-            "buy_sl": 0.0,
-            "sell_grid": 0.05,
-            "sell_lot": 0.01,
-            "sell_tp": 0.05,
-            "use_sell_sl": false,
-            "sell_sl": 0.0,
-            "use_smart_sl": false,
-            "smart_sl_tf": "H4",
-            "burn_on_sl": false,
-            "is_burned": false
+            "min_price": 70.0,
+            "max_price": 80.0,
+            "grid_step": 0.5,
+            "lot_size": 0.01,
+            "take_profit": 0.5,
+            "stop_loss": 0.0,
+            "clear_on_exit": false
         }
     ]
 }

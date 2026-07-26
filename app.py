@@ -3,6 +3,7 @@ import streamlit as st
 import threading
 import time  
 import platform 
+from components.chart_viewer import render_chart
 
 from components.header import render_header
 from components.settings_panel import render_settings_panel
@@ -13,7 +14,7 @@ from styles.custom_css import apply_custom_css
 from utils.config import load_settings, save_settings
 import core.model_1 as model_1
 import core.model_2 as model_2
-import core.model_3 as model_3 # 👈 BARKOD: Model 3 eklendi
+import core.model_3 as model_3 
 
 st.set_page_config(
     page_title="Grid Robot Control",
@@ -29,7 +30,6 @@ if "robot_running" not in st.session_state:
 if "selected_model" not in st.session_state:
     st.session_state.selected_model = "Model 1"
 
-# 👈 BARKOD: Aktif olan modeli seç (Model 3 desteği eklendi)
 if st.session_state.selected_model == "Model 1":
     bot_engine = model_1
 elif st.session_state.selected_model == "Model 2":
@@ -41,9 +41,7 @@ current_settings = load_settings(st.session_state.selected_model)
 
 render_header(symbol="USOUSD", broker="Eightcap-Demo", is_market_open=True)
 
-# Eğer robot çalışıyorsa canlı verileri çek, çalışmıyorsa her şeyi 0 göster
 if st.session_state.robot_running:
-    # Hata yakalama (Model 3'te get_live_metrics henüz yoksa çökmeyi önler)
     if hasattr(bot_engine, 'get_live_metrics'):
         live_data = bot_engine.get_live_metrics()
     else:
@@ -95,36 +93,36 @@ if updated_settings:
 
 st.divider()
 
-# 5. Log Gösterici Bileşenini Sayfanın En Altına Ekle
-render_log_viewer()
+# ==========================================
+# 1. ÖNCE SİMÜLATÖRÜ OKU (Eğer Mac ise)
+# ==========================================
+current_active_price = live_data.get("current_price", 0.0)
+
+if platform.system() != "Windows":
+    st.warning("💻 Mac Test Modu Aktif - Fiyat Simülatörü")
+    mock_price = st.slider(
+        "Canlı Fiyatı Belirle (USOUSD)", 
+        min_value=50.0, max_value=150.0, value=75.0, step=0.10
+    )
+    current_active_price = mock_price 
+    
+    # BARKOD: Kaydırıcıdaki fiyatı robotun beynine zorla enjekte et!
+    bot_engine.SIMULATED_PRICE = mock_price
+
+# ==========================================
+# 2. SONRA GRAFİĞİ VE LOGLARI ÇİZ
+# ==========================================
+col_chart, col_log = st.columns([2, 1])
+
+with col_chart:
+    render_chart(current_active_price, bot_engine)
+
+with col_log:
+    render_log_viewer()
 
 # ==========================================
 # CANLI VERİ AKIŞI (AUTO-REFRESH) DÖNGÜSÜ
 # ==========================================
 if st.session_state.robot_running:
-    # Sayfayı 1 saniye bekletip tekrar yukarıdan aşağı okumasını sağlarız.
-    # Böylece metrikler ve loglar kendi kendine akar.
     time.sleep(1)
     st.rerun()
-
-
-# ==========================================
-# 🧪 MAC TEST SİMÜLATÖRÜ (Sadece Mac'te Görünür)
-# ==========================================
-if platform.system() != "Windows":
-    st.warning("🧪 Mac Test Modu Aktif - Fiyat Simülatörü", icon="💻")
-    # Kullanıcıdan fiyatı kaydırıcı ile al
-    mock_price = st.slider(
-        "Canlı Fiyatı Belirle (USOUSD)", 
-        min_value=20.00, 
-        max_value=120.00, 
-        value=75.00, 
-        step=0.05,
-        help="Piyasa kapalıyken robotun tepkilerini test etmek için fiyatı sağa sola kaydırın."
-    )
-    # Yeni fiyatı tüm motorlara gönder
-    if hasattr(model_1, 'set_mock_price'): model_1.set_mock_price(mock_price)
-    if hasattr(model_2, 'set_mock_price'): model_2.set_mock_price(mock_price)
-    if hasattr(model_3, 'set_mock_price'): model_3.set_mock_price(mock_price) # 👈 BARKOD: Model 3'e sahte fiyat eklendi
-    st.divider()
-# ==========================================
