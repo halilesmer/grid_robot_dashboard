@@ -6,3 +6,6 @@ __pycache__/
 # Sanal Ortamlar
 venv/
 .venv/
+
+# MetaTrader Hesap Bilgileri (Güvenlik)
+configs/accounts.json

@@ -2,6 +2,7 @@
 
 import sys
 from pathlib import Path
+from src.components.account_selector import render_account_selector
 
 # src klasörünü Python modül arama yoluna ekler
 sys.path.append(str(Path(__file__).parent / "src"))
@@ -11,6 +12,7 @@ import threading
 import time  
 import platform 
 from src.components.chart_viewer import render_chart
+from src.utils.mt5_connection import connect_to_mt5
 
 from src.components.header import render_header
 from src.components.settings_panel import render_settings_panel
@@ -61,34 +63,61 @@ else:
         "current_price": 0.0,
     }
 
-render_metrics(
-    profit=live_data["profit"],
-    open_positions=live_data["open_positions"],
-    pending_orders=live_data["pending_orders"],
-    current_price=live_data["current_price"],
-)
+# ==========================================
+# ÜST KOKPİT PANELİ (Metrikler + Hesap + Kontroller)
+# ==========================================
+# Ekranı 3 sütuna bölüyoruz.
+# Oranlar: Metrikler(2 birim) - Hesap Seçici(1 birim) - Robot Kontrol(1 birim)
+col_metrics, col_account, col_controls = st.columns([2, 1, 1.4])
 
-action, chosen_model = render_controls(
-    is_running=st.session_state.robot_running,
-    current_model=st.session_state.selected_model
-)
+with col_metrics:
+    # 4 Metrik artık bu dar alanda yan yana görünecek
+    render_metrics(
+        profit=live_data["profit"],
+        open_positions=live_data["open_positions"],
+        pending_orders=live_data["pending_orders"],
+        current_price=live_data["current_price"],
+    )
+
+with col_account:
+    # Hesap seçicimiz ortada yer alacak
+    render_account_selector()
+
+with col_controls:
+    # Motor seçimi ve Başlat butonu sağ tarafta olacak
+    action, chosen_model = render_controls(
+        is_running=st.session_state.robot_running,
+        current_model=st.session_state.selected_model,
+    )
+# ==========================================
 
 if chosen_model and chosen_model != st.session_state.selected_model:
     st.session_state.selected_model = chosen_model
     st.rerun()
 
 if action == "TOGGLE":
-    st.session_state.robot_running = not st.session_state.robot_running
-    
-    if st.session_state.robot_running:
-        bot_engine.IS_RUNNING = True
-        robot_thread = threading.Thread(target=bot_engine.main_loop, daemon=True)
-        robot_thread.start()
-        st.toast("🚀 Robot başarıyla başlatıldı!", icon="✅")
+    # Eğer robot şu an duruyorsa ve başlatılmak isteniyorsa:
+    if not st.session_state.robot_running:
+        # Önce seçili hesaba güvenli şekilde bağlanmayı dene
+        connection_success = connect_to_mt5(st.session_state.selected_account)
+
+        if connection_success:
+            st.session_state.robot_running = True
+            bot_engine.IS_RUNNING = True
+            robot_thread = threading.Thread(target=bot_engine.main_loop, daemon=True)
+            robot_thread.start()
+            st.toast("🚀 MT5 Bağlantısı Başarılı, Robot Başlatıldı!", icon="✅")
+        else:
+            # Bağlantı başarısızsa veya güvenlik duvarına takılırsa çalışmayı reddet
+            st.session_state.robot_running = False
+            st.toast("🔴 Hata: Robot başlatılamadı!", icon="❌")
+
+    # Eğer robot zaten çalışıyorsa ve durdurulmak isteniyorsa:
     else:
+        st.session_state.robot_running = False
         bot_engine.IS_RUNNING = False
         st.toast("🛑 Robot durduruldu!", icon="⚠️")
-        
+
     st.rerun()
 
 updated_settings = render_settings_panel(current_settings, st.session_state.selected_model)
