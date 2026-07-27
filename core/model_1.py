@@ -396,6 +396,9 @@ def modify_position_tp_sl(position, tp_price, sl_price=None):
 # ═══════════════════════════════════════════════════════════════════════════════
 # ANA DİNAMİK YÖNETİM MOTORU 
 # ═══════════════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════════════
+# ANA DİNAMİK YÖNETİM MOTORU 
+# ═══════════════════════════════════════════════════════════════════════════════
 
 def manage_dynamic_grid():
     global REFERENCE_PRICE
@@ -412,7 +415,7 @@ def manage_dynamic_grid():
     # 1. KURAL: BEKLEME (STANDBY) KİLİDİ 
     if REFERENCE_PRICE is None:
         if not manual_positions and not robot_positions:
-            return True # Piyasada işlem yok, sessizce bekle (Bekleme Modu)
+            return True 
             
         yeni_referans = calculate_reference_price()
         if yeni_referans is None: return False
@@ -420,13 +423,12 @@ def manage_dynamic_grid():
         log_message(f"🎯 Hedef Kilitlendi: İlk islem saptandi. Ağ Güncel Fiyata Kuruluyor -> {REFERENCE_PRICE}")
 
     # 2. VE 5. KURAL: KESİNTİSİZ KÖR TAKİP (Kayan Ağ)
-    # Robot işlem kapansa da, açılsa da buralara bakmaz. Sadece REFERENCE_PRICE (Güncel Fiyat) üzerinden ağ örer.
     yeni_referans = calculate_reference_price()
     if yeni_referans is not None and REFERENCE_PRICE != yeni_referans:
         log_message(f"🌊 DİNAMİK AĞ: Fiyat Hareket Etti, Yeni Merkez -> {yeni_referans}")
         REFERENCE_PRICE = yeni_referans
 
-    # 3. KURAL: MANUEL İŞLEME TP EKLENMESİ (Kapatmaz, Sadece TP Günceller)
+    # 3. KURAL: MANUEL İŞLEME TP EKLENMESİ
     if manual_positions and not robot_positions:
         pos = manual_positions[0]
         if pos.tp == 0.0:
@@ -434,7 +436,7 @@ def manage_dynamic_grid():
             if modify_position_tp_sl(pos, tp_price):
                 log_message(f"✅ Manuel {ORDER_TYPE} islemine Kar Al (TP) eklendi: {tp_price}")
 
-    # GÜVENLİK KALKANI: LIMIT AŞILDIYSA SADECE BEKLEYEN EMİRLERİ SİL
+    # GÜVENLİK KALKANI
     if total_positions >= MAX_OPEN_POSITIONS:
         if robot_orders:
             log_message(f"🚨 KALKAN AKTİF: Maksimum açık pozisyon limitine ({MAX_OPEN_POSITIONS}) ulaşıldı!")
@@ -446,12 +448,15 @@ def manage_dynamic_grid():
                 log_message(f"✅ Marjin koruması için {silinen_kalkan} adet bekleyen emir silindi.")
         return True
 
-    # 5. İSTENEN DİNAMİK SEVİYELERİ HESAPLA
     desired_levels = calculate_grid_levels(REFERENCE_PRICE)
 
+    # -----------------------------------------------------------------------
+    # HATA BURADAYDI: Toleransı eski keskin (0.02) formata geri çevirdik!
+    tolerance = (SYMBOL_INFO.point * 2) if SYMBOL_INFO else 0.02
+    # -----------------------------------------------------------------------
+    
     # 6. UZAKTA KALAN (SINIR DIŞI) BEKLEYEN EMİRLERİ SİL
     silinen_emir_sayisi = 0
-    tolerance = GRID_STEP / 2.0  
     
     for order in robot_orders:
         order_price = normalize_price(order.price_open)
@@ -462,7 +467,7 @@ def manage_dynamic_grid():
                 break
                 
         if not is_valid:
-            if cancel_order(order): # Yalnızca Bekleyen Emirlere Dokunur
+            if cancel_order(order): 
                 silinen_emir_sayisi += 1
                 
     if silinen_emir_sayisi > 0:
@@ -498,7 +503,6 @@ def manage_dynamic_grid():
         log_message(f"🌱 Ağ kaydı: {doldurulan} adet yeni nöbetçi emir ufuk çizgisine eklendi.")
         
     return True
-
 # ═══════════════════════════════════════════════════════════════════════════════
 # BAŞLANGIÇ KONTROLLERİ VE ANA DÖNGÜ
 # ═══════════════════════════════════════════════════════════════════════════════
