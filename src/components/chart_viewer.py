@@ -40,12 +40,12 @@ def render_chart(current_price, bot_engine=None):
             # Model 2 ve Model 3'teki farklı fonksiyon isimlerini dinamik yakala
             orders = []
             positions = []
-            
+
             if hasattr(bot_engine, 'get_all_robot_orders'):
                 orders = bot_engine.get_all_robot_orders() or []
             elif hasattr(bot_engine, 'get_orders'):
                 orders = bot_engine.get_orders() or []
-                
+
             if hasattr(bot_engine, 'get_all_robot_positions'):
                 positions = bot_engine.get_all_robot_positions() or []
             elif hasattr(bot_engine, 'get_positions'):
@@ -64,10 +64,10 @@ def render_chart(current_price, bot_engine=None):
             for p in positions:
                 price = getattr(p, 'price_open', 0.0)
                 p_type = getattr(p, 'type', 0) # 0: BUY, 1: SELL (MT5 Standart)
-                
+
                 color = "#00e676" if p_type == 0 else "#ff5252"
                 label = "BUY Pos" if p_type == 0 else "SELL Pos"
-                
+
                 if price > 0:
                     fig.add_hline(
                         y=price, line_width=2, line_color=color, 
@@ -90,4 +90,4 @@ def render_chart(current_price, bot_engine=None):
         yaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.1)', tickformat=".2f")
     )
 
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")

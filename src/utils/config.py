@@ -2,8 +2,9 @@
 import json
 import os
 
-SETTINGS_MODEL1_FILE = "settings_model1.json"
-SETTINGS_MODEL2_FILE = "settings_model2.json"
+SETTINGS_MODEL1_FILE = "configs/settings_model1.json"
+SETTINGS_MODEL2_FILE = "configs/settings_model2.json"
+SETTINGS_MODEL3_FILE = "configs/settings_model3.json"
 
 # Dosya yoksa kullanılacak ilk fabrika ayarları
 DEFAULT_SETTINGS_MODEL1 = {

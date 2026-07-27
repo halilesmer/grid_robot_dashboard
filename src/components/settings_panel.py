@@ -1,9 +1,9 @@
 # components/settings_panel.py
 import streamlit as st
 import uuid
-from constants.tooltips import SETTINGS_TOOLTIPS
+from src.constants.tooltips import SETTINGS_TOOLTIPS
 # Yeni model 3 bileşenimizi içeri alıyoruz:
-from components.model3_settings import render_model_3_settings 
+from src.components.model3_settings import render_model_3_settings 
 
 def render_settings_panel(current_settings, model_name="Model 1"):
     """

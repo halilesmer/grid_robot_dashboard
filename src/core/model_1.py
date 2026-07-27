@@ -34,7 +34,7 @@ def load_dynamic_settings():
     global GRID_STEP, TAKE_PROFIT, LEVELS_BELOW, LEVELS_ABOVE
     global DEFAULT_LOT, MAX_OPEN_POSITIONS, MAX_PRICE_LIMIT, MIN_PRICE_LIMIT, LOOP_INTERVAL_SECONDS
     try:
-        with open("settings_model1.json", "r", encoding="utf-8") as f:
+        with open("configs/settings_model1.json", "r", encoding="utf-8") as f:
             settings = json.load(f)
             GRID_STEP = settings.get("GRID_STEP", 0.05)
             TAKE_PROFIT = settings.get("TAKE_PROFIT", 0.05)
@@ -57,7 +57,7 @@ if platform.system() == "Windows":
 else:
     IS_MAC_TEST_MODE = True
     print("⚠️ UYARI: Mac işletim sistemi algılandı. MT5 Sahte (Mock) modda çalışıyor!")
-    
+
 # ===============================================================================
 # 🍏🪟 MAC / WINDOWS UYUMLULUK KÖPRÜSÜ VE FİYAT SİMÜLATÖRÜ
 # ===============================================================================
@@ -187,7 +187,7 @@ UP_THRESHOLDS = [
 LOOP_INTERVAL_SECONDS = 1            
 MARKET_CLOSED_CHECK_INTERVAL = 60    
 LOG_TO_FILE = True                   
-LOG_FILE_PATH = "grid_robot_log.txt" 
+LOG_FILE_PATH = "logs/grid_robot_log.txt"
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # GLOBAL DEĞİŞKENLER
@@ -421,10 +421,10 @@ def modify_position_tp_sl(position, tp_price, sl_price=None):
     return True
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# ANA DİNAMİK YÖNETİM MOTORU 
+# ANA DİNAMİK YÖNETİM MOTORU
 # ═══════════════════════════════════════════════════════════════════════════════
 # ═══════════════════════════════════════════════════════════════════════════════
-# ANA DİNAMİK YÖNETİM MOTORU 
+# ANA DİNAMİK YÖNETİM MOTORU
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def manage_dynamic_grid():

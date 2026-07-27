@@ -6,9 +6,9 @@ def render_controls(is_running: bool, current_model: str = "Model 1"):
     Dinamik Tek Butonlu Kontrol Paneli ve Motor Seçimi
     """
     st.subheader("🎮 Robot Kontrol Paneli")
-    
+
     col1, col2, col3 = st.columns([1, 1, 1])
-    
+
     with col1:
         # Model 3 listeye eklendi ve index mantığı dinamik hale getirildi
         models = ["Model 1", "Model 2", "Model 3"]
@@ -29,10 +29,10 @@ def render_controls(is_running: bool, current_model: str = "Model 1"):
     with col3:
         button_label = "⏹️ Robotu Durdur" if is_running else "▶️ Robotu Başlat"
         button_type = "secondary" if is_running else "primary"
-        
-        toggle_btn = st.button(button_label, type=button_type, use_container_width=True)
+
+        toggle_btn = st.button(button_label, type=button_type, width="stretch")
 
     st.divider()
-    
+
     action = "TOGGLE" if toggle_btn else None
     return action, selected_model

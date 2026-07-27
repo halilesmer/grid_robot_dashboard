@@ -131,7 +131,7 @@ else:
 # ===============================================================================
 MAGIC_NUMBER = 300000 
 MAX_DEVIATION = 20      
-LOG_FILE_PATH = "grid_robot_m3_log.txt"
+LOG_FILE_PATH = "logs/grid_robot_m3_log.txt"
 SYMBOL_INFO = None          
 FILLING_MODE = mt5.ORDER_FILLING_FOK         
 IS_RUNNING = True

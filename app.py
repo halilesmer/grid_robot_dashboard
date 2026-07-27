@@ -1,20 +1,27 @@
 # app.py
+
+import sys
+from pathlib import Path
+
+# src klasörünü Python modül arama yoluna ekler
+sys.path.append(str(Path(__file__).parent / "src"))
+
 import streamlit as st
 import threading
 import time  
 import platform 
-from components.chart_viewer import render_chart
+from src.components.chart_viewer import render_chart
 
-from components.header import render_header
-from components.settings_panel import render_settings_panel
-from components.metrics import render_metrics
-from components.controls import render_controls
-from components.log_viewer import render_log_viewer 
-from styles.custom_css import apply_custom_css
-from utils.config import load_settings, save_settings
-import core.model_1 as model_1
-import core.model_2 as model_2
-import core.model_3 as model_3 
+from src.components.header import render_header
+from src.components.settings_panel import render_settings_panel
+from src.components.metrics import render_metrics
+from src.components.controls import render_controls
+from src.components.log_viewer import render_log_viewer 
+from src.styles.custom_css import apply_custom_css
+from src.utils.config import load_settings, save_settings
+import src.core.model_1 as model_1
+import src.core.model_2 as model_2
+import src.core.model_3 as model_3 
 
 st.set_page_config(
     page_title="Grid Robot Control",

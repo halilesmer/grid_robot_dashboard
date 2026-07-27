@@ -149,7 +149,7 @@ MAGIC_NUMBER  = 123456
 MAX_DEVIATION = 20      
 MARKET_CLOSED_CHECK_INTERVAL = 60    
 LOG_TO_FILE = True                   
-LOG_FILE_PATH = "grid_robot_log.txt"
+LOG_FILE_PATH = "logs/grid_robot_log.txt"
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # GLOBAL DEĞİŞKENLER
