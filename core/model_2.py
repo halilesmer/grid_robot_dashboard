@@ -260,7 +260,7 @@ def get_all_manual_positions():
     target_type = mt5.POSITION_TYPE_BUY if ORDER_TYPE.upper() == "BUY" else mt5.POSITION_TYPE_SELL
     return [p for p in positions if p.magic != MAGIC_NUMBER and p.type == target_type]
 
-# DÜZELTME: Kayma (Slippage) yuvarlaması dinamik grid_step ile
+# DÜZELTME: Kayma (Slippage) yuvarlaması (Dinamik Zone grid_step'i ile)
 def get_existing_levels(grid_step):
     levels = set()
     orders = get_all_robot_orders()
@@ -290,7 +290,7 @@ def cancel_order(order):
         return True
     return False
 
-# DÜZELTME: Ping-Pong Mıknatısı eklendi
+# DÜZELTME: Ping-Pong Mıknatısı (Dinamik grid_step entegreli)
 def calculate_reference_price(grid_step):
     global REFERENCE_PRICE
     current_price = get_current_market_price()
@@ -414,6 +414,8 @@ def manage_dynamic_grid():
                 log_message(f"🪤 Bölge ({ACTIVE_ZONE.get('min_price')}-{ACTIVE_ZONE.get('max_price')}) dışına çıkıldı. Temizlik KAPALI: Mevcut bekleyen emirler tuzak olarak bırakıldı.")
                 
         ACTIVE_ZONE = current_zone
+        # DÜZELTME 1: Yeni bölgeye geçince eski merkez hafızasını sıfırla! (Matematiksel Uyum)
+        REFERENCE_PRICE = None
 
     # BÖLGE KONTROLÜ
     if ACTIVE_ZONE is not None:
@@ -431,13 +433,20 @@ def manage_dynamic_grid():
         return True 
 
     desired_levels = calculate_grid_levels(REFERENCE_PRICE, ACTIVE_ZONE)
-    
-    # DÜZELTME: Tolerans dar ve keskin seviyeye getirildi
     tolerance = (SYMBOL_INFO.point * 2) if SYMBOL_INFO else 0.02
     
     # UZAKTA KALAN BEKLEYEN EMİRLERİ SİL
+    z_min = float(ACTIVE_ZONE.get("min_price", 0))
+    z_max = float(ACTIVE_ZONE.get("max_price", 0))
+
     for order in robot_orders:
         order_price = normalize_price(order.price_open)
+        
+        # DÜZELTME 2: (Model 2 Özelliği) Eğer emir şu anki aktif bölgenin dışındaysa,
+        # ve clear_on_exit = False sayesinde hayatta kalmışsa, ONA DOKUNMA (Tuzak Koruma)
+        if not (z_min <= order_price <= z_max):
+            continue
+
         is_valid = False
         for dl in desired_levels:
             if abs(order_price - dl) <= tolerance:
@@ -510,7 +519,7 @@ def run_startup_checks():
     log_message("Tum baslangic kontrolleri basarili!")
     return True
 
-# YANLIŞLIKLA SİLİNEN VE GERİ EKLENEN KRİTİK FONKSİYON
+# Geri Eklenen Kritik Fonksiyon (Web Dashboard için gereklidir)
 def get_live_metrics():
     current_price = get_current_market_price()
     robot_positions = get_all_robot_positions()
