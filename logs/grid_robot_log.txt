@@ -1,0 +1,117 @@
+[2026-07-25 21:49:52] [INFO] MT5 baglantisi kuruluyor...
+[2026-07-25 21:49:52] [INFO] MT5 baglantisi kuruldu.
+[2026-07-25 21:49:52] [INFO] Fill politikası: ORDER_FILLING_FOK
+[2026-07-25 21:49:52] [INFO] Piyasa acik. Bid: 75.0, Ask: 75.05
+[2026-07-25 21:49:52] [INFO] Tum baslangic kontrolleri basarili!
+[2026-07-25 21:49:52] [INFO] Robot calismaya basladi. (Durdurmak icin Ctrl+C)
+[2026-07-25 21:50:21] [INFO] 🛑 Robot durduruldu. Sadece bekleyen nöbetçi emirler temizleniyor. AÇIK POZİSYONLAR BIRAKILDI.
+[2026-07-25 21:50:21] [INFO] MT5 baglantisi kapatiliyor...
+[2026-07-25 21:50:21] [INFO] Robot sonlandirildi.
+[2026-07-25 21:50:28] [INFO] ============================================================
+[2026-07-25 21:50:28] [INFO] USOUSD Dinamik Grid Robot v2.2 (MODEL 2) Baslatiliyor...
+[2026-07-25 21:50:28] [INFO] ============================================================
+[2026-07-25 21:50:28] [INFO] MT5 baglantisi kuruluyor...
+[2026-07-25 21:50:28] [INFO] MT5 baglantisi kuruldu.
+[2026-07-25 21:50:28] [INFO] Fill politikası: ORDER_FILLING_FOK
+[2026-07-25 21:50:28] [INFO] Piyasa acik. Bid: 75.0, Ask: 75.05
+[2026-07-25 21:50:28] [INFO] Tum baslangic kontrolleri basarili!
+[2026-07-25 21:50:28] [INFO] Robot calismaya basladi. (Durdurmak icin Ctrl+C)
+[2026-07-25 21:51:10] [INFO] 🛑 Robot durduruldu. Sadece bekleyen nöbetçi emirler temizleniyor. AÇIK POZİSYONLAR BIRAKILDI.
+[2026-07-25 21:51:10] [INFO] MT5 baglantisi kapatiliyor...
+[2026-07-25 21:51:10] [INFO] Robot sonlandirildi.
+[2026-07-25 21:51:25] [INFO] ============================================================
+[2026-07-25 21:51:25] [INFO] USOUSD Dinamik Grid Robot v2.2 (MODEL 2) Baslatiliyor...
+[2026-07-25 21:51:25] [INFO] ============================================================
+[2026-07-25 21:51:25] [INFO] MT5 baglantisi kuruluyor...
+[2026-07-25 21:51:25] [INFO] MT5 baglantisi kuruldu.
+[2026-07-25 21:51:25] [INFO] Fill politikası: ORDER_FILLING_FOK
+[2026-07-25 21:51:25] [INFO] Piyasa acik. Bid: 75.0, Ask: 75.05
+[2026-07-25 21:51:25] [INFO] Tum baslangic kontrolleri basarili!
+[2026-07-25 21:51:25] [INFO] Robot calismaya basladi. (Durdurmak icin Ctrl+C)
+[2026-07-26 23:54:56] [INFO] ============================================================
+[2026-07-26 23:54:56] [INFO] USOUSD Dinamik Grid Robot v2.2 Baslatiliyor...
+[2026-07-26 23:54:56] [INFO] ============================================================
+[2026-07-26 23:54:56] [INFO] MT5 baglantisi kuruluyor...
+[2026-07-26 23:54:56] [INFO] MT5 baglantisi kuruldu.
+[2026-07-26 23:54:56] [INFO] Fill politikası: ORDER_FILLING_FOK
+[2026-07-26 23:54:56] [INFO] Piyasa acik. Bid: 75.0, Ask: 75.05
+[2026-07-26 23:54:56] [INFO] Tum baslangic kontrolleri basarili!
+[2026-07-26 23:54:56] [INFO] Robot calismaya basladi. (Durdurmak icin Ctrl+C)
+[2026-07-26 23:54:56] [INFO] Manuel start bekleniyor... Lutfen manuel islem acin.
+[2026-07-26 23:55:17] [INFO] 🛑 Robot durduruldu. Sadece bekleyen nöbetçi emirler temizleniyor. AÇIK POZİSYONLAR BIRAKILDI.
+[2026-07-26 23:55:17] [INFO] MT5 baglantisi kapatiliyor...
+[2026-07-26 23:55:17] [INFO] Robot sonlandirildi.
+[2026-07-26 23:55:52] [INFO] ============================================================
+[2026-07-26 23:55:52] [INFO] USOUSD Dinamik Grid Robot v2.2 (MODEL 2) Baslatiliyor...
+[2026-07-26 23:55:52] [INFO] ============================================================
+[2026-07-26 23:55:52] [INFO] MT5 baglantisi kuruluyor...
+[2026-07-26 23:55:52] [INFO] MT5 baglantisi kuruldu.
+[2026-07-26 23:55:52] [INFO] Fill politikası: ORDER_FILLING_FOK
+[2026-07-26 23:55:52] [INFO] Piyasa acik. Bid: 75.0, Ask: 75.05
+[2026-07-26 23:55:52] [INFO] Tum baslangic kontrolleri basarili!
+[2026-07-26 23:55:52] [INFO] Robot calismaya basladi. (Durdurmak icin Ctrl+C)
+[2026-07-27 00:08:32] [INFO] ============================================================
+[2026-07-27 00:08:32] [INFO] USOUSD Dinamik Grid Robot v2.2 (MODEL 2) Baslatiliyor...
+[2026-07-27 00:08:32] [INFO] ============================================================
+[2026-07-27 00:08:32] [INFO] MT5 baglantisi kuruluyor...
+[2026-07-27 00:08:32] [INFO] MT5 baglantisi kuruldu.
+[2026-07-27 00:08:32] [INFO] Fill politikası: ORDER_FILLING_FOK
+[2026-07-27 00:08:32] [INFO] Piyasa acik. Bid: 75.0, Ask: 75.05
+[2026-07-27 00:08:32] [INFO] Tum baslangic kontrolleri basarili!
+[2026-07-27 00:08:32] [INFO] Robot calismaya basladi. (Durdurmak icin Ctrl+C)
+[2026-07-27 00:09:04] [INFO] 🛑 Robot durduruldu. Sadece bekleyen nöbetçi emirler temizleniyor. AÇIK POZİSYONLAR BIRAKILDI.
+[2026-07-27 00:09:04] [INFO] MT5 baglantisi kapatiliyor...
+[2026-07-27 00:09:04] [INFO] Robot sonlandirildi.
+[2026-07-27 00:15:10] [INFO] ============================================================
+[2026-07-27 00:15:10] [INFO] USOUSD Dinamik Grid Robot v2.2 (MODEL 2) Baslatiliyor...
+[2026-07-27 00:15:10] [INFO] ============================================================
+[2026-07-27 00:15:10] [INFO] MT5 baglantisi kuruluyor...
+[2026-07-27 00:15:10] [INFO] MT5 baglantisi kuruldu.
+[2026-07-27 00:15:10] [INFO] Fill politikası: ORDER_FILLING_FOK
+[2026-07-27 00:15:10] [INFO] Piyasa acik. Bid: 75.0, Ask: 75.05
+[2026-07-27 00:15:10] [INFO] Tum baslangic kontrolleri basarili!
+[2026-07-27 00:15:10] [INFO] Robot calismaya basladi. (Durdurmak icin Ctrl+C)
+[2026-07-27 00:15:42] [INFO] 🛑 Robot durduruldu. Sadece bekleyen nöbetçi emirler temizleniyor. AÇIK POZİSYONLAR BIRAKILDI.
+[2026-07-27 00:15:42] [INFO] MT5 baglantisi kapatiliyor...
+[2026-07-27 00:15:42] [INFO] Robot sonlandirildi.
+[2026-07-27 00:15:55] [INFO] 📍 BÖLGE İÇİ OTONOM AĞ: Yeni Merkez -> 75.0
+[2026-07-27 00:15:57] [INFO] ============================================================
+[2026-07-27 00:15:57] [INFO] USOUSD Dinamik Grid Robot v2.2 (MODEL 2) Baslatiliyor...
+[2026-07-27 00:15:57] [INFO] ============================================================
+[2026-07-27 00:15:57] [INFO] MT5 baglantisi kuruluyor...
+[2026-07-27 00:15:57] [INFO] MT5 baglantisi kuruldu.
+[2026-07-27 00:15:57] [INFO] Fill politikası: ORDER_FILLING_FOK
+[2026-07-27 00:15:57] [INFO] Piyasa acik. Bid: 75.0, Ask: 75.05
+[2026-07-27 00:15:57] [INFO] Tum baslangic kontrolleri basarili!
+[2026-07-27 00:15:57] [INFO] Robot calismaya basladi. (Durdurmak icin Ctrl+C)
+[2026-07-27 00:15:57] [INFO] 📍 BÖLGE İÇİ OTONOM AĞ: Yeni Merkez -> 75.0
+[2026-07-27 00:26:44] [INFO] ============================================================
+[2026-07-27 00:26:44] [INFO] USOUSD Dinamik Grid Robot v2.2 (MODEL 2) Baslatiliyor...
+[2026-07-27 00:26:44] [INFO] ============================================================
+[2026-07-27 00:26:44] [INFO] MT5 baglantisi kuruluyor...
+[2026-07-27 00:26:44] [INFO] MT5 baglantisi kuruldu.
+[2026-07-27 00:26:44] [INFO] Fill politikası: ORDER_FILLING_FOK
+[2026-07-27 00:26:44] [INFO] Piyasa acik. Bid: 75.0, Ask: 75.05
+[2026-07-27 00:26:44] [INFO] Tum baslangic kontrolleri basarili!
+[2026-07-27 00:26:44] [INFO] Robot calismaya basladi. (Durdurmak icin Ctrl+C)
+[2026-07-27 00:26:44] [INFO] 📍 BÖLGE İÇİ OTONOM AĞ: Yeni Merkez -> 75.0
+[2026-07-27 00:26:53] [INFO] 🛑 Robot durduruldu. Sadece bekleyen nöbetçi emirler temizleniyor. AÇIK POZİSYONLAR BIRAKILDI.
+[2026-07-27 00:26:53] [INFO] MT5 baglantisi kapatiliyor...
+[2026-07-27 00:26:53] [INFO] Robot sonlandirildi.
+[2026-07-27 00:27:07] [INFO] ============================================================
+[2026-07-27 00:27:07] [INFO] USOUSD Dinamik Grid Robot v2.2 (MODEL 2) Baslatiliyor...
+[2026-07-27 00:27:07] [INFO] ============================================================
+[2026-07-27 00:27:07] [INFO] MT5 baglantisi kuruluyor...
+[2026-07-27 00:27:07] [INFO] MT5 baglantisi kuruldu.
+[2026-07-27 00:27:07] [INFO] Fill politikası: ORDER_FILLING_FOK
+[2026-07-27 00:27:07] [INFO] Piyasa acik. Bid: 75.0, Ask: 75.05
+[2026-07-27 00:27:07] [INFO] Tum baslangic kontrolleri basarili!
+[2026-07-27 00:27:07] [INFO] Robot calismaya basladi. (Durdurmak icin Ctrl+C)
+[2026-07-27 00:27:13] [INFO] 📍 BÖLGE İÇİ OTONOM AĞ: Yeni Merkez -> 70.5
+[2026-07-27 00:27:17] [INFO] 🪤 Bölge (70.0-80.0) dışına çıkıldı. Temizlik KAPALI: Mevcut bekleyen emirler tuzak olarak bırakıldı.
+[2026-07-27 00:27:29] [INFO] 📍 BÖLGE İÇİ OTONOM AĞ: Yeni Merkez -> 79.0
+[2026-07-27 00:27:36] [INFO] 📍 BÖLGE İÇİ OTONOM AĞ: Yeni Merkez -> 76.0
+[2026-07-27 00:27:44] [INFO] 📍 BÖLGE İÇİ OTONOM AĞ: Yeni Merkez -> 72.0
+[2026-07-27 00:28:00] [INFO] 🛑 Robot durduruldu. Sadece bekleyen nöbetçi emirler temizleniyor. AÇIK POZİSYONLAR BIRAKILDI.
+[2026-07-27 00:28:00] [INFO] MT5 baglantisi kapatiliyor...
+[2026-07-27 00:28:00] [INFO] Robot sonlandirildi.
