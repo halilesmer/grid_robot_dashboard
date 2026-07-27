@@ -161,7 +161,7 @@ FILLING_MODE = None
 IS_RUNNING = True
 INITIAL_CLEANUP_DONE = False 
 ACTIVE_ZONE = None
-SIMULATED_PRICE = None # 👈 YENİ: Arayüzden gelen sahte fiyatı (slider) tutacak değişken
+SIMULATED_PRICE = None
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # YARDIMCI FONKSİYONLAR
@@ -204,9 +204,6 @@ def normalize_volume(volume):
 
 def get_current_market_price():
     global SIMULATED_PRICE
-    
-    # 👈 BARKOD: Eğer app.py üzerinden bir simülatör fiyatı enjekte edildiyse 
-    # MT5'e bağlanmak yerine doğrudan bizim belirlediğimiz bu sahte fiyatı kullan.
     if SIMULATED_PRICE is not None:
         return SIMULATED_PRICE
         
@@ -263,7 +260,8 @@ def get_all_manual_positions():
     target_type = mt5.POSITION_TYPE_BUY if ORDER_TYPE.upper() == "BUY" else mt5.POSITION_TYPE_SELL
     return [p for p in positions if p.magic != MAGIC_NUMBER and p.type == target_type]
 
-def get_existing_levels():
+# DÜZELTME: Kayma (Slippage) yuvarlaması dinamik grid_step ile
+def get_existing_levels(grid_step):
     levels = set()
     orders = get_all_robot_orders()
     r_pos = get_all_robot_positions()
@@ -272,13 +270,16 @@ def get_existing_levels():
     if orders:
         for order in orders: levels.add(normalize_price(order.price_open))
     if r_pos:
-        for pos in r_pos: levels.add(normalize_price(pos.price_open))
+        for pos in r_pos: 
+            snapped_price = round(pos.price_open / grid_step) * grid_step
+            levels.add(normalize_price(snapped_price))
     if m_pos:
-        for pos in m_pos: levels.add(normalize_price(pos.price_open))
+        for pos in m_pos: 
+            snapped_price = round(pos.price_open / grid_step) * grid_step
+            levels.add(normalize_price(snapped_price))
     return levels
 
 def cancel_order(order):
-    """SADECE ve SADECE bekleyen emirleri (Pending Orders) iptal eder."""
     request = {
         "action": mt5.TRADE_ACTION_REMOVE,
         "order": order.ticket,
@@ -289,11 +290,23 @@ def cancel_order(order):
         return True
     return False
 
+# DÜZELTME: Ping-Pong Mıknatısı eklendi
 def calculate_reference_price(grid_step):
+    global REFERENCE_PRICE
     current_price = get_current_market_price()
     if current_price is None: return None
-    snapped_price = round(current_price / grid_step) * grid_step
-    return normalize_price(snapped_price)
+    
+    if REFERENCE_PRICE is None:
+        snapped_price = round(current_price / grid_step) * grid_step
+        return normalize_price(snapped_price)
+        
+    distance = abs(current_price - REFERENCE_PRICE)
+    
+    if distance >= grid_step:
+        snapped_price = round(current_price / grid_step) * grid_step
+        return normalize_price(snapped_price)
+        
+    return REFERENCE_PRICE
 
 def get_active_zone(price):
     for zone in ZONES:
@@ -310,13 +323,11 @@ def calculate_grid_levels(reference_price, zone_info):
     z_min = float(zone_info["min_price"])
     z_max = float(zone_info["max_price"])
     
-    # From reference price to max
     p = reference_price + grid_step
     while p <= z_max:
         levels.append(normalize_price(p))
         p += grid_step
         
-    # From reference price to min
     p = reference_price - grid_step
     while p >= z_min:
         levels.append(normalize_price(p))
@@ -343,7 +354,6 @@ def send_pending_order(price, lot, tp_price, sl_price=None):
         "type_filling": FILLING_MODE,
         "tp": tp_price,
     }
-    # Artık STOP_LOSS dinamik ve bölgeden geldiği için sadece sl_price kontrolü yeterli
     if sl_price is not None:
         request["sl"] = sl_price
         
@@ -353,8 +363,6 @@ def send_pending_order(price, lot, tp_price, sl_price=None):
 
     result = mt5.order_send(request)
     if result is None or result.retcode != mt5.TRADE_RETCODE_DONE:
-        last_err = mt5.last_error()
-        log_message(f"❌ MT5 Emir Hatası! Kodu: {result.retcode if result else 'Yok'}, Hata: {last_err}", "ERROR")
         return False
     
     return True
@@ -409,7 +417,6 @@ def manage_dynamic_grid():
 
     # BÖLGE KONTROLÜ
     if ACTIVE_ZONE is not None:
-        # Fiyat bir bölgenin içinde -> Ayarları bölgeden al
         grid_step = float(ACTIVE_ZONE.get("grid_step", 0.05))
         tp_val = float(ACTIVE_ZONE.get("take_profit", 0.05))
         lot_val = float(ACTIVE_ZONE.get("lot_size", 0.01))
@@ -420,14 +427,13 @@ def manage_dynamic_grid():
             REFERENCE_PRICE = yeni_referans
             log_message(f"📍 BÖLGE İÇİ OTONOM AĞ: Yeni Merkez -> {REFERENCE_PRICE}")
     else:
-        # Fiyat hiçbir bölgede değilse robot işlem yapmaz. Standby (bekleme) modundadır.
         REFERENCE_PRICE = None
         return True 
 
-    # GÜVENLİK KALKANI: Max Positions sildik. Maksimum işlem sayısını zaten bölge sınırları belirliyor.
-
     desired_levels = calculate_grid_levels(REFERENCE_PRICE, ACTIVE_ZONE)
-    tolerance = grid_step / 2.0  
+    
+    # DÜZELTME: Tolerans dar ve keskin seviyeye getirildi
+    tolerance = (SYMBOL_INFO.point * 2) if SYMBOL_INFO else 0.02
     
     # UZAKTA KALAN BEKLEYEN EMİRLERİ SİL
     for order in robot_orders:
@@ -442,9 +448,8 @@ def manage_dynamic_grid():
             cancel_order(order)
 
     # EKSİK OLAN SEVİYELERİ DOLDUR
-    mevcut_seviyeler = get_existing_levels() 
+    mevcut_seviyeler = get_existing_levels(grid_step) 
     for level_price in desired_levels:
-        # Taban ve Tavan fiyat kontrollerini sildik, çünkü level_price zaten desired_levels içinde, bu da direkt Zone ile sınırlandırılmış durumda.
         is_occupied = False
         for exist_lvl in mevcut_seviyeler:
             if abs(level_price - exist_lvl) <= tolerance:
@@ -505,6 +510,7 @@ def run_startup_checks():
     log_message("Tum baslangic kontrolleri basarili!")
     return True
 
+# YANLIŞLIKLA SİLİNEN VE GERİ EKLENEN KRİTİK FONKSİYON
 def get_live_metrics():
     current_price = get_current_market_price()
     robot_positions = get_all_robot_positions()
