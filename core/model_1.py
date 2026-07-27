@@ -307,12 +307,24 @@ def get_existing_levels():
     r_pos = get_all_robot_positions()
     m_pos = get_all_manual_positions()
     
+    # 1. Bekleyen emirlerin fiyatı nettir (kayma yoktur), doğrudan ekle.
     if orders:
-        for order in orders: levels.add(normalize_price(order.price_open))
+        for order in orders: 
+            levels.add(normalize_price(order.price_open))
+            
+    # 2. CANLI İŞLEMLERDE SPREAD/SLIPPAGE (KAYMA) OLUR!
+    # İşlem 85.007'de açılmış olsa bile robot onu 85.000 çizgisi olarak algılamalı.
+    # Bu yüzden fiyatı en yakın Grid (Ağ) aralığına yuvarlayarak listeye ekliyoruz.
     if r_pos:
-        for pos in r_pos: levels.add(normalize_price(pos.price_open))
+        for pos in r_pos: 
+            snapped_price = round(pos.price_open / GRID_STEP) * GRID_STEP
+            levels.add(normalize_price(snapped_price))
+            
     if m_pos:
-        for pos in m_pos: levels.add(normalize_price(pos.price_open))
+        for pos in m_pos: 
+            snapped_price = round(pos.price_open / GRID_STEP) * GRID_STEP
+            levels.add(normalize_price(snapped_price))
+            
     return levels
 
 # KURAL 4 UYARINCA `close_position` FONKSİYONU KODDAN TAMAMEN SİLİNMİŞTİR.
