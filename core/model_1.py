@@ -333,8 +333,23 @@ def cancel_order(order):
 def calculate_reference_price():
     current_price = get_current_market_price()
     if current_price is None: return None
-    snapped_price = round(current_price / GRID_STEP) * GRID_STEP
-    return normalize_price(snapped_price)
+    
+    # 1. Eğer robot yeni başlıyorsa ve merkez yoksa doğrudan hesapla
+    if REFERENCE_PRICE is None:
+        snapped_price = round(current_price / GRID_STEP) * GRID_STEP
+        return normalize_price(snapped_price)
+        
+    # 2. PİNG-PONG (TİTREME) KORUMASI:
+    # Fiyat, mevcut merkezden en az "1 Grid Adımı" kadar uzaklaşmadan 
+    # ağın merkezini kesinlikle değiştirme ve emirleri silme!
+    distance = abs(current_price - REFERENCE_PRICE)
+    
+    if distance >= GRID_STEP:
+        snapped_price = round(current_price / GRID_STEP) * GRID_STEP
+        return normalize_price(snapped_price)
+        
+    # Fiyat yeterince uzaklaşmadıysa (sadece milimetrik dalgalanıyorsa) eski merkezi koru.
+    return REFERENCE_PRICE
 
 def calculate_grid_levels(reference_price):
     levels = []
