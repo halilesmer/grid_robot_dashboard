@@ -25,12 +25,18 @@ ZONES = []
 ORDER_TYPE = "BUY"
 SYMBOL = "USOUSD"
 
+
 def load_dynamic_settings():
-    """Her döngüde arayüzden gelen güncel settings_model2.json dosyasını okur"""
+    """Her döngüde arayüzden gelen güncel configs/settings_model2.json dosyasını okur"""
     global LOOP_INTERVAL_SECONDS, ZONES, ORDER_TYPE, SYMBOL
-    
+
+    # configs/ klasöründen okumasını sağlıyoruz
+    file_path = os.path.join("configs", "settings_model2.json")
+    if not os.path.exists(file_path):
+        file_path = "settings_model2.json"  # Yedek kontrol
+
     try:
-        with open("settings_model2.json", "r", encoding="utf-8") as f:
+        with open(file_path, "r", encoding="utf-8") as f:
             settings = json.load(f)
             LOOP_INTERVAL_SECONDS = settings.get("LOOP_INTERVAL_SECONDS", 1.0)
             ZONES = settings.get("ZONES", [])
@@ -340,7 +346,7 @@ def send_pending_order(price, lot, tp_price, sl_price=None):
     if current_price is None:
         return False
     order_type = get_pending_order_type(price, current_price)
-    
+
     request = {
         "action": mt5.TRADE_ACTION_PENDING,
         "symbol": SYMBOL,
@@ -351,12 +357,14 @@ def send_pending_order(price, lot, tp_price, sl_price=None):
         "magic": MAGIC_NUMBER,
         "comment": f"GridBot_M2_{ORDER_TYPE}",
         "type_time": mt5.ORDER_TIME_GTC,
-        "type_filling": FILLING_MODE,
+        "type_filling": (
+            FILLING_MODE if FILLING_MODE is not None else mt5.ORDER_FILLING_IOC
+        ),
         "tp": tp_price,
     }
     if sl_price is not None:
         request["sl"] = sl_price
-        
+
     check = mt5.order_check(request)
     if check is None or check.retcode != 0:
         return False
@@ -364,7 +372,7 @@ def send_pending_order(price, lot, tp_price, sl_price=None):
     result = mt5.order_send(request)
     if result is None or result.retcode != mt5.TRADE_RETCODE_DONE:
         return False
-    
+
     return True
 
 def modify_position_tp_sl(position, tp_price, sl_price=None):
