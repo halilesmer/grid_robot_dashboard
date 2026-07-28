@@ -1,6 +1,6 @@
 """
 ================================================================================
-🛠️ USOUSD Yarı-Otomatik Dinamik Grid Robotu v2.2 (MODEL 1)
+🛠️ USOUSD Yarı-Otomatik Dinamik Grid Robotu v2 (MODEL 1)
 MetaTrader 5 Python API ile çalışan algoritmik ticaret robotu
 ================================================================================
 Açıklama: 
@@ -527,7 +527,7 @@ def manage_dynamic_grid():
 def run_startup_checks():
     global SYMBOL_INFO, FILLING_MODE
     log_message("=" * 60)
-    log_message("USOUSD Dinamik Grid Robot v2.2 Baslatiliyor...")
+    log_message("USOUSD Dinamik Grid Robot v2 Baslatiliyor...")
     log_message("=" * 60)
 
     log_message("MT5 baglantisi kuruluyor...")
