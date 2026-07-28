@@ -72,7 +72,15 @@ if live_data.get("algo_trading_error", False):
         "Robot emir gönderemiyor. Lütfen MT5 terminalinin üst menüsünden 'Algo Trading' butonunu aktif (yeşil) hale getirin.",
         icon="🚫",
     )
-    
+
+    # EĞER HATA ALINDIĞINDA ROBOT HALA ÇALIŞIYOR GÖRÜNÜYORSA, OTOMATİK FİŞİNİ ÇEK:
+    if st.session_state.robot_running:
+        st.session_state.robot_running = False
+        bot_engine.IS_RUNNING = False
+        st.toast("🛑 Motor kilitlendi: Algo Trading kapalı!", icon="⚠️")
+        st.rerun()  # Arayüzü anında yenileyip butonu "Başlat"a çevir
+# ==========================================
+
 # ==========================================
 # ÜST KOKPİT PANELİ (Metrikler + Hesap + Kontroller)
 # ==========================================
