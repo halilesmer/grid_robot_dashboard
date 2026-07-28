@@ -18,6 +18,7 @@ import os
 import platform
 import json
 import threading
+from src.utils.trade_utils import safe_send_order, get_algo_status
 
 # Temel Değişkenleri Başlangıç İçin Tanımlayalım
 LOOP_INTERVAL_SECONDS = 1.0
@@ -272,7 +273,7 @@ def get_existing_levels(grid_step):
     orders = get_all_robot_orders()
     r_pos = get_all_robot_positions()
     m_pos = get_all_manual_positions()
-    
+
     if orders:
         for order in orders: levels.add(normalize_price(order.price_open))
     if r_pos:
@@ -285,16 +286,16 @@ def get_existing_levels(grid_step):
             levels.add(normalize_price(snapped_price))
     return levels
 
+
 def cancel_order(order):
     request = {
         "action": mt5.TRADE_ACTION_REMOVE,
         "order": order.ticket,
-        "symbol": SYMBOL
+        "symbol": SYMBOL,
     }
-    result = mt5.order_send(request)
-    if result and result.retcode == mt5.TRADE_RETCODE_DONE:
-        return True
-    return False
+    # Emir iptali de güvenli merkeze emanet
+    return safe_send_order(mt5, request, log_message)
+
 
 # DÜZELTME: Ping-Pong Mıknatısı (Dinamik grid_step entegreli)
 def calculate_reference_price(grid_step):
@@ -324,22 +325,23 @@ def calculate_grid_levels(reference_price, zone_info):
     levels = []
     if zone_info is None or reference_price is None:
         return levels
-        
+
     grid_step = float(zone_info["grid_step"])
     z_min = float(zone_info["min_price"])
     z_max = float(zone_info["max_price"])
-    
+
     p = reference_price + grid_step
     while p <= z_max:
         levels.append(normalize_price(p))
         p += grid_step
-        
+
     p = reference_price - grid_step
     while p >= z_min:
         levels.append(normalize_price(p))
         p -= grid_step
-            
+
     return sorted(set(levels))
+
 
 def send_pending_order(price, lot, tp_price, sl_price=None):
     current_price = get_current_market_price()
@@ -355,25 +357,21 @@ def send_pending_order(price, lot, tp_price, sl_price=None):
         "price": price,
         "deviation": MAX_DEVIATION,
         "magic": MAGIC_NUMBER,
-        "comment": f"GridBot_M2_{ORDER_TYPE}",
+        "comment": f"GridBot_{ORDER_TYPE}",
         "type_time": mt5.ORDER_TIME_GTC,
         "type_filling": (
             FILLING_MODE if FILLING_MODE is not None else mt5.ORDER_FILLING_IOC
         ),
         "tp": tp_price,
     }
-    if sl_price is not None:
+    # Model 1'de STOP_LOSS globaldir, Model 2'de fonksiyona gelir.
+    # Güvenli atama:
+    if sl_price is not None and sl_price > 0:
         request["sl"] = sl_price
 
-    check = mt5.order_check(request)
-    if check is None or check.retcode != 0:
-        return False
+    # Loglama yeteneğiyle birlikte gönderiyoruz!
+    return safe_send_order(mt5, request, log_message)
 
-    result = mt5.order_send(request)
-    if result is None or result.retcode != mt5.TRADE_RETCODE_DONE:
-        return False
-
-    return True
 
 def modify_position_tp_sl(position, tp_price, sl_price=None):
     request = {
@@ -382,13 +380,12 @@ def modify_position_tp_sl(position, tp_price, sl_price=None):
         "symbol": SYMBOL,
         "tp": tp_price,
     }
-    if sl_price is not None:
+    if sl_price is not None and sl_price > 0:
         request["sl"] = sl_price
-        
-    result = mt5.order_send(request)
-    if result is None or result.retcode != mt5.TRADE_RETCODE_DONE:
-        return False
-    return True
+
+    # TP/SL değişikliği de güvenli merkeze emanet
+    return safe_send_order(mt5, request, log_message)
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # ANA DİNAMİK YÖNETİM MOTORU (MODEL 2)
@@ -548,7 +545,8 @@ def get_live_metrics():
         "profit": profit,
         "open_positions": open_positions,
         "pending_orders": pending_orders,
-        "current_price": current_price if current_price else 0.0
+        "current_price": current_price if current_price else 0.0,
+        "algo_trading_error": get_algo_status() # Merkezi bileşenden okuyoruz!
     }
 
 def main_loop():

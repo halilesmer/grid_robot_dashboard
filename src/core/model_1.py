@@ -18,6 +18,7 @@ import os
 import platform
 import json
 import threading
+from src.utils.trade_utils import safe_send_order, get_algo_status
 
 # Global Değişkenleri Başlangıç İçin Tanımlayalım
 GRID_STEP = 0.05
@@ -306,12 +307,12 @@ def get_existing_levels():
     orders = get_all_robot_orders()
     r_pos = get_all_robot_positions()
     m_pos = get_all_manual_positions()
-    
+
     # 1. Bekleyen emirlerin fiyatı nettir (kayma yoktur), doğrudan ekle.
     if orders:
         for order in orders: 
             levels.add(normalize_price(order.price_open))
-            
+
     # 2. CANLI İŞLEMLERDE SPREAD/SLIPPAGE (KAYMA) OLUR!
     # İşlem 85.007'de açılmış olsa bile robot onu 85.000 çizgisi olarak algılamalı.
     # Bu yüzden fiyatı en yakın Grid (Ağ) aralığına yuvarlayarak listeye ekliyoruz.
@@ -319,28 +320,27 @@ def get_existing_levels():
         for pos in r_pos: 
             snapped_price = round(pos.price_open / GRID_STEP) * GRID_STEP
             levels.add(normalize_price(snapped_price))
-            
+
     if m_pos:
         for pos in m_pos: 
             snapped_price = round(pos.price_open / GRID_STEP) * GRID_STEP
             levels.add(normalize_price(snapped_price))
-            
+
     return levels
 
 # KURAL 4 UYARINCA `close_position` FONKSİYONU KODDAN TAMAMEN SİLİNMİŞTİR.
 # Yalnızca bekleyen emirleri silecek olan fonksiyon (cancel_order) bırakılmıştır.
 
+
 def cancel_order(order):
-    """SADECE ve SADECE bekleyen emirleri (Pending Orders) iptal eder."""
     request = {
         "action": mt5.TRADE_ACTION_REMOVE,
         "order": order.ticket,
-        "symbol": SYMBOL
+        "symbol": SYMBOL,
     }
-    result = mt5.order_send(request)
-    if result and result.retcode == mt5.TRADE_RETCODE_DONE:
-        return True
-    return False
+    # Emir iptali de güvenli merkeze emanet
+    return safe_send_order(mt5, request, log_message)
+
 
 def calculate_reference_price():
     current_price = get_current_market_price()
@@ -371,12 +371,13 @@ def calculate_grid_levels(reference_price):
         levels.append(normalize_price(reference_price + (i * GRID_STEP)))
     return sorted(set(levels))
 
+
 def send_pending_order(price, lot, tp_price, sl_price=None):
     current_price = get_current_market_price()
     if current_price is None:
         return False
     order_type = get_pending_order_type(price, current_price)
-    
+
     request = {
         "action": mt5.TRADE_ACTION_PENDING,
         "symbol": SYMBOL,
@@ -392,18 +393,11 @@ def send_pending_order(price, lot, tp_price, sl_price=None):
     }
     if sl_price is not None and STOP_LOSS > 0:
         request["sl"] = sl_price
-        
-    check = mt5.order_check(request)
-    if check is None or check.retcode != 0:
-        return False
 
-    result = mt5.order_send(request)
-    if result is None or result.retcode != mt5.TRADE_RETCODE_DONE:
-        last_err = mt5.last_error()
-        log_message(f"❌ MT5 Emir Hatası! Kodu: {result.retcode if result else 'Yok'}, Hata: {last_err}", "ERROR")
-        return False
-    
-    return True
+    # Eski kalabalık kodlar tamamen silindi.
+    # Artık sadece merkezi trade_utils bileşenimize yolluyoruz:
+    return safe_send_order(mt5, request)
+
 
 def modify_position_tp_sl(position, tp_price, sl_price=None):
     request = {
@@ -412,17 +406,13 @@ def modify_position_tp_sl(position, tp_price, sl_price=None):
         "symbol": SYMBOL,
         "tp": tp_price,
     }
-    if sl_price is not None and STOP_LOSS > 0:
+    if sl_price is not None and sl_price > 0:
         request["sl"] = sl_price
-        
-    result = mt5.order_send(request)
-    if result is None or result.retcode != mt5.TRADE_RETCODE_DONE:
-        return False
-    return True
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# ANA DİNAMİK YÖNETİM MOTORU
-# ═══════════════════════════════════════════════════════════════════════════════
+    # TP/SL değişikliği de güvenli merkeze emanet
+    return safe_send_order(mt5, request, log_message)
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # ANA DİNAMİK YÖNETİM MOTORU
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -576,23 +566,24 @@ def get_live_metrics():
     current_price = get_current_market_price()
     robot_positions = get_all_robot_positions()
     robot_orders = get_all_robot_orders()
-    
+
     profit = 0.0
     open_positions = 0
     pending_orders = 0
-    
+
     if robot_positions:
         open_positions = len(robot_positions)
         profit = sum(pos.profit for pos in robot_positions)
-        
+
     if robot_orders:
         pending_orders = len(robot_orders)
-        
+
     return {
         "profit": profit,
         "open_positions": open_positions,
         "pending_orders": pending_orders,
-        "current_price": current_price if current_price else 0.0
+        "current_price": current_price if current_price else 0.0,
+        "algo_trading_error": get_algo_status(),  # Merkezi bileşenden okuyoruz!
     }
 
 def main_loop():
