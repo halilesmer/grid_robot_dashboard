@@ -64,6 +64,16 @@ else:
     }
 
 # ==========================================
+# 🔴 BURAYI EKLİYORUZ: ALGO TRADING GÜVENLİK UYARISI
+# ==========================================
+if live_data.get("algo_trading_error", False):
+    st.error(
+        "🚨 **KRİTİK HATA:** MetaTrader 5'te **'Algo Trading' (Otomatik Ticaret)** kapalı! "
+        "Robot emir gönderemiyor. Lütfen MT5 terminalinin üst menüsünden 'Algo Trading' butonunu aktif (yeşil) hale getirin.",
+        icon="🚫",
+    )
+    
+# ==========================================
 # ÜST KOKPİT PANELİ (Metrikler + Hesap + Kontroller)
 # ==========================================
 # Ekranı 3 sütuna bölüyoruz.
