@@ -7,5 +7,9 @@ __pycache__/
 venv/
 .venv/
 
-# MetaTrader Hesap Bilgileri (Güvenlik)
+# Konfigurationen und sensible Daten ignorieren
 configs/accounts.json
+configs/settings_*.json
+
+# Logs ignorieren (damit GitHub nicht zugemüllt wird)
+logs/*.txt

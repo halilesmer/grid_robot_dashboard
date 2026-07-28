@@ -5,7 +5,8 @@ def apply_custom_css():
     """
     Streamlit arayüzünü son derece kompakt, derli toplu ve modern yapan CSS
     """
-    st.markdown("""
+    st.markdown(
+        """
         <style>
         /* Sayfa genişliğini 1200px'e sabitleme ve ortalama */
         .block-container {
@@ -73,5 +74,36 @@ def apply_custom_css():
             width: 15px !important;
             height: 15px !important;
         }
+
+        /* =========================================
+           NEU: ACCOUNT SELECTOR ANIMATIONEN
+           ========================================= */
+        /* Pulsierende Animation für DEMO-Konten (Grün) */
+        @keyframes pulse-green {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(76, 175, 80, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(76, 175, 80, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(76, 175, 80, 0); }
+        }
+        
+        /* Pulsierende Animation für LIVE-Konten (Rot) */
+        @keyframes pulse-red {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(244, 67, 54, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(244, 67, 54, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(244, 67, 54, 0); }
+        }
+
+        .pulsing-green {
+            display: inline-block; width: 14px; height: 14px; background-color: #4CAF50; border-radius: 50%; animation: pulse-green 2s infinite; margin-right: 8px;
+        }
+        
+        .pulsing-red {
+            display: inline-block; width: 14px; height: 14px; background-color: #F44336; border-radius: 50%; animation: pulse-red 2s infinite; margin-right: 8px;
+        }
+
+        .status-container {
+            display: flex; align-items: center; font-size: 1.1em; font-weight: bold; margin-bottom: 15px; padding: 10px; background-color: rgba(255,255,255,0.05); border-radius: 8px;
+        }
         </style>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )

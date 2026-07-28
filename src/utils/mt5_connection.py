@@ -2,8 +2,8 @@
 
 import streamlit as st
 import platform
+import time  # 👈 FEHLTE VORHER: Wichtig für den Auto-Login Delay!
 
-# MT5 kütüphanesini sadece Windows'ta içe aktarmayı deneriz. Mac'te çökmeyi önleriz.
 try:
     import MetaTrader5 as mt5
 
@@ -13,55 +13,68 @@ except ImportError:
 
 
 def connect_to_mt5(account_config):
-    """
-    Kullanıcının seçtiği hesap bilgileriyle MT5'e bağlanır ve güvenlik kontrollerini yapar.
-    Mac ortamında ise çökmeyi önlemek için bağlantıyı simüle eder.
-    """
     if not account_config:
         st.error("Bağlanılacak hesap seçilmedi!")
         return False
 
-    # EĞER BİLGİSAYAR MAC İSE (Simülasyon Modu)
     if not MT5_AVAILABLE or platform.system() != "Windows":
         st.warning(
             "💻 Mac Ortamı Tespit Edildi: MT5 bağlantısı simüle ediliyor. (Gerçek bağlantı Windows'ta çalışacaktır)."
         )
-        return True  # Mac'te arayüzü test edebilmen için bağlantıyı başarılı sayıyoruz
+        return True
 
     # ==========================================
     # BUNDAN SONRASI SADECE WINDOWS'TA ÇALIŞIR
     # ==========================================
 
-    # 1. MT5 Terminalini Başlat
-    if not mt5.initialize():
+    # ÖNCEKİ BAĞLANTIYI KES (Multi-Account için zorunlu)
+    mt5.shutdown()
+
+    mt5_path = account_config.get("mt5_path")
+
+    # 1. MT5 Terminalini Özel Yoldan (Path) Başlat
+    if mt5_path:
+        init_success = mt5.initialize(path=mt5_path)
+    else:
+        init_success = mt5.initialize()
+
+    if not init_success:
         st.error(f"MetaTrader 5 başlatılamadı! Hata Kodu: {mt5.last_error()}")
         return False
 
-    login_id = int(account_config["login"])
-    password = account_config["password"]
-    server = account_config["server"]
-    env_type = account_config["env_type"]  # 'TEST' veya 'LIVE'
-
     # 2. Seçilen Hesaba Giriş Yap
-    authorized = mt5.login(login=login_id, password=password, server=server)
+    login_id = account_config.get("login")
+    password = account_config.get("password")
+    server = account_config.get("server")
 
-    if not authorized:
-        st.error(
-            f"🔴 MT5 Girişi Başarısız! Hesap No: {login_id}. Hata Kodu: {mt5.last_error()}"
-        )
-        return False
+    if login_id and password and server:
+        # Şifre varsa zorla giriş yap
+        authorized = mt5.login(login=int(login_id), password=password, server=server)
+        if not authorized:
+            st.error(
+                f"🔴 MT5 Girişi Başarısız! Hesap No: {login_id}. Hata Kodu: {mt5.last_error()}"
+            )
+            return False
+    else:
+        # 👈 DER EHRLICHE FIX: Şifre yoksa MT5'in otomatik giriş yapmasını bekle!
+        # Terminalin sunucuya bağlanması ve verileri çekmesi için 2 saniye süre veriyoruz.
+        time.sleep(2.0)
 
     # 3. GÜVENLİK SİGORTASI (Çapraz Kontrol)
     account_info = mt5.account_info()
     if account_info is None:
-        st.error("Hesap bilgileri MetaTrader'dan alınamadı!")
+        st.error(
+            "Hesap bilgileri MetaTrader'dan alınamadı! (Auto-Login gecikmiş veya MT5 kapalı olabilir)"
+        )
         mt5.shutdown()
         return False
 
     # MT5'in bize söylediği hesap türü (Demo mu Gerçek mi?)
     is_mt5_demo = account_info.trade_mode == mt5.ACCOUNT_TRADE_MODE_DEMO
 
-    # Kural 1: LIVE seçilmişse ama hesap DEMO ise
+    # JSON'dan gelen ortam türü ('type' veya eski adıyla 'env_type')
+    env_type = account_config.get("type", account_config.get("env_type", ""))
+
     if env_type == "LIVE" and is_mt5_demo:
         st.error(
             "🚨 KRİTİK GÜVENLİK İHLALİ: Canlı (LIVE) ortam seçili ama MT5 hesabı DEMO!"
@@ -70,8 +83,7 @@ def connect_to_mt5(account_config):
         mt5.shutdown()
         return False
 
-    # Kural 2: TEST seçilmişse ama hesap GERÇEK (LIVE) ise
-    if env_type == "TEST" and not is_mt5_demo:
+    if env_type in ["DEMO", "TEST"] and not is_mt5_demo:
         st.error(
             "🚨 KRİTİK GÜVENLİK İHLALİ: Test (TEST) ortamı seçili ama MT5 hesabı GERÇEK PARALI (LIVE)!"
         )
@@ -79,5 +91,4 @@ def connect_to_mt5(account_config):
         mt5.shutdown()
         return False
 
-    # Her şey yolundaysa
     return True
