@@ -4,7 +4,7 @@ import os
 import glob
 from collections import deque
 
-LOG_FILE = "grid_robot_log.txt"
+LOG_FILE = "logs/grid_robot_log.txt"
 MAX_LINES = 20  # Ekranda gösterilecek son satır sayısı
 MAX_FILE_SIZE = 2 * 1024 * 1024  # 2 MB Limit
 
