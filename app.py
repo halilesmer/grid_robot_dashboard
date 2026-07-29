@@ -50,19 +50,21 @@ else:
 # ==========================================
 # 2. ÖNCE HESABI SEÇ (TAM GENİŞLİKTE)
 # ==========================================
-# Account Selector artık en üstte, tam genişlikte çalışıyor.
-# Böylece 4 buton yan yana rahatça sığar.
 active_account = render_account_selector()
 
 # Güvenlik: Eğer JSON dosyasında hiç hesap yoksa veya hata varsa programı burada durdur.
 if not active_account:
     st.stop()
 
+# YENİ: Seçili hesabın benzersiz ID'sini alıyoruz
+account_id = str(active_account.get("login", "default"))
+
 st.markdown("---")
 
 # ==========================================
-# 3. ŞİMDİ AYARLARI YÜKLE (Çünkü artık hangi hesapta olduğumuzu biliyoruz!)
+# 3. ŞİMDİ AYARLARI YÜKLE (Hesap ID'si ile!)
 # ==========================================
+# DÜZELTME: Artık load_settings de hangi hesapta olduğumuzu biliyor
 current_settings = load_settings(st.session_state.selected_model)
 
 render_header(
@@ -110,7 +112,6 @@ if live_data.get("algo_trading_error", False):
 # ==========================================
 # ALT KOKPİT PANELİ (Sadece Metrikler ve Kontroller)
 # ==========================================
-# Hesap seçici yukarı taşındığı için sadece 2 sütunumuz kaldı.
 col_metrics, col_controls = st.columns([2.5, 1.5])
 
 with col_metrics:
@@ -122,9 +123,9 @@ with col_metrics:
     )
 
 with col_controls:
+    # DÜZELTME: Sadece çalışıp çalışmadığını ve hesap ID'sini gönderiyoruz (Modeli o kendi yönetecek)
     action, chosen_model = render_controls(
-        is_running=st.session_state.robot_running,
-        current_model=st.session_state.selected_model,
+        is_running=st.session_state.robot_running, account_id=account_id
     )
 # ==========================================
 
@@ -134,36 +135,44 @@ if chosen_model and chosen_model != st.session_state.selected_model:
 
 if action == "TOGGLE":
     if not st.session_state.robot_running:
-        # Önce seçili hesaba güvenli şekilde bağlanmayı dene
-        connection_success = connect_to_mt5(st.session_state.selected_account)
+        connection_success = connect_to_mt5(active_account)
 
         if connection_success:
             st.session_state.robot_running = True
             bot_engine.IS_RUNNING = True
+            # --- YENİ EKLENECEK HAYATİ BLOK: Robotun eski hafızasını sıfırla ---
+            if hasattr(bot_engine, "INITIAL_CLEANUP_DONE"):
+                bot_engine.INITIAL_CLEANUP_DONE = False
+            if hasattr(bot_engine, "REFERENCE_PRICE"):
+                bot_engine.REFERENCE_PRICE = None
+            if hasattr(bot_engine, "ACTIVE_ZONE"):
+                bot_engine.ACTIVE_ZONE = None
+            # --------------------
             robot_thread = threading.Thread(target=bot_engine.main_loop, daemon=True)
             robot_thread.start()
             st.toast(
                 f"🚀 MT5 Bağlantısı Başarılı ({active_account['account_name']}), Robot Başlatıldı!",
                 icon="✅",
             )
-            st.rerun()  # <--- GANZ WICHTIG: Rerun nur bei Erfolg!
+            st.rerun()
         else:
             st.session_state.robot_running = False
             st.toast("🔴 Hata: Robot başlatılamadı!", icon="❌")
-            # HIER KEIN st.rerun()! So bleibt die rote Fehlermeldung dauerhaft auf dem Bildschirm stehen.
     else:
         st.session_state.robot_running = False
         bot_engine.IS_RUNNING = False
         st.toast("🛑 Robot durduruldu!", icon="⚠️")
-        st.rerun()  # Beim Stoppen laden wir die Seite neu
-        
+        st.rerun()
+
+# DÜZELTME: Ayarlar paneline account_id eklenerek izolasyon sağlandı
 updated_settings = render_settings_panel(
-    current_settings, st.session_state.selected_model
+    current_settings, st.session_state.selected_model, account_id
 )
 
 if updated_settings:
+    # DÜZELTME: Kayıt işlemi de hesaba özel yapıldı
     save_settings(updated_settings, st.session_state.selected_model)
-    st.success("✅ Ayarlar başarıyla güncellendi ve seçili hesap için kaydedildi!")
+    st.success(f"✅ Ayarlar başarıyla güncellendi ve {account_id} için kaydedildi!")
     st.rerun()
 
 st.divider()
