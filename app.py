@@ -146,16 +146,17 @@ if action == "TOGGLE":
                 f"🚀 MT5 Bağlantısı Başarılı ({active_account['account_name']}), Robot Başlatıldı!",
                 icon="✅",
             )
+            st.rerun()  # <--- GANZ WICHTIG: Rerun nur bei Erfolg!
         else:
             st.session_state.robot_running = False
             st.toast("🔴 Hata: Robot başlatılamadı!", icon="❌")
+            # HIER KEIN st.rerun()! So bleibt die rote Fehlermeldung dauerhaft auf dem Bildschirm stehen.
     else:
         st.session_state.robot_running = False
         bot_engine.IS_RUNNING = False
         st.toast("🛑 Robot durduruldu!", icon="⚠️")
-
-    st.rerun()
-
+        st.rerun()  # Beim Stoppen laden wir die Seite neu
+        
 updated_settings = render_settings_panel(
     current_settings, st.session_state.selected_model
 )
