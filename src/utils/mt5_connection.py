@@ -2,7 +2,7 @@
 
 import streamlit as st
 import platform
-import time  # 👈 FEHLTE VORHER: Wichtig für den Auto-Login Delay!
+import time
 
 try:
     import MetaTrader5 as mt5
@@ -27,12 +27,10 @@ def connect_to_mt5(account_config):
     # BUNDAN SONRASI SADECE WINDOWS'TA ÇALIŞIR
     # ==========================================
 
-    # ÖNCEKİ BAĞLANTIYI KES (Multi-Account için zorunlu)
     mt5.shutdown()
 
     mt5_path = account_config.get("mt5_path")
 
-    # 1. MT5 Terminalini Özel Yoldan (Path) Başlat
     if mt5_path:
         init_success = mt5.initialize(path=mt5_path)
     else:
@@ -42,13 +40,11 @@ def connect_to_mt5(account_config):
         st.error(f"MetaTrader 5 başlatılamadı! Hata Kodu: {mt5.last_error()}")
         return False
 
-    # 2. Seçilen Hesaba Giriş Yap
     login_id = account_config.get("login")
     password = account_config.get("password")
     server = account_config.get("server")
 
     if login_id and password and server:
-        # Şifre varsa zorla giriş yap
         authorized = mt5.login(login=int(login_id), password=password, server=server)
         if not authorized:
             st.error(
@@ -56,11 +52,8 @@ def connect_to_mt5(account_config):
             )
             return False
     else:
-        # 👈 DER EHRLICHE FIX: Şifre yoksa MT5'in otomatik giriş yapmasını bekle!
-        # Terminalin sunucuya bağlanması ve verileri çekmesi için 2 saniye süre veriyoruz.
         time.sleep(2.0)
 
-    # 3. GÜVENLİK SİGORTASI (Çapraz Kontrol)
     account_info = mt5.account_info()
     if account_info is None:
         st.error(
@@ -69,10 +62,22 @@ def connect_to_mt5(account_config):
         mt5.shutdown()
         return False
 
-    # MT5'in bize söylediği hesap türü (Demo mu Gerçek mi?)
-    is_mt5_demo = account_info.trade_mode == mt5.ACCOUNT_TRADE_MODE_DEMO
+    # ==========================================
+    # YENİ: ALGO TRADING KONTROLÜ (SOFORT-CHECK)
+    # ==========================================
+    terminal_info = mt5.terminal_info()
+    if terminal_info is not None and not terminal_info.trade_allowed:
+        st.error(
+            "🚨 KRİTİK HATA: MetaTrader 5'te 'Algo Trading' (Otomatik Ticaret) butonu kapalı!"
+        )
+        st.error(
+            "İşlem reddedildi. Lütfen MT5 terminalinin üst menüsündeki 'Algo Trading' butonunu yeşil (aktif) hale getirin ve tekrar deneyin."
+        )
+        mt5.shutdown()
+        return False
+    # ==========================================
 
-    # JSON'dan gelen ortam türü ('type' veya eski adıyla 'env_type')
+    is_mt5_demo = account_info.trade_mode == mt5.ACCOUNT_TRADE_MODE_DEMO
     env_type = account_config.get("type", account_config.get("env_type", ""))
 
     if env_type == "LIVE" and is_mt5_demo:
