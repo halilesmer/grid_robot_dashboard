@@ -31,6 +31,18 @@ def render_account_selector():
         st.warning("Hesap bulunamadı! configs/accounts.json eksik.")
         st.session_state.selected_account = None
         return None
+    # ==========================================
+    # YENİ: ÇİFT LOGİN (DUPLICATE) KONTROLÜ
+    # ==========================================
+    login_ids = [str(acc.get("login")) for acc in accounts if acc.get("login")]
+    duplicate_logins = set([x for x in login_ids if login_ids.count(x) > 1])
+
+    if duplicate_logins:
+        dup_str = ", ".join(duplicate_logins)
+        st.error(
+            f"🚨 **DİKKAT - AYNI HESAP ID'Sİ TEKRARLIYOR:** `accounts.json` dosyasında şu Login ID'leri birden fazla kez kullanılmış: **{dup_str}**.\n\n"
+            "Lütfen dosyayı kontrol edip mükerrer (çift) kayıtları silin veya ID'leri düzeltin!"
+        )
 
     if (
         "selected_account" not in st.session_state
@@ -85,7 +97,7 @@ def render_account_selector():
 
         if cols[i].button(
             btn_label,
-            key=f"btn_{acc['login']}",
+            key=f"btn_{i}_{acc['login']}",
             type="primary" if is_active else "secondary",
         ):
             if is_running:
