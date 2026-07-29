@@ -28,13 +28,25 @@ SYMBOL = "USOUSD"
 
 
 def load_dynamic_settings():
-    """Her döngüde arayüzden gelen güncel configs/settings_model2.json dosyasını okur"""
+    """Güncel ayarları MT5 hesap ID'sine göre dinamik olarak okur"""
     global LOOP_INTERVAL_SECONDS, ZONES, ORDER_TYPE, SYMBOL
 
-    # configs/ klasöründen okumasını sağlıyoruz
-    file_path = os.path.join("configs", "settings_model2.json")
+    # 1. MT5'ten aktif hesabın Login ID'sini alıyoruz
+    login_id = "default"
+    try:
+        if platform.system() == "Windows":
+            acc_info = mt5.account_info()
+            if acc_info is not None:
+                login_id = str(acc_info.login)
+    except Exception:
+        pass
+
+    # 2. Multi-Account sistemine uygun dosya adını oluşturuyoruz
+    file_path = os.path.join("configs", f"settings_{login_id}_Model_2.json")
+
+    # 3. Eğer dosya yoksa, eski isme (fallback) bak
     if not os.path.exists(file_path):
-        file_path = "settings_model2.json"  # Yedek kontrol
+        file_path = os.path.join("configs", "settings_model2.json")
 
     try:
         with open(file_path, "r", encoding="utf-8") as f:
@@ -45,6 +57,7 @@ def load_dynamic_settings():
             SYMBOL = settings.get("SYMBOL", "USOUSD")
     except Exception as e:
         pass
+
 
 # ===============================================================================
 # 🍏🪟 MAC / WINDOWS UYUMLULUK KÖPRÜSÜ
