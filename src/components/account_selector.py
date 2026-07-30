@@ -92,7 +92,7 @@ def render_account_selector():
         acc_name = acc.get("account_name", acc.get("name", "Bilinmeyen Hesap"))
 
         btn_icon = "🔴" if acc_type == "LIVE" else "🧪"
-        btn_label = f"{btn_icon} {acc_name.split(' ')[0]}"  # İlk kelime
+        btn_label = f"{btn_icon} {acc.get('id', 'Bilinmeyen ID')}"
         is_active = acc["login"] == active_login
 
         if cols[i].button(
