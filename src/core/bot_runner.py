@@ -8,12 +8,22 @@ import io
 from pathlib import Path
 
 # Zwingt die Windows-Konsole dazu, UTF-8 (inkl. türkischer Zeichen) zu akzeptieren!
+# Zwingt die Windows-Konsole dazu, UTF-8 zu akzeptieren UND sofort auf die Festplatte zu schreiben (Live-Modus)
+# Zwingt die Windows-Konsole dazu, UTF-8 zu akzeptieren UND sofort auf die Festplatte zu schreiben (Live-Modus)
 if sys.platform == "win32":
     sys.stdout = io.TextIOWrapper(
-        sys.stdout.buffer, encoding="utf-8", errors="replace", line_buffering=True
+        sys.stdout.buffer,
+        encoding="utf-8",
+        errors="replace",
+        line_buffering=True,
+        write_through=True,
     )
     sys.stderr = io.TextIOWrapper(
-        sys.stderr.buffer, encoding="utf-8", errors="replace", line_buffering=True
+        sys.stderr.buffer,
+        encoding="utf-8",
+        errors="replace",
+        line_buffering=True,
+        write_through=True,
     )
 
 # Proje kök dizinini Python yoluna ekle ki 'src' klasöründeki modülleri bulabilelim
