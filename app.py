@@ -1,16 +1,18 @@
 # app.py
 
 import sys
+import os
+import json
 from pathlib import Path
 
 # src klasörünü Python modül arama yoluna ekler
 sys.path.append(str(Path(__file__).parent / "src"))
 
 import streamlit as st
-import threading
 import time
 import platform
 
+from src.utils.bot_manager import is_bot_running, start_bot_process, stop_bot_process
 from src.components.account_selector import render_account_selector
 from src.components.chart_viewer import render_chart
 from src.utils.mt5_connection import connect_to_mt5
@@ -27,15 +29,32 @@ import src.core.model_1 as model_1
 import src.core.model_2 as model_2
 import src.core.model_3 as model_3
 
-st.set_page_config(page_title="Grid Robot Control", page_icon="🤖", layout="wide")
 
-# 1. CSS YÜKLE
+def get_live_metrics_from_file(account_id):
+    """Liest die aktuellsten Metriken des Subprozesses aus der JSON-Datei."""
+    metrics_file = os.path.join("logs", f"live_metrics_{account_id}.json")
+    if os.path.exists(metrics_file):
+        try:
+            with open(metrics_file, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass  # Wenn die Datei exakt in dieser Millisekunde geschrieben wird
+    return {
+        "profit": 0.0,
+        "open_positions": 0,
+        "pending_orders": 0,
+        "current_price": 0.0,
+        "algo_trading_error": False,
+    }
+
+
+# ==========================================
+# 1. STREAMLIT CONFIG & CSS
+# ==========================================
+st.set_page_config(page_title="Grid Robot Control", page_icon="🤖", layout="wide")
 apply_custom_css()
 
-# Session State Başlangıç Değerleri
-if "robot_running" not in st.session_state:
-    st.session_state.robot_running = False
-
+# Session State Başlangıç Değerleri (robot_running KESİNLİKLE YOK!)
 if "selected_model" not in st.session_state:
     st.session_state.selected_model = "Model 1"
 
@@ -62,9 +81,15 @@ account_id = str(active_account.get("login", "default"))
 st.markdown("---")
 
 # ==========================================
-# 3. ŞİMDİ AYARLARI YÜKLE (Hesap ID'si ile!)
+# 3. GÜNCEL ÇALIŞMA DURUMUNU SORGULA (CRASH DETECTION)
 # ==========================================
-# DÜZELTME: Artık load_settings de hangi hesapta olduğumuzu biliyor
+# Durumu globalden değil, Bot Manager'dan SADECE bu hesap için soruyoruz
+account_is_running = is_bot_running(account_id)
+
+
+# ==========================================
+# 4. AYARLARI VE METRİKLERİ YÜKLE
+# ==========================================
 current_settings = load_settings(st.session_state.selected_model)
 
 render_header(
@@ -73,24 +98,18 @@ render_header(
     is_market_open=True,
 )
 
-# Canlı verileri çek
-if st.session_state.robot_running:
-    if hasattr(bot_engine, "get_live_metrics"):
-        live_data = bot_engine.get_live_metrics()
-    else:
-        live_data = {
-            "profit": 0.0,
-            "open_positions": 0,
-            "pending_orders": 0,
-            "current_price": 0.0,
-        }
+# Canlı verileri JSON dosyasından çek (Çünkü robot artık Subprocess olarak çalışıyor)
+if account_is_running:
+    live_data = get_live_metrics_from_file(account_id)
 else:
     live_data = {
         "profit": 0.0,
         "open_positions": 0,
         "pending_orders": 0,
         "current_price": 0.0,
+        "algo_trading_error": False,
     }
+
 
 # ==========================================
 # ALGO TRADING GÜVENLİK UYARISI
@@ -102,15 +121,14 @@ if live_data.get("algo_trading_error", False):
         icon="🚫",
     )
 
-    if st.session_state.robot_running:
-        st.session_state.robot_running = False
-        bot_engine.IS_RUNNING = False
+    if account_is_running:
+        stop_bot_process(account_id)
         st.toast("🛑 Motor kilitlendi: Algo Trading kapalı!", icon="⚠️")
         st.rerun()
-# ==========================================
+
 
 # ==========================================
-# ALT KOKPİT PANELİ (Sadece Metrikler ve Kontroller)
+# ALT KOKPİT PANELİ
 # ==========================================
 col_metrics, col_controls = st.columns([2.5, 1.5])
 
@@ -123,63 +141,64 @@ with col_metrics:
     )
 
 with col_controls:
-    # DÜZELTME: Sadece çalışıp çalışmadığını ve hesap ID'sini gönderiyoruz (Modeli o kendi yönetecek)
     action, chosen_model = render_controls(
-        is_running=st.session_state.robot_running, account_id=account_id
+        is_running=account_is_running,
+        account_id=account_id,
     )
-# ==========================================
 
 if chosen_model and chosen_model != st.session_state.selected_model:
     st.session_state.selected_model = chosen_model
     st.rerun()
 
+
+# ==========================================
+# BAŞLAT / DURDUR MANTIĞI (SUBPROCESS İLE)
+# ==========================================
 if action == "TOGGLE":
-    if not st.session_state.robot_running:
+    if not account_is_running:
+        # Önce MT5 bağlantısını test et
         connection_success = connect_to_mt5(active_account)
 
         if connection_success:
-            st.session_state.robot_running = True
-            bot_engine.IS_RUNNING = True
-            # --- YENİ EKLENECEK HAYATİ BLOK: Robotun eski hafızasını sıfırla ---
-            if hasattr(bot_engine, "INITIAL_CLEANUP_DONE"):
-                bot_engine.INITIAL_CLEANUP_DONE = False
-            if hasattr(bot_engine, "REFERENCE_PRICE"):
-                bot_engine.REFERENCE_PRICE = None
-            if hasattr(bot_engine, "ACTIVE_ZONE"):
-                bot_engine.ACTIVE_ZONE = None
-            # --------------------
-            robot_thread = threading.Thread(target=bot_engine.main_loop, daemon=True)
-            robot_thread.start()
-            st.toast(
-                f"🚀 MT5 Bağlantısı Başarılı ({active_account['account_name']}), Robot Başlatıldı!",
-                icon="✅",
-            )
-            st.rerun()
+            # Subprocess (Alt Süreç) başlat!
+            if start_bot_process(account_id, st.session_state.selected_model):
+                st.toast(
+                    f"🚀 {active_account['account_name']} için robot izole olarak başlatıldı!",
+                    icon="✅",
+                )
+                st.rerun()
+            else:
+                st.toast(
+                    "🔴 Hata: Robot başlatılamadı! Lütfen hata kayıtlarını (logs) inceleyin.",
+                    icon="❌",
+                )
         else:
-            st.session_state.robot_running = False
-            st.toast("🔴 Hata: Robot başlatılamadı!", icon="❌")
+            # EKLENDİ: Bağlantı başarısız olursa kullanıcıya bildir!
+            st.toast(
+                "🔴 MT5 Bağlantı Hatası! Terminal açılamadı veya bilgiler yanlış.",
+                icon="❌",
+            )
     else:
-        st.session_state.robot_running = False
-        bot_engine.IS_RUNNING = False
-        st.toast("🛑 Robot durduruldu!", icon="⚠️")
+        # Zombi bırakmadan, süreci işletim sistemi seviyesinde öldür
+        stop_bot_process(account_id)
+        st.toast(f"🛑 {active_account['account_name']} robotu durduruldu!", icon="⚠️")
         st.rerun()
 
-# DÜZELTME: Ayarlar paneline account_id eklenerek izolasyon sağlandı
+
+# ==========================================
+# AYARLAR VE MAC SİMÜLATÖRÜ
+# ==========================================
 updated_settings = render_settings_panel(
     current_settings, st.session_state.selected_model, account_id
 )
 
 if updated_settings:
-    # DÜZELTME: Kayıt işlemi de hesaba özel yapıldı
     save_settings(updated_settings, st.session_state.selected_model)
     st.success(f"✅ Ayarlar başarıyla güncellendi ve {account_id} için kaydedildi!")
     st.rerun()
 
 st.divider()
 
-# ==========================================
-# MAC SİMÜLATÖRÜ VE GRAFİKLER
-# ==========================================
 current_active_price = live_data.get("current_price", 0.0)
 
 if platform.system() != "Windows":
@@ -197,11 +216,15 @@ if platform.system() != "Windows":
 col_chart, col_log = st.columns([2, 1])
 
 with col_chart:
-    render_chart(current_active_price, bot_engine)
+    # DÜZELTME: bot_engine yerine current_settings ve modeli gönderiyoruz!
+    render_chart(
+        current_active_price, current_settings, st.session_state.selected_model
+    )
 
 with col_log:
-    render_log_viewer()
+    # HIER IST DIE ÄNDERUNG: Wir übergeben die account_id
+    render_log_viewer(account_id)
 
-if st.session_state.robot_running:
+if account_is_running:
     time.sleep(1)
     st.rerun()

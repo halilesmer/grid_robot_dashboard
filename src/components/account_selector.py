@@ -100,13 +100,8 @@ def render_account_selector():
             key=f"btn_{i}_{acc['login']}",
             type="primary" if is_active else "secondary",
         ):
-            if is_running:
-                st.toast(
-                    "⚠️ Lütfen hesap değiştirmeden önce robotu durdurun!", icon="🚫"
-                )
-            else:
-                st.session_state.selected_account = acc
-                st.rerun()
+            st.session_state.selected_account = acc
+            st.rerun()
 
     # Dropdown für restliche Konten
     if num_accounts > MAX_BUTTONS:
@@ -126,12 +121,7 @@ def render_account_selector():
         if selected_extra_name != "Diğer Hesaplar...":
             selected_acc = extra_options[selected_extra_name]
             if selected_acc["login"] != active_login:
-                if is_running:
-                    st.toast(
-                        "⚠️ Lütfen hesap değiştirmeden önce robotu durdurun!", icon="🚫"
-                    )
-                else:
-                    st.session_state.selected_account = selected_acc
-                    st.rerun()
+                st.session_state.selected_account = selected_acc
+                st.rerun()
 
     return st.session_state.selected_account

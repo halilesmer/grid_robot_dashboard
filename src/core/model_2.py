@@ -1,62 +1,110 @@
-"""
-================================================================================
-🛠️ USOUSD Yarı-Otomatik Dinamik Grid Robotu v2.2 (MODEL 2)
-MetaTrader 5 Python API ile çalışan algoritmik ticaret robotu
-================================================================================
-Açıklama: 
-- 5 ALTIN KURAL UYGULANMIŞTIR.
-- Açık işlemlere KESİNLİKLE müdahale edemez, kapatamaz.
-- Çoklu-Bölge (Multi-Zone) ve Otonom yapıya sahiptir.
-- Ayarlar sadece ait olduğu bölgeye özeldir.
-================================================================================
-"""
-
 import time
 import datetime
-import sys
-import os
 import platform
 import json
-import threading
-from src.utils.trade_utils import safe_send_order, get_algo_status
+from src.utils.trade_utils import safe_send_order
+from src.utils.config import get_settings_file
 
-# Temel Değişkenleri Başlangıç İçin Tanımlayalım
+# ==========================================
+# TEMEL DEĞİŞKENLER VE AYARLAR
+# ==========================================
 LOOP_INTERVAL_SECONDS = 1.0
 ZONES = []
 ORDER_TYPE = "BUY"
 SYMBOL = "USOUSD"
 
+# ==========================================
+# GLOBAL DEĞİŞKENLER (Bot Manager İçin Zorunlu)
+# ==========================================
+REFERENCE_PRICE = None
+SYMBOL_INFO = None
+FILLING_MODE = None
+ACTIVE_ZONE = None
 
+# DÜZELTME: IS_RUNNING ilk başta KESİNLİKLE False olmalı! Subprocess bunu True yapar.
+IS_RUNNING = False
+INITIAL_CLEANUP_DONE = False
+SIMULATED_PRICE = 0.0
+
+
+# ==========================================
+# METRİK ARAYÜZÜ (Dashboard için)
+# ==========================================
+def get_live_metrics():
+    """
+    Dashboard'un arka planda okuyabilmesi için güncel verileri toplar.
+    """
+    metrics = {
+        "profit": 0.0,
+        "open_positions": 0,
+        "pending_orders": 0,
+        "current_price": 0.0,
+        "algo_trading_error": False,
+    }
+
+    if mt5 is None or IS_MAC_TEST_MODE:
+        if SIMULATED_PRICE > 0:
+            metrics["current_price"] = SIMULATED_PRICE
+        return metrics
+
+    # 1. Terminal-Status prüfen
+    terminal_info = mt5.terminal_info()
+    if terminal_info is None:
+        return metrics
+
+    if not terminal_info.trade_allowed:
+        metrics["algo_trading_error"] = True
+
+    # 2. Offene Positionen und Profit
+    positions = mt5.positions_get(symbol=SYMBOL)
+    if positions:
+        metrics["open_positions"] = len(positions)
+        metrics["profit"] = round(sum(pos.profit for pos in positions), 2)
+
+    # 3. Bekleyen Emirler
+    orders = mt5.orders_get(symbol=SYMBOL)
+    if orders:
+        metrics["pending_orders"] = len(orders)
+
+    # 4. Fiyat
+    tick = mt5.symbol_info_tick(SYMBOL)
+    if tick:
+        metrics["current_price"] = tick.bid
+    elif SIMULATED_PRICE > 0:
+        metrics["current_price"] = SIMULATED_PRICE
+
+    return metrics
+
+
+# ==========================================
+# GÜVENLİ YÜKLEME VE LOGLAMA FONKSİYONLARI
+# ==========================================
 def load_dynamic_settings():
-    """Güncel ayarları MT5 hesap ID'sine göre dinamik olarak okur"""
-    global LOOP_INTERVAL_SECONDS, ZONES, ORDER_TYPE, SYMBOL
+    """Her döngüde arka plan sürecine ait doğru settings.json dosyasını okur"""
+    # DİKKAT: Hangi modeldeysen o modelin global değişkenlerini buraya yazmalısın!
+    global ZONES, LOOP_INTERVAL_SECONDS
 
-    # 1. MT5'ten aktif hesabın Login ID'sini alıyoruz
-    login_id = "default"
     try:
-        if platform.system() == "Windows":
-            acc_info = mt5.account_info()
-            if acc_info is not None:
-                login_id = str(acc_info.login)
+        # İŞTE BURASI! Pylance'ın beklediği kullanım tam olarak bu satır:
+        settings_file = get_settings_file(
+            "Model 2"
+        )  # model_1.py dosyasındaysan buraya "Model 1" yaz!
+
+        with open(settings_file, "r", encoding="utf-8") as f:
+            settings = json.load(f)
+
+            # Model 2'nin kendi ayarları (Model 1'deysen GRID_STEP, TAKE_PROFIT vs. yazmalısın)
+            ZONES = settings.get("ZONES", [])
+            LOOP_INTERVAL_SECONDS = settings.get("LOOP_INTERVAL_SECONDS", 1.0)
     except Exception:
         pass
 
-    # 2. Multi-Account sistemine uygun dosya adını oluşturuyoruz
-    file_path = os.path.join("configs", f"settings_{login_id}_Model_2.json")
 
-    # 3. Eğer dosya yoksa, eski isme (fallback) bak
-    if not os.path.exists(file_path):
-        file_path = os.path.join("configs", "settings_model2.json")
-
-    try:
-        with open(file_path, "r", encoding="utf-8") as f:
-            settings = json.load(f)
-            LOOP_INTERVAL_SECONDS = settings.get("LOOP_INTERVAL_SECONDS", 1.0)
-            ZONES = settings.get("ZONES", [])
-            ORDER_TYPE = settings.get("ORDER_TYPE", "BUY")
-            SYMBOL = settings.get("SYMBOL", "USOUSD")
-    except Exception as e:
-        pass
+def log_message(msg, level="INFO"):
+    """Sadece print yapar. bot_manager.py bunu yakalayıp log dosyasına aktarır."""
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    formatted = f"[{timestamp}] [{level}] {msg}"
+    print(formatted)
 
 
 # ===============================================================================
@@ -170,33 +218,6 @@ MAX_DEVIATION = 20
 MARKET_CLOSED_CHECK_INTERVAL = 60    
 LOG_TO_FILE = True                   
 LOG_FILE_PATH = "logs/grid_robot_log.txt"
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# GLOBAL DEĞİŞKENLER
-# ═══════════════════════════════════════════════════════════════════════════════
-
-REFERENCE_PRICE = None      
-SYMBOL_INFO = None          
-FILLING_MODE = None         
-IS_RUNNING = True
-INITIAL_CLEANUP_DONE = False 
-ACTIVE_ZONE = None
-SIMULATED_PRICE = None
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# YARDIMCI FONKSİYONLAR
-# ═══════════════════════════════════════════════════════════════════════════════
-
-def log_message(msg, level="INFO"):
-    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    formatted = f"[{timestamp}] [{level}] {msg}"
-    print(formatted)
-    if LOG_TO_FILE:
-        try:
-            with open(LOG_FILE_PATH, "a", encoding="utf-8") as f:
-                f.write(formatted + "\n")
-        except Exception:
-            pass
 
 def normalize_price(price):
     if SYMBOL_INFO is None:
@@ -537,30 +558,6 @@ def run_startup_checks():
     log_message("Tum baslangic kontrolleri basarili!")
     return True
 
-# Geri Eklenen Kritik Fonksiyon (Web Dashboard için gereklidir)
-def get_live_metrics():
-    current_price = get_current_market_price()
-    robot_positions = get_all_robot_positions()
-    robot_orders = get_all_robot_orders()
-    
-    profit = 0.0
-    open_positions = 0
-    pending_orders = 0
-    
-    if robot_positions:
-        open_positions = len(robot_positions)
-        profit = sum(pos.profit for pos in robot_positions)
-        
-    if robot_orders:
-        pending_orders = len(robot_orders)
-        
-    return {
-        "profit": profit,
-        "open_positions": open_positions,
-        "pending_orders": pending_orders,
-        "current_price": current_price if current_price else 0.0,
-        "algo_trading_error": get_algo_status() # Merkezi bileşenden okuyoruz!
-    }
 
 def main_loop():
     global IS_RUNNING, INITIAL_CLEANUP_DONE

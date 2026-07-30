@@ -1,25 +1,14 @@
-"""
-================================================================================
-🛠️ USOUSD Yarı-Otomatik Dinamik Grid Robotu v2 (MODEL 1)
-MetaTrader 5 Python API ile çalışan algoritmik ticaret robotu
-================================================================================
-Açıklama: 
-- 5 ALTIN KURAL UYGULANMIŞTIR.
-- Açık işlemlere KESİNLİKLE müdahale edemez, kapatamaz.
-- Sadece bekleyen emirleri (Pending Orders) dizebilir, silebilir ve TP/SL atayabilir.
-- İlk manuel tetiklemeden sonra sürekli güncel fiyatı takip ederek ağ örer.
-================================================================================
-"""
-
 import time
 import datetime
-import sys
-import os
 import platform
 import json
-import threading
-from src.utils.trade_utils import safe_send_order, get_algo_status
+from src.utils.trade_utils import safe_send_order
+import time
+from src.utils.config import get_settings_file
 
+# ==========================================
+# GLOBALE STEUERUNGSVARIABLEN (Zwingend für den Bot-Manager)
+# ==========================================
 # Global Değişkenleri Başlangıç İçin Tanımlayalım
 GRID_STEP = 0.05
 TAKE_PROFIT = 0.05
@@ -29,25 +18,27 @@ DEFAULT_LOT = 0.01
 MAX_OPEN_POSITIONS = 999
 MAX_PRICE_LIMIT = 120.00
 MIN_PRICE_LIMIT = 20.00
+IS_RUNNING = False
+INITIAL_CLEANUP_DONE = False
+SIMULATED_PRICE = 0.0  # Für den Mac-Testmodus
+
 
 def load_dynamic_settings():
-    """Her döngüde arayüzden gelen güncel settings.json dosyasını okur"""
-    global GRID_STEP, TAKE_PROFIT, LEVELS_BELOW, LEVELS_ABOVE
-    global DEFAULT_LOT, MAX_OPEN_POSITIONS, MAX_PRICE_LIMIT, MIN_PRICE_LIMIT, LOOP_INTERVAL_SECONDS
+    """Her döngüde arka plan sürecine ait doğru settings.json dosyasını okur"""
+    # Not: Buradaki global değişkenler senin model_2'deki değişkenlerinle aynı olmalı (ZONES vb.)
+    global TAKE_PROFIT, MAX_OPEN_POSITIONS, ZONES, LOOP_INTERVAL_SECONDS
     try:
-        with open("configs/settings_model1.json", "r", encoding="utf-8") as f:
+        # DÜZELTME: Model 2 için hesaba özel JSON dosyasını buluyor!
+        settings_file = get_settings_file("Model 2")
+        with open(settings_file, "r", encoding="utf-8") as f:
             settings = json.load(f)
-            GRID_STEP = settings.get("GRID_STEP", 0.05)
             TAKE_PROFIT = settings.get("TAKE_PROFIT", 0.05)
-            LEVELS_BELOW = settings.get("LEVELS_BELOW", 6)
-            LEVELS_ABOVE = settings.get("LEVELS_ABOVE", 6)
-            DEFAULT_LOT = settings.get("DEFAULT_LOT", 0.01)
             MAX_OPEN_POSITIONS = settings.get("MAX_OPEN_POSITIONS", 999)
-            MAX_PRICE_LIMIT = settings.get("MAX_PRICE_LIMIT", 120.00)
-            MIN_PRICE_LIMIT = settings.get("MIN_PRICE_LIMIT", 20.00)
+            ZONES = settings.get("ZONES", [])
             LOOP_INTERVAL_SECONDS = settings.get("LOOP_INTERVAL_SECONDS", 1.0)
     except Exception as e:
         pass
+
 
 # ===============================================================================
 # 🍏🪟 MAC / WINDOWS UYUMLULUK KÖPRÜSÜ
@@ -204,16 +195,13 @@ INITIAL_CLEANUP_DONE = False
 # YARDIMCI FONKSİYONLAR
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 def log_message(msg, level="INFO"):
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     formatted = f"[{timestamp}] [{level}] {msg}"
+    # DÜZELTME: Sadece print yapıyoruz. bot_manager.py bunu otomatik yakalayıp log dosyasına yazar!
     print(formatted)
-    if LOG_TO_FILE:
-        try:
-            with open(LOG_FILE_PATH, "a", encoding="utf-8") as f:
-                f.write(formatted + "\n")
-        except Exception:
-            pass
+
 
 def normalize_price(price):
     if SYMBOL_INFO is None:
@@ -562,29 +550,53 @@ def run_startup_checks():
     log_message("Tum baslangic kontrolleri basarili!")
     return True
 
+
+# ==========================================
+# METRIK-SCHNITTSTELLE FÜR DAS DASHBOARD
+# ==========================================
 def get_live_metrics():
-    current_price = get_current_market_price()
-    robot_positions = get_all_robot_positions()
-    robot_orders = get_all_robot_orders()
-
-    profit = 0.0
-    open_positions = 0
-    pending_orders = 0
-
-    if robot_positions:
-        open_positions = len(robot_positions)
-        profit = sum(pos.profit for pos in robot_positions)
-
-    if robot_orders:
-        pending_orders = len(robot_orders)
-
-    return {
-        "profit": profit,
-        "open_positions": open_positions,
-        "pending_orders": pending_orders,
-        "current_price": current_price if current_price else 0.0,
-        "algo_trading_error": get_algo_status(),  # Merkezi bileşenden okuyoruz!
+    """
+    Sammelt Echtzeit-Daten (Profit, Positionen, Preis) direkt aus dem
+    MetaTrader 5 Terminal und reicht sie an den bot_runner weiter.
+    """
+    metrics = {
+        "profit": 0.0,
+        "open_positions": 0,
+        "pending_orders": 0,
+        "current_price": 0.0,
+        "algo_trading_error": False,
     }
+
+    # 1. Terminal-Status prüfen (Algo Trading an?)
+    terminal_info = mt5.terminal_info()
+    if terminal_info is None:
+        return metrics
+
+    if not terminal_info.trade_allowed:
+        metrics["algo_trading_error"] = True
+
+    # 2. Offene Positionen und Profit berechnen
+    # HINWEIS: Falls du ein dynamisches Symbol nutzt, ersetze "USOUSD" durch deine Symbol-Variable
+    positions = mt5.positions_get(symbol="USOUSD")
+    if positions:
+        metrics["open_positions"] = len(positions)
+        metrics["profit"] = round(sum(pos.profit for pos in positions), 2)
+
+    # 3. Ausstehende (Pending) Orders zählen
+    orders = mt5.orders_get(symbol="USOUSD")
+    if orders:
+        metrics["pending_orders"] = len(orders)
+
+    # 4. Aktuellen Preis abfragen
+    tick = mt5.symbol_info_tick("USOUSD")
+    if tick:
+        metrics["current_price"] = tick.bid
+    elif SIMULATED_PRICE > 0:
+        # Fallback für den Mac-Simulator im Dashboard
+        metrics["current_price"] = SIMULATED_PRICE
+
+    return metrics
+
 
 def main_loop():
     global IS_RUNNING, INITIAL_CLEANUP_DONE
