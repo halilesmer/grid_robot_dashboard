@@ -4,7 +4,13 @@ import os
 import json
 import time
 import threading
+import io
 from pathlib import Path
+
+# Zwingt die Windows-Konsole dazu, UTF-8 (inkl. türkischer Zeichen) zu akzeptieren!
+if sys.platform == "win32":
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
 
 # Proje kök dizinini Python yoluna ekle ki 'src' klasöründeki modülleri bulabilelim
 project_root = Path(__file__).parent.parent.parent
