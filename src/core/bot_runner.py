@@ -45,7 +45,7 @@ def main():
     # İşletim Sistemi ortam değişkenlerine hesap ID'sini kazıyoruz!
     os.environ["ACTIVE_ACCOUNT_ID"] = account_id
 
-    print(f"[{account_id}] İşçi Süreç (Subprocess) başlatılıyor. Motor: {model_name}")
+    print(f"[{account_id}] Isci Surec (Subprocess) baslatiliyor. Motor: {model_name}")
 
     # 2. Hesabı JSON'dan bul (Tam izolasyon)
     accounts_path = os.path.join(project_root, "configs", "accounts.json")
