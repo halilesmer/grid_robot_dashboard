@@ -24,7 +24,7 @@ def get_recent_logs(account_id: str):
             pass
 
     try:
-        with open(log_file, "r", encoding="utf-8") as f:
+        with open(log_file, "r", encoding="utf-8", errors="replace") as f:
             lines = deque(f, maxlen=MAX_LINES)
             return "".join(lines)
     except Exception as e:
