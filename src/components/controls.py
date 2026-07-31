@@ -3,9 +3,11 @@ import streamlit as st
 from src.constants.tooltips import SETTINGS_TOOLTIPS
 
 
-def render_controls(is_running: bool, current_model: str = "Model 1"):
+def render_controls(
+    is_running: bool, account_id: str = "default", current_model: str = "Model 1"
+):
     """
-    Dinamik Tek Butonlu Kontrol Paneli, Anında Açılan Tooltip ve Motor Seçimi
+    Dinamik Tek Butonlu Kontrol Paneli, Anında Açılan Tooltip ve Motor Seçimi (%100 Multi-Account Uyumlu)
     """
     st.markdown("### 🎮 Robot Kontrol Paneli")
 
@@ -13,21 +15,31 @@ def render_controls(is_running: bool, current_model: str = "Model 1"):
 
     with col1:
         models = ["Model 1", "Model 2", "Model 3"]
+
+        # Finde heraus, an welcher Position (Index) das aktuelle Modell steht
+        try:
+            default_index = models.index(current_model)
+        except ValueError:
+            default_index = 0
+
         selected_model = st.selectbox(
             "⚙️ Motor Seçimi",
             options=models,
-            index=models.index(current_model) if current_model in models else 0,
+            index=default_index,  # NEU: Wir erzwingen die Auswahl per Index!
             disabled=is_running,
             label_visibility="collapsed",
+            key=f"selectbox_motor_{account_id}",
         )
 
     with col2:
-        # Tooltip metinlerini merkezi dosyadan (.format ile modeli içine atarak) çekiyoruz
+        # Tooltip metinleri artık dışarıdan gelen selected_model üzerinden besleniyor.
         if is_running:
-            status_text = SETTINGS_TOOLTIPS["ROBOT_ACTIVE"].format(model=current_model)
+            status_text = SETTINGS_TOOLTIPS["ROBOT_ACTIVE"].format(model=selected_model)
             icon = "🟢"
         else:
-            status_text = SETTINGS_TOOLTIPS["ROBOT_PASSIVE"].format(model=current_model)
+            status_text = SETTINGS_TOOLTIPS["ROBOT_PASSIVE"].format(
+                model=selected_model
+            )
             icon = "🔴"
 
         st.markdown(
@@ -81,7 +93,12 @@ def render_controls(is_running: bool, current_model: str = "Model 1"):
         button_label = "⏹️ Durdur" if is_running else "▶️ Başlat"
         button_type = "secondary" if is_running else "primary"
 
-        toggle_btn = st.button(button_label, type=button_type, use_container_width=True)
+        toggle_btn = st.button(
+            button_label,
+            type=button_type,
+            use_container_width=True,
+            key=f"toggle_btn_{account_id}",
+        )
 
     action = "TOGGLE" if toggle_btn else None
     return action, selected_model

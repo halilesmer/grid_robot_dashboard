@@ -1,42 +1,48 @@
-# components/log_viewer.py
+# src/components/log_viewer.py
 import streamlit as st
 import os
 import glob
 from collections import deque
 
-LOG_FILE = "grid_robot_log.txt"
 MAX_LINES = 20  # Ekranda gösterilecek son satır sayısı
 MAX_FILE_SIZE = 2 * 1024 * 1024  # 2 MB Limit
 
-def get_recent_logs():
-    """Robotun kendi ürettiği logları okur."""
-    if not os.path.exists(LOG_FILE):
-        return "Henüz robot log kaydı bulunmuyor..."
-        
-    if os.path.getsize(LOG_FILE) > MAX_FILE_SIZE:
+
+def get_recent_logs(account_id: str):
+    """Robotun (Subprocess) o hesaba özel ürettiği logları okur."""
+    # YENİ: Artık tek bir global dosya yerine, bu hesaba özel dosyayı okuyoruz!
+    log_file = os.path.join("logs", f"bot_{account_id}_error.log")
+
+    if not os.path.exists(log_file):
+        return "Henüz bu hesap için robot log kaydı bulunmuyor..."
+
+    if os.path.getsize(log_file) > MAX_FILE_SIZE:
         try:
-            with open(LOG_FILE, 'w', encoding='utf-8') as f:
+            with open(log_file, "w", encoding="utf-8") as f:
                 f.write("[SİSTEM KORUMASI] Dosya çok büyüdüğü için temizlendi.\n")
         except Exception:
             pass
 
     try:
-        with open(LOG_FILE, "r", encoding="utf-8") as f:
+        with open(log_file, "r", encoding="utf-8", errors="replace") as f:
             lines = deque(f, maxlen=MAX_LINES)
             return "".join(lines)
     except Exception as e:
         return f"[HATA] Loglar okunamadı: {e}"
 
+
 def get_latest_mt5_log():
     """MT5'in kendi orijinal günlük sistem logunu bulur ve okur."""
-    mt5_log_dir = os.path.expanduser("~\\AppData\\Roaming\\MetaQuotes\\Terminal\\*\\Logs")
+    mt5_log_dir = os.path.expanduser(
+        "~\\AppData\\Roaming\\MetaQuotes\\Terminal\\*\\Logs"
+    )
     log_files = glob.glob(os.path.join(mt5_log_dir, "*.log"))
-    
+
     if not log_files:
         return "Windows/MT5 orijinal log dosyası henüz bulunamadı."
-        
+
     latest_file = max(log_files, key=os.path.getmtime)
-    
+
     try:
         # MT5 logları UTF-16 formatında tutar
         with open(latest_file, "r", encoding="utf-16", errors="ignore") as f:
@@ -45,19 +51,23 @@ def get_latest_mt5_log():
     except Exception as e:
         return f"MT5 Log okuma hatası: {e}"
 
-def render_log_viewer():
+
+def render_log_viewer(account_id: str = "default"):
     """Canlı Log Ekranı Bileşeni (Sekmeli Görünüm)"""
     st.subheader("📟 Sistem ve Terminal Logları")
-    
+
     # İki farklı sekme oluşturuyoruz
     tab1, tab2 = st.tabs(["🤖 Robot Logları", "🏦 Orijinal MT5 Logları"])
-    
+
     with tab1:
-        st.caption("Robotun kendi yaptığı işlemlerin son 20 adımı.")
-        logs = get_recent_logs()
+        st.caption(f"{account_id} hesabının arka plan işlemlerinin son 20 adımı.")
+        # YENİ: account_id parametresini fonksiyona gönderiyoruz
+        logs = get_recent_logs(account_id)
         st.code(logs, language="bash")
-        
+
     with tab2:
-        st.caption("MetaTrader 5 terminalinin arka planda ürettiği orijinal sistem kayıtları.")
+        st.caption(
+            "MetaTrader 5 terminalinin arka planda ürettiği orijinal sistem kayıtları."
+        )
         mt5_logs = get_latest_mt5_log()
         st.code(mt5_logs, language="bash")

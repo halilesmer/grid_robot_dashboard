@@ -32,6 +32,19 @@ def render_account_selector():
         st.session_state.selected_account = None
         return None
 
+    # ==========================================
+    # ÇİFT LOGİN (DUPLICATE) KONTROLÜ
+    # ==========================================
+    login_ids = [str(acc.get("login")) for acc in accounts if acc.get("login")]
+    duplicate_logins = set([x for x in login_ids if login_ids.count(x) > 1])
+
+    if duplicate_logins:
+        dup_str = ", ".join(duplicate_logins)
+        st.error(
+            f"🚨 **DİKKAT - AYNI HESAP ID'Sİ TEKRARLIYOR:** `accounts.json` dosyasında şu Login ID'leri birden fazla kez kullanılmış: **{dup_str}**.\n\n"
+            "Lütfen dosyayı kontrol edip mükerrer (çift) kayıtları silin veya ID'leri düzeltin!"
+        )
+
     if (
         "selected_account" not in st.session_state
         or st.session_state.selected_account is None
@@ -39,9 +52,10 @@ def render_account_selector():
         st.session_state.selected_account = accounts[0]
 
     active_account = st.session_state.selected_account
-    active_login = active_account.get("login")
+    # GÜVENLİK DÜZELTMESİ: KeyError riskine karşı .get() kullanıldı
+    active_login = active_account.get("login", active_account.get("id", "Bilinmeyen"))
 
-    # Sicherer Fallback für Namen und Typ
+    # Güvenli Fallback (Yedek) İsim Seçimi
     active_name = active_account.get(
         "account_name", active_account.get("name", "Bilinmeyen Hesap")
     )
@@ -65,9 +79,9 @@ def render_account_selector():
             )
     else:
         if active_type == "LIVE":
-            st.error(f"🔴 SEÇİLİ HESAP: CANLI HESAP! (ID: {active_login})")
+            st.error(f"🔴 SEÇİLİ HESAP: {active_name} (ID: {active_login})")
         else:
-            st.success(f"🟢 Seçili Hesap: Test Ortamı (ID: {active_login})")
+            st.success(f"🟢 Seçili Hesap: {active_name} (ID: {active_login})")
 
     # 2. Hibrit Buton Menüsü
     MAX_BUTTONS = 4
@@ -77,33 +91,39 @@ def render_account_selector():
 
     for i, acc in enumerate(accounts[:MAX_BUTTONS]):
         acc_type = acc.get("env_type", acc.get("type", "DEMO"))
+
+        # HESAP ADI VE ID'SİNİ GÜVENLİ ŞEKİLDE ÇEKİYORUZ
         acc_name = acc.get("account_name", acc.get("name", "Bilinmeyen Hesap"))
+        acc_login = acc.get("login", acc.get("id", "Bilinmeyen ID"))
 
         btn_icon = "🔴" if acc_type == "LIVE" else "🧪"
-        btn_label = f"{btn_icon} {acc_name.split(' ')[0]}"  # İlk kelime
-        is_active = acc["login"] == active_login
+
+        # Buton üzerinde ID ve İsim yan yana yazacak
+        btn_label = f"{btn_icon} {acc_login} - {acc_name}"
+
+        is_active = str(acc.get("login", acc.get("id"))) == str(active_login)
 
         if cols[i].button(
             btn_label,
-            key=f"btn_{acc['login']}",
+            key=f"btn_{i}_{acc_login}",
             type="primary" if is_active else "secondary",
         ):
-            if is_running:
-                st.toast(
-                    "⚠️ Lütfen hesap değiştirmeden önce robotu durdurun!", icon="🚫"
-                )
-            else:
-                st.session_state.selected_account = acc
-                st.rerun()
+            st.session_state.selected_account = acc
+            st.rerun()
 
-    # Dropdown für restliche Konten
+    # Eğer 4'ten fazla hesap varsa, geri kalanı açılır menüye koy
     if num_accounts > MAX_BUTTONS:
         extra_accounts = accounts[MAX_BUTTONS:]
         extra_options = {}
         for a in extra_accounts:
             a_type = a.get("env_type", a.get("type", "DEMO"))
             a_name = a.get("account_name", a.get("name", "Bilinmeyen Hesap"))
-            extra_options[f"{'🔴' if a_type=='LIVE' else '🧪'} {a_name}"] = a
+            a_login = a.get("login", a.get("id", "Bilinmeyen ID"))
+
+            # Açılır menüdeki liste elemanlarına da ID ve İsim eklendi
+            extra_options[
+                f"{'🔴' if a_type=='LIVE' else '🧪'} {a_login} - {a_name}"
+            ] = a
 
         selected_extra_name = cols[MAX_BUTTONS].selectbox(
             "Diğer:",
@@ -113,13 +133,9 @@ def render_account_selector():
 
         if selected_extra_name != "Diğer Hesaplar...":
             selected_acc = extra_options[selected_extra_name]
-            if selected_acc["login"] != active_login:
-                if is_running:
-                    st.toast(
-                        "⚠️ Lütfen hesap değiştirmeden önce robotu durdurun!", icon="🚫"
-                    )
-                else:
-                    st.session_state.selected_account = selected_acc
-                    st.rerun()
+            selected_acc_login = selected_acc.get("login", selected_acc.get("id"))
+            if str(selected_acc_login) != str(active_login):
+                st.session_state.selected_account = selected_acc
+                st.rerun()
 
     return st.session_state.selected_account

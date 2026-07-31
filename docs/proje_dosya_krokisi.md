@@ -1,48 +1,194 @@
-# 📂 Proje Dosya Yapısı ve Görevleri
+```python
+content = """# 🤖 Algoritmik Ticaret Botu (Grid Robot) Sistem Dokümantasyonu
 
-> **SİSTEM TALİMATI (YAPAY ZEKA İÇİN):**
-> Bu proje üzerinde çalışırken, eğer projeye **yeni bir dosya eklersen**, **yeni bir klasör oluşturursan** veya **mevcut bir dosyanın adını/işlevini köklü şekilde değiştirirsen**, bu değişiklikleri okumakta olduğun bu krokiye de yansıtmalısın. Her yeni dosya veya klasör oluşturma işleminin ardından, bana mutlaka güncellenmiş `proje_dosya_krokisi.md` dosyasının içeriğini de ver. Yeni dosyayı doğru klasör başlığı altına ekle, dosya adını kalın (`**`) yaz ve hemen yanına ne işe yaradığını kısaca açıkla.
+Gönderilen log dökümlerine ve referans alınan `docs/proje_dosya_krokisi.md` dosyasına dayanarak oluşturulan proje mimarisi ve dosya yapısı aşağıda sunulmuştur. Bu sistem, MetaTrader 5 (MT5) entegrasyonuna sahip bir **Algoritmik Ticaret (Algorithmic Trading) Botu** ve bu botun yönetimini sağlayan bir **Streamlit** web arayüzünden oluşmaktadır.
 
-Bu belge, `grid_robot_dashboard` projesinin dosya ve klasör hiyerarşisini, ayrıca her bir bileşenin ne işe yaradığını açıklamaktadır. Sisteme veya yapay zekaya bağlam sunmak için bir referans rehberidir.
+---
 
-## Ana Dizin (Root)
-*   **`app.py`**: Projenin ana çalıştırma ve giriş (entry point) dosyasıdır.
-*   **`requirements.txt`**: Projenin çalışması için kurulması gereken Python bağımlılıklarını ve kütüphanelerini listeler.
-*   **`grid_robot_log.txt`**: Sistemin veya bir grid robotunun çalışma zamanı günlüklerini (log) kaydettiği metin dosyasıdır.
-*   **`settings_model1.json`, `settings_model2.json`, `settings_model3.json`**: Projedeki farklı çekirdek modellerin (1, 2 ve 3) ayarlarını, parametrelerini ve yapılandırmalarını tutan veri dosyalarıdır.
-*   **`proje_dosya_krokisi.md`**: Projenin yapısını ve dosyaların görevlerini açıklayan, yapay zekaya bağlam sağlayan güncel doküman (bu dosya).
-*   **`.gitignore` / `.gitattributes`**: Git versiyon kontrol sistemi için hariç tutulacak dosyaları ve depolama kurallarını belirler.
+## 📂 Proje Klasör Şablonu (Kroki)
 
-## 📁 Gizli ve Yapılandırma Klasörleri
-*   **`.agents/`**: Yapay zeka destekli kodlama araçlarının (asistanların) kurallarını ve yeteneklerini tanımlayan dosyaları (örneğin Streamlit becerileri veya token tasarruf kuralları) barındırır.
-*   **`.git/`**: Projenin versiyon kontrol geçmişini ve Git yapılandırmalarını tutar.
-*   **`.streamlit/`**: Streamlit arayüz kütüphanesine ait özel yapılandırmaları (`config.toml` gibi) içerir.
-*   **`.vscode/`**: Visual Studio Code veya benzeri editörler için çalışma alanı (workspace) ayarlarını (`settings.json`) saklar.
+```text
+📦 PROJE_KOK_DIZINI
+┣ 📜 app.py                     # Uygulamanın (Streamlit) ana giriş noktası
+┣ 📜 requirements.txt           # Python bağımlılıkları
+┃
+┣ 📂 src                        # Kaynak kodların bulunduğu ana dizin
+┃ ┣ 📂 components               # Arayüz (UI) bileşenleri
+┃ ┃ ┣ 📜 account_selector.py    # Hesap seçim ekranı
+┃ ┃ ┣ 📜 chart_viewer.py        # Grafik ve veri görselleştirme
+┃ ┃ ┣ 📜 controls.py            # Başlat/Durdur gibi kontrol butonları
+┃ ┃ ┣ 📜 header.py              # Üst bilgi alanı
+┃ ┃ ┣ 📜 log_viewer.py          # Arayüzde logların gösterimi
+┃ ┃ ┣ 📜 metrics.py             # Kâr/Zarar gibi metriklerin gösterimi
+┃ ┃ ┣ 📜 model3_settings.py     # Model 3'e özel arayüz ayarları
+┃ ┃ ┗ 📜 settings_panel.py      # Genel ayar paneli
+┃ ┃
+┃ ┣ 📂 core                     # Çekirdek algoritma ve ticaret mantığı
+┃ ┃ ┣ 📜 bot_runner.py          # Botu çalıştıran ana motor
+┃ ┃ ┣ 📜 model_1.py             # Ticaret stratejisi / Modeli 1
+┃ ┃ ┣ 📜 model_2.py             # Ticaret stratejisi / Modeli 2
+┃ ┃ ┗ 📜 model_3.py             # Ticaret stratejisi / Modeli 3
+┃ ┃
+┃ ┣ 📂 utils                    # Yardımcı araçlar ve bağlantılar
+┃ ┃ ┣ 📜 bot_manager.py         # Botların yaşam döngüsünü yöneten araç
+┃ ┃ ┣ 📜 config.py              # Ayar dosyalarını (JSON) okuma/yazma işlemleri
+┃ ┃ ┣ 📜 mt5_connection.py      # MetaTrader 5 (MT5) borsa/broker bağlantısı
+┃ ┃ ┗ 📜 trade_utils.py         # Alım-satım ve hesaplama yardımcı fonksiyonları
+┃ ┃
+┃ ┣ 📂 constants                # Sabit değerler
+┃ ┃ ┗ 📜 tooltips.py            # Arayüzdeki bilgilendirme/ipucu metinleri
+┃ ┃
+┃ ┗ 📂 styles                   # Arayüz tasarımları
+┃   ┗ 📜 custom_css.py          # Streamlit arayüzünü özelleştiren CSS kodları
+┃
+┣ 📂 configs                    # Konfigürasyon dosyaları (JSON)
+┃ ┣ 📜 accounts.json            # Borsa hesap bilgileri/kimlik bilgileri
+┃ ┗ 📜 settings_*.json          # Modeller için parametre ve ayar kayıtları
+┃
+┣ 📂 logs                       # Sistem kayıtları
+┃ ┣ 📜 grid_robot_log.txt       # Genel bot logları
+┃ ┗ 📜 grid_robot_m3_log.txt    # Model 3'e özel loglar
+┃
+┗ 📂 docs                       # Dokümantasyon
+  ┣ 📜 proje_dosya_krokisi.md   # Proje genel yapısı (Ana rehber dosya)
+  ┣ 📜 my_notes.md              # Geliştirici notları
+  ┗ 📂 architecture             # Modellere ait teknik mimari belgeleri
 
-## 📁 `components/` Klasörü
-Kullanıcı arayüzünü (UI) oluşturan modüler parçaları barındırır.
-*   **`chart_viewer.py`**: Verileri görselleştirmek ve grafikleri göstermek için kullanılan bileşendir.
-*   **`controls.py`**: Kullanıcının etkileşime girdiği kontrol elemanlarını (butonlar, kaydırıcılar vb.) içerir.
-*   **`header.py`**: Uygulamanın üst bilgi, başlık veya menü kısmını yönetir.
-*   **`log_viewer.py`**: Arka planda veya robot tarafından üretilen logları arayüzde göstermeye yarar.
-*   **`metrics.py`**: Sistemden gelen verilerin temel metriklerini ve istatistiklerini arayüzde sunar.
-*   **`model3_settings.py`**: Özellikle 3. modelin arayüzdeki ayar paneline özgü kontrolleri yönetir.
-*   **`settings_panel.py`**: Kullanıcının uygulamanın genel ayarlarını değiştirebildiği paneli oluşturur.
-*   **`__init__.py`**: Bu klasörün bir Python modülü olarak tanınmasını sağlar.
+```
 
-## 📁 `core/` Klasörü
-Projenin beynidir; ana mantığı, yapay zeka veya işlem modellerini içerir.
-*   **`model_1.py`, `model_2.py`, `model_3.py`**: Sistemin temelini oluşturan üç farklı simülasyon, veri işleme veya yapay zeka modelinin tanımlandığı çekirdek dosyalardır.
-*   **`__init__.py`**: Klasörü Python modülü yapar.
+---
 
-## 📁 `constants/` Klasörü
-Proje genelinde kullanılan sabitleri (değişmeyen verileri) tutar.
-*   **`tooltips.py`**: Arayüzdeki bilgilendirme kutucuklarının (ipucu/tooltip) metinlerini içerir.
+## ⚙️ Dosyaların İşlevleri ve Etkileşim Yapısı
 
-## 📁 `styles/` Klasörü
-Uygulamanın görsel tasarımıyla ilgili dosyaları tutar.
-*   **`custom_css.py`**: Projenin arayüzünü özelleştirmek için kullanılan CSS kodlarını Python üzerinden sisteme entegre eder.
+Sistem, **Önyüz (Frontend - Streamlit)** ve **Arkayüz (Backend - Ticaret Mantığı)** olmak üzere modüler bir mimariyle tasarlanmıştır.
 
-## 📁 `utils/` Klasörü
-Projede birden çok yerde ihtiyaç duyulan yardımcı araçları barındırır.
-*   **`config.py`**: Uygulama yapılandırmalarının okunması, işlenmesi veya yönetilmesi için kullanılan yardımcı fonksiyonları içerir.
+### 1. Arayüz Katmanı (Girdi ve Görüntüleme)
+
+* **`app.py`:** Sistemin giriş noktasıdır. Kullanıcı arayüzü başlattığında bu dosya çalışır ve `src/components/` altındaki UI modüllerini birleştirerek ekranı oluşturur.
+* **`src/components/`:** Uygulamanın görsel öğeleridir.
+* `header.py` üst bilgi alanını çizer.
+* `account_selector.py` borsa/hesap seçimini sağlar.
+* `controls.py` işlemleri başlatıp durduran tetikleyicileri barındırır. Bu bileşenler üzerinden alınan girdiler işlenmek üzere **Core** ve **Utils** katmanlarına gönderilir.
+
+
+
+### 2. Çekirdek İş Katmanı (Beyin)
+
+* **`src/core/bot_runner.py`:** Arayüzden başlatma komutu geldiğinde devreye giren ana motordur. Seçilen ticaret modelinin yüklenmesinden ve çalıştırılmasından sorumludur.
+* **`src/core/model_*.py`:** Algoritmik ticaret stratejilerini barındıran asıl dosyalardır. Fiyat verilerini analiz ederek piyasaya giriş (alım) veya çıkış (satış) kararlarını verirler.
+
+### 3. Bağlantı ve Araçlar Katmanı (Operasyonel)
+
+* **`src/utils/mt5_connection.py`:** Modellerin dış dünyayla, yani MetaTrader 5 terminaliyle iletişimini sağlar. Anlık piyasa verilerini alır ve modelin ürettiği işlem emirlerini (AL/SAT) terminale iletir.
+* **`src/utils/trade_utils.py`:** İşlem boyutlandırması, Stop-Loss (Zarar Durdur) ve Take-Profit (Kâr Al) gibi kritik finansal/matematiksel hesaplamaları yapan yardımcı kütüphanedir.
+* **`src/utils/config.py`:** Sistemin çalışması için gerekli olan `configs/` altındaki JSON yapılandırma dosyalarını okur, yorumlar ve diğer modüllerin kullanımına sunar.
+
+### 4. Sistem Veri Akışı ve Çalışma Senaryosu
+
+1. Sistem `app.py` üzerinden ayağa kalktığında, `config.py` çalışarak `configs/` içindeki ayarları (ör. `accounts.json`) okur ve arayüze yükler.
+2. Kullanıcı `account_selector.py` ile bir ticaret hesabı seçer ve parametreleri belirleyerek `controls.py` üzerinden botu başlatır.
+3. Alınan başlatma emri, **`src/utils/bot_manager.py`** vasıtasıyla **`src/core/bot_runner.py`** modülüne iletilir.
+4. `bot_runner.py`, kullanıcının seçtiği ticaret stratejisini (`model_1`, `model_2` veya `model_3`) bellek üzerinde aktif hale getirir.
+5. Çalışan model, **`mt5_connection.py`** aracılığıyla MT5 platformuna bağlanarak anlık piyasa fiyatlarını çekmeye başlar.
+6. Algoritma bir işlem fırsatı tespit ettiğinde, işlem detayları **`trade_utils.py`** üzerinden hesaplanır ve **`mt5_connection.py`** üzerinden emir olarak piyasaya iletilir.
+7. İşlemin her aşamasındaki durum, başarı/hata sonuçları ve metrikler **`logs/`** dizinine metin olarak kaydedilir. Bu veriler eş zamanlı olarak **`log_viewer.py`**, **`chart_viewer.py`** ve **`metrics.py`** üzerinden görsel bir şekilde kullanıcıya sunulur.
+"""
+
+with open("proje_dokumantasyonu.md", "w", encoding="utf-8") as f:
+f.write(content)
+
+```
+
+Dosyayı indirmekte sorun yaşıyorsan, bağlantıyı senin için tazeledim:
+[file-tag: code-generated-file-62f74677-fc2a-4632-841a-82dd260dd3de]
+
+**Eğer yine sistem üzerinden indiremezsen,** hiç dert etme! Aşağıdaki kutudaki metnin tamamını kopyalayıp bilgisayarında `proje_dokumantasyonu.md` adında bir dosya oluşturarak doğrudan içine yapıştırabilirsin:
+
+```markdown
+# 🤖 Algoritmik Ticaret Botu (Grid Robot) Sistem Dokümantasyonu
+
+Gönderilen log dökümlerine ve referans alınan `docs/proje_dosya_krokisi.md` dosyasına dayanarak oluşturulan proje mimarisi ve dosya yapısı aşağıda sunulmuştur. Bu sistem, MetaTrader 5 (MT5) entegrasyonuna sahip bir **Algoritmik Ticaret (Algorithmic Trading) Botu** ve bu botun yönetimini sağlayan bir **Streamlit** web arayüzünden oluşmaktadır.
+
+---
+
+## 📂 Proje Klasör Şablonu (Kroki)
+
+📦 PROJE_KOK_DIZINI
+┣ 📜 app.py                     # Uygulamanın (Streamlit) ana giriş noktası
+┣ 📜 requirements.txt           # Python bağımlılıkları
+┃
+┣ 📂 src                        # Kaynak kodların bulunduğu ana dizin
+┃ ┣ 📂 components               # Arayüz (UI) bileşenleri
+┃ ┃ ┣ 📜 account_selector.py    # Hesap seçim ekranı
+┃ ┃ ┣ 📜 chart_viewer.py        # Grafik ve veri görselleştirme
+┃ ┃ ┣ 📜 controls.py            # Başlat/Durdur gibi kontrol butonları
+┃ ┃ ┣ 📜 header.py              # Üst bilgi alanı
+┃ ┃ ┣ 📜 log_viewer.py          # Arayüzde logların gösterimi
+┃ ┃ ┣ 📜 metrics.py             # Kâr/Zarar gibi metriklerin gösterimi
+┃ ┃ ┣ 📜 model3_settings.py     # Model 3'e özel arayüz ayarları
+┃ ┃ ┗ 📜 settings_panel.py      # Genel ayar paneli
+┃ ┃
+┃ ┣ 📂 core                     # Çekirdek algoritma ve ticaret mantığı
+┃ ┃ ┣ 📜 bot_runner.py          # Botu çalıştıran ana motor
+┃ ┃ ┣ 📜 model_1.py             # Ticaret stratejisi / Modeli 1
+┃ ┃ ┣ 📜 model_2.py             # Ticaret stratejisi / Modeli 2
+┃ ┃ ┗ 📜 model_3.py             # Ticaret stratejisi / Modeli 3
+┃ ┃
+┃ ┣ 📂 utils                    # Yardımcı araçlar ve bağlantılar
+┃ ┃ ┣ 📜 bot_manager.py         # Botların yaşam döngüsünü yöneten araç
+┃ ┃ ┣ 📜 config.py              # Ayar dosyalarını (JSON) okuma/yazma işlemleri
+┃ ┃ ┣ 📜 mt5_connection.py      # MetaTrader 5 (MT5) borsa/broker bağlantısı
+┃ ┃ ┗ 📜 trade_utils.py         # Alım-satım ve hesaplama yardımcı fonksiyonları
+┃ ┃
+┃ ┣ 📂 constants                # Sabit değerler
+┃ ┃ ┗ 📜 tooltips.py            # Arayüzdeki bilgilendirme/ipucu metinleri
+┃ ┃
+┃ ┗ 📂 styles                   # Arayüz tasarımları
+┃   ┗ 📜 custom_css.py          # Streamlit arayüzünü özelleştiren CSS kodları
+┃
+┣ 📂 configs                    # Konfigürasyon dosyaları (JSON)
+┃ ┣ 📜 accounts.json            # Borsa hesap bilgileri/kimlik bilgileri
+┃ ┗ 📜 settings_*.json          # Modeller için parametre ve ayar kayıtları
+┃
+┣ 📂 logs                       # Sistem kayıtları
+┃ ┣ 📜 grid_robot_log.txt       # Genel bot logları
+┃ ┗ 📜 grid_robot_m3_log.txt    # Model 3'e özel loglar
+┃
+┗ 📂 docs                       # Dokümantasyon
+  ┣ 📜 proje_dosya_krokisi.md   # Proje genel yapısı (Ana rehber dosya)
+  ┣ 📜 my_notes.md              # Geliştirici notları
+  ┗ 📂 architecture             # Modellere ait teknik mimari belgeleri
+
+
+---
+
+## ⚙️ Dosyaların İşlevleri ve Etkileşim Yapısı
+
+Sistem, **Önyüz (Frontend - Streamlit)** ve **Arkayüz (Backend - Ticaret Mantığı)** olmak üzere modüler bir mimariyle tasarlanmıştır.
+
+### 1. Arayüz Katmanı (Girdi ve Görüntüleme)
+*   **`app.py`:** Sistemin giriş noktasıdır. Kullanıcı arayüzü başlattığında bu dosya çalışır ve `src/components/` altındaki UI modüllerini birleştirerek ekranı oluşturur.
+*   **`src/components/`:** Uygulamanın görsel öğeleridir. 
+    *   `header.py` üst bilgi alanını çizer.
+    *   `account_selector.py` borsa/hesap seçimini sağlar.
+    *   `controls.py` işlemleri başlatıp durduran tetikleyicileri barındırır. Bu bileşenler üzerinden alınan girdiler işlenmek üzere **Core** ve **Utils** katmanlarına gönderilir.
+
+### 2. Çekirdek İş Katmanı (Beyin)
+*   **`src/core/bot_runner.py`:** Arayüzden başlatma komutu geldiğinde devreye giren ana motordur. Seçilen ticaret modelinin yüklenmesinden ve çalıştırılmasından sorumludur.
+*   **`src/core/model_*.py`:** Algoritmik ticaret stratejilerini barındıran asıl dosyalardır. Fiyat verilerini analiz ederek piyasaya giriş (alım) veya çıkış (satış) kararlarını verirler.
+
+### 3. Bağlantı ve Araçlar Katmanı (Operasyonel)
+*   **`src/utils/mt5_connection.py`:** Modellerin dış dünyayla, yani MetaTrader 5 terminaliyle iletişimini sağlar. Anlık piyasa verilerini alır ve modelin ürettiği işlem emirlerini (AL/SAT) terminale iletir.
+*   **`src/utils/trade_utils.py`:** İşlem boyutlandırması, Stop-Loss (Zarar Durdur) ve Take-Profit (Kâr Al) gibi kritik finansal/matematiksel hesaplamaları yapan yardımcı kütüphanedir.
+*   **`src/utils/config.py`:** Sistemin çalışması için gerekli olan `configs/` altındaki JSON yapılandırma dosyalarını okur, yorumlar ve diğer modüllerin kullanımına sunar.
+
+### 4. Sistem Veri Akışı ve Çalışma Senaryosu
+1. Sistem `app.py` üzerinden ayağa kalktığında, `config.py` çalışarak `configs/` içindeki ayarları (ör. `accounts.json`) okur ve arayüze yükler.
+2. Kullanıcı `account_selector.py` ile bir ticaret hesabı seçer ve parametreleri belirleyerek `controls.py` üzerinden botu başlatır.
+3. Alınan başlatma emri, **`src/utils/bot_manager.py`** vasıtasıyla **`src/core/bot_runner.py`** modülüne iletilir.
+4. `bot_runner.py`, kullanıcının seçtiği ticaret stratejisini (`model_1`, `model_2` veya `model_3`) bellek üzerinde aktif hale getirir.
+5. Çalışan model, **`mt5_connection.py`** aracılığıyla MT5 platformuna bağlanarak anlık piyasa fiyatlarını çekmeye başlar.
+6. Algoritma bir işlem fırsatı tespit ettiğinde, işlem detayları **`trade_utils.py`** üzerinden hesaplanır ve **`mt5_connection.py`** üzerinden emir olarak piyasaya iletilir.
+7. İşlemin her aşamasındaki durum, başarı/hata sonuçları ve metrikler **`logs/`** dizinine metin olarak kaydedilir. Bu veriler eş zamanlı olarak **`log_viewer.py`**, **`chart_viewer.py`** ve **`metrics.py`** üzerinden görsel bir şekilde kullanıcıya sunulur.
+
+```

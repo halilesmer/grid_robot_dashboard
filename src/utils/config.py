@@ -31,16 +31,27 @@ DEFAULT_SETTINGS_MODEL2 = {
 
 def get_settings_file(model_name: str) -> str:
     """Generiert einen einzigartigen Dateinamen basierend auf Konto-ID und Modell."""
-    # Welches Konto ist gerade ausgewählt?
     account_id = "default"
-    if "selected_account" in st.session_state and st.session_state.selected_account:
-        # Wir nutzen die Login-ID aus der accounts.json als eindeutigen Namensteil
-        account_id = str(st.session_state.selected_account.get("login", "default"))
 
-    # Entfernt Leerzeichen aus dem Modellnamen (z.B. "Model 1" -> "Model_1")
+    # 1. ÖNCE Çevresel Değişkene (Subprocess/Arka Plan) bak
+    if "ACTIVE_ACCOUNT_ID" in os.environ:
+        account_id = os.environ["ACTIVE_ACCOUNT_ID"]
+    else:
+        # 2. YOKSA Streamlit arayüzünde (App.py) olduğumuzu varsay ve oradan çek
+        try:
+            import streamlit as st
+
+            if (
+                "selected_account" in st.session_state
+                and st.session_state.selected_account
+            ):
+                account_id = str(
+                    st.session_state.selected_account.get("login", "default")
+                )
+        except Exception:
+            pass
+
     safe_model_name = model_name.replace(" ", "_")
-
-    # Das Ergebnis sieht z.B. so aus: "configs/settings_7942034_Model_1.json"
     return f"configs/settings_{account_id}_{safe_model_name}.json"
 
 

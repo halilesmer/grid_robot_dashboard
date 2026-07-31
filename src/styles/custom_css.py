@@ -13,7 +13,7 @@ def apply_custom_css():
             max-width: 1200px !important;
             margin-left: auto !important;
             margin-right: auto !important;
-            padding-top: 1.2rem !important;
+            padding-top: 3.5rem !important;
             padding-bottom: 1rem !important;
             padding-left: 1.5rem !important;
             padding-right: 1.5rem !important;

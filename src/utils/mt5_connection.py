@@ -1,8 +1,30 @@
 # src/utils/mt5_connection.py
 
-import streamlit as st
 import platform
-import time  # 👈 FEHLTE VORHER: Wichtig für den Auto-Login Delay!
+import time
+import os
+
+# Streamlit sicher importieren, um Subprocess-Abstürze zu verhindern!
+try:
+    import streamlit as st
+    from streamlit.runtime.scriptrunner import get_script_run_ctx
+except ImportError:
+    st = None
+
+
+def safe_log(msg, type="error"):
+    """Zeigt Fehler im Dashboard an, schreibt sie aber im Hintergrund-Prozess sicher ins Log, ohne abzustürzen!"""
+    print(msg)  # Geht immer sicher in die bot_..._error.log Datei
+    if st is not None:
+        try:
+            if get_script_run_ctx() is not None:  # Prüft, ob wir im UI-Dashboard sind
+                if type == "error":
+                    st.error(msg)
+                elif type == "warning":
+                    st.warning(msg)
+        except Exception:
+            pass
+
 
 try:
     import MetaTrader5 as mt5
@@ -14,12 +36,13 @@ except ImportError:
 
 def connect_to_mt5(account_config):
     if not account_config:
-        st.error("Bağlanılacak hesap seçilmedi!")
+        safe_log("Bağlanılacak hesap seçilmedi!")
         return False
 
     if not MT5_AVAILABLE or platform.system() != "Windows":
-        st.warning(
-            "💻 Mac Ortamı Tespit Edildi: MT5 bağlantısı simüle ediliyor. (Gerçek bağlantı Windows'ta çalışacaktır)."
+        safe_log(
+            "💻 Mac Ortamı Tespit Edildi: MT5 bağlantısı simüle ediliyor.",
+            type="warning",
         )
         return True
 
@@ -27,67 +50,82 @@ def connect_to_mt5(account_config):
     # BUNDAN SONRASI SADECE WINDOWS'TA ÇALIŞIR
     # ==========================================
 
-    # ÖNCEKİ BAĞLANTIYI KES (Multi-Account için zorunlu)
     mt5.shutdown()
 
+    # 1. NAVIGATOR: Welches Terminal soll gestartet werden?
     mt5_path = account_config.get("mt5_path")
 
-    # 1. MT5 Terminalini Özel Yoldan (Path) Başlat
-    if mt5_path:
+    # Prüfen, ob der Pfad in der JSON steht und die Datei auf dem Windows-Server wirklich existiert
+    if mt5_path and os.path.exists(mt5_path):
         init_success = mt5.initialize(path=mt5_path)
     else:
+        if mt5_path:
+            safe_log(
+                f"UYARI: Belirtilen MT5 yolu bulunamadı ({mt5_path}). Standart terminal açılıyor...",
+                type="warning",
+            )
         init_success = mt5.initialize()
 
     if not init_success:
-        st.error(f"MetaTrader 5 başlatılamadı! Hata Kodu: {mt5.last_error()}")
+        safe_log(f"MetaTrader 5 başlatılamadı! Hata Kodu: {mt5.last_error()}")
         return False
 
-    # 2. Seçilen Hesaba Giriş Yap
     login_id = account_config.get("login")
     password = account_config.get("password")
     server = account_config.get("server")
 
     if login_id and password and server:
-        # Şifre varsa zorla giriş yap
         authorized = mt5.login(login=int(login_id), password=password, server=server)
         if not authorized:
-            st.error(
+            safe_log(
                 f"🔴 MT5 Girişi Başarısız! Hesap No: {login_id}. Hata Kodu: {mt5.last_error()}"
             )
+            mt5.shutdown()  # Hata durumunda hafızada asılı kalmaması için kapatıldı
             return False
+
+        # DÜZELTME: Broker sunucusuyla senkronizasyon için MT5'e 1 saniye nefes payı ver
+        time.sleep(1.0)
     else:
-        # 👈 DER EHRLICHE FIX: Şifre yoksa MT5'in otomatik giriş yapmasını bekle!
-        # Terminalin sunucuya bağlanması ve verileri çekmesi için 2 saniye süre veriyoruz.
         time.sleep(2.0)
 
-    # 3. GÜVENLİK SİGORTASI (Çapraz Kontrol)
-    account_info = mt5.account_info()
+    # DÜZELTME: Hesap verilerini çekmek için 3 denemeli (Retry) güvenli döngü kuruldu
+    account_info = None
+    for _ in range(3):
+        account_info = mt5.account_info()
+        if account_info is not None:
+            break
+        time.sleep(1.0)
+
     if account_info is None:
-        st.error(
+        safe_log(
             "Hesap bilgileri MetaTrader'dan alınamadı! (Auto-Login gecikmiş veya MT5 kapalı olabilir)"
         )
         mt5.shutdown()
         return False
 
-    # MT5'in bize söylediği hesap türü (Demo mu Gerçek mi?)
-    is_mt5_demo = account_info.trade_mode == mt5.ACCOUNT_TRADE_MODE_DEMO
+    # Algo Trading Check
+    terminal_info = mt5.terminal_info()
+    if terminal_info is not None and not terminal_info.trade_allowed:
+        safe_log(
+            "🚨 KRİTİK HATA: MetaTrader 5'te 'Algo Trading' (Otomatik Ticaret) butonu kapalı!"
+        )
+        mt5.shutdown()
+        return False
 
-    # JSON'dan gelen ortam türü ('type' veya eski adıyla 'env_type')
+    is_mt5_demo = account_info.trade_mode == mt5.ACCOUNT_TRADE_MODE_DEMO
     env_type = account_config.get("type", account_config.get("env_type", ""))
 
     if env_type == "LIVE" and is_mt5_demo:
-        st.error(
+        safe_log(
             "🚨 KRİTİK GÜVENLİK İHLALİ: Canlı (LIVE) ortam seçili ama MT5 hesabı DEMO!"
         )
-        st.error("İşlem reddedildi. Lütfen doğru hesabı seçin.")
         mt5.shutdown()
         return False
 
     if env_type in ["DEMO", "TEST"] and not is_mt5_demo:
-        st.error(
+        safe_log(
             "🚨 KRİTİK GÜVENLİK İHLALİ: Test (TEST) ortamı seçili ama MT5 hesabı GERÇEK PARALI (LIVE)!"
         )
-        st.error("İşlem reddedildi. Lütfen doğru hesabı seçin.")
         mt5.shutdown()
         return False
 
