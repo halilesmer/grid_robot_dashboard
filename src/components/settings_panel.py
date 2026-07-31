@@ -161,40 +161,65 @@ def render_model_2_settings(current_settings, account_id):
                 [1, 1, 1, 1, 1, 1, 1.2, 0.5]
             )
             with zc1:
+                # KORREKTUR: Darf nicht negativ sein
                 z_min = st.number_input(
-                    f"Alt Sınır##{idx}_{account_id}",
-                    value=float(zone.get("min_price", 0.0)),
+                    f"Alt Sınır ($)##{idx}_{account_id}",
+                    min_value=0.0,
+                    value=max(0.0, float(zone.get("min_price", 0.0))),
                     step=0.1,
+                    format="%.2f",
+                    help="💵 Dolar cinsi: Robotun çalışacağı EN DÜŞÜK varil fiyatı ($).",
                 )
             with zc2:
+                # KORREKTUR: Darf nicht negativ sein
                 z_max = st.number_input(
-                    f"Üst Sınır##{idx}_{account_id}",
-                    value=float(zone.get("max_price", 0.0)),
+                    f"Üst Sınır ($)##{idx}_{account_id}",
+                    min_value=0.0,
+                    value=max(0.0, float(zone.get("max_price", 0.0))),
                     step=0.1,
+                    format="%.2f",
+                    help="💵 Dolar cinsi: Robotun çalışacağı EN YÜKSEK varil fiyatı ($).",
                 )
             with zc3:
+                # Grid en az 0.05 olabilir
                 z_grid = st.number_input(
-                    f"Grid##{idx}_{account_id}",
-                    value=float(zone.get("grid_step", 0.05)),
-                    step=0.01,
+                    f"Grid Adımı ($)##{idx}_{account_id}",
+                    min_value=0.05,
+                    value=max(0.05, float(zone.get("grid_step", 0.05))),
+                    step=0.05,
+                    format="%.2f",
+                    help="📏 Dolar cinsi: Emirlerin kaç $ aralıkla dizileceği (Ağ adımı).",
                 )
             with zc4:
+                # Lot en az 0.01, en çok 5.0 olabilir
                 z_lot = st.number_input(
-                    f"Lot##{idx}_{account_id}",
-                    value=float(zone.get("lot_size", 0.01)),
+                    f"Lot (📦)##{idx}_{account_id}",
+                    min_value=0.01,
+                    max_value=5.0,
+                    value=max(0.01, min(5.0, float(zone.get("lot_size", 0.01)))),
                     step=0.01,
+                    format="%.2f",
+                    help="📦 Hacim: İşlem başına açılacak pozisyon büyüklüğü (Lot).",
                 )
             with zc5:
+                # KORREKTUR: Take Profit MUSS mindestens 0.01 sein (0 macht keinen Sinn und blockiert MT5)
                 z_tp = st.number_input(
-                    f"TP##{idx}_{account_id}",
-                    value=float(zone.get("take_profit", 0.05)),
+                    f"Kâr Al ($)##{idx}_{account_id}",
+                    min_value=0.01,
+                    value=max(0.01, float(zone.get("take_profit", 0.05))),
                     step=0.01,
+                    format="%.2f",
+                    help="🎯 Dolar cinsi: Pozisyon başına hedeflenen kâr miktarı ($).",
                 )
             with zc6:
+                # KORREKTUR: Stop Loss darf 0.0 sein (deaktiviert), aber niemals negativ!
                 z_sl = st.number_input(
-                    f"Stop Loss##{idx}_{account_id}",
-                    value=float(zone.get("stop_loss", 0.0)),
+                    f"Stop Loss ($)##{idx}_{account_id}",
+                    min_value=0.0,
+                    value=max(0.0, float(zone.get("stop_loss", 0.0))),
                     step=0.01,
+                    format="%.2f",
+                    help="🛡️ Dolar cinsi: Zarar kes mesafesi ($). 0.00 ise kapalıdır.",
                 )
             with zc7:
                 st.markdown(
@@ -203,12 +228,15 @@ def render_model_2_settings(current_settings, account_id):
                 z_clear = st.checkbox(
                     f"Çıkışta Temizle##{idx}_{account_id}",
                     value=bool(zone.get("clear_on_exit", True)),
+                    help="🧹 İşaretliyken, fiyat bölgeden çıkarsa o bölgedeki bekleyen emirler silinir.",
                 )
             with zc8:
                 st.markdown(
                     "<div style='margin-top: 28px;'></div>", unsafe_allow_html=True
                 )
-                delete_btn = st.checkbox(f"🗑️##del_{idx}_{account_id}")
+                delete_btn = st.checkbox(
+                    f"🗑️##del_{idx}_{account_id}", help="Bu bölgeyi sil."
+                )
 
             if not delete_btn:
                 updated_zones.append(
@@ -222,7 +250,6 @@ def render_model_2_settings(current_settings, account_id):
                         "clear_on_exit": z_clear,
                     }
                 )
-
         st.session_state[zones_session_key] = updated_zones
 
         col_b1, col_b2 = st.columns([1, 1])

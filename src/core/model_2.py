@@ -458,9 +458,17 @@ def manage_dynamic_grid():
 
     # BÖLGE KONTROLÜ
     if ACTIVE_ZONE is not None:
-        grid_step = float(ACTIVE_ZONE.get("grid_step", 0.05))
+        # Eski ham okuma satırlarını siliyoruz, yerine bu GÜVENLİK KİLİDİ kısmını koyuyoruz:
+        raw_grid = float(ACTIVE_ZONE.get("grid_step", 0.05))
+        raw_lot = float(ACTIVE_ZONE.get("lot_size", 0.01))
+
+        # Sınırlandırmalar:
+        # Grid en az 0.05 olabilir (Sınırsız üst limit)
+        # Lot en az 0.01, en çok 5.0 olabilir.
+        grid_step = max(0.05, raw_grid)
+        lot_val = max(0.01, min(5.0, raw_lot))
+
         tp_val = float(ACTIVE_ZONE.get("take_profit", 0.05))
-        lot_val = float(ACTIVE_ZONE.get("lot_size", 0.01))
         sl_val = float(ACTIVE_ZONE.get("stop_loss", 0.0))
 
         yeni_referans = calculate_reference_price(grid_step)
