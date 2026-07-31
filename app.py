@@ -5,6 +5,21 @@ import os
 import json
 from pathlib import Path
 
+# 1. Çalışma ortamını (.bat dosyasından) oku. Bulamazsa varsayılan olarak "TEST" kabul et.
+env = os.getenv("ROBOT_ENV", "TEST").upper()
+
+# 2. Ortama göre sekme başlığı (Title) ve İkon (Favicon) ayarla
+if env == "LIVE":
+    PAGE_TITLE = "🔴 [LIVE] Grid Robot Control"
+    PAGE_ICON = "🔴"
+else:
+    PAGE_TITLE = "🟢 [TEST] Grid Robot Control"
+    PAGE_ICON = "🟢"
+
+# 3. Sayfa ayarlarını uygula
+# (DİKKAT: app.py içinde st. ile başlayan İLK komut bu olmak zorundadır!)
+st.set_page_config(page_title=PAGE_TITLE, page_icon=PAGE_ICON, layout="wide")
+
 # src klasörünü Python modül arama yoluna ekler
 sys.path.append(str(Path(__file__).parent / "src"))
 
