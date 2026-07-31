@@ -4,6 +4,7 @@ import sys
 import os
 import json
 import streamlit as st
+import time  # Bekleme (sleep) için eklendi
 from pathlib import Path
 
 # Proje dizinini al ki utils klasöründeki dosyalara ulaşabilelim
@@ -85,7 +86,36 @@ def start_bot_process(account_id: str, model_name: str) -> bool:
 def stop_bot_process(account_id: str) -> bool:
     """Çalışan robotu KESİN olarak durdurur ve MT5'teki BEKLEYEN emirleri siler."""
 
-    # 1. AŞAMA: MT5 Temizliği (Robotu öldürmeden hemen önce MT5'teki bekleyen emirleri temizle)
+    # 1. AŞAMA (DÜZELTME): Python Zombi Sürecini Yok Et (Önce fişi çekiyoruz!)
+    if account_id in _ACTIVE_BOTS:
+        process = _ACTIVE_BOTS[account_id]
+        try:
+            if os.name == "nt":
+                # Windows işletim sistemi ise Taskkill ile tüm alt döngüleri acımasızca sonlandır
+                subprocess.call(
+                    ["taskkill", "/F", "/T", "/PID", str(process.pid)],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+            else:
+                # Mac/Linux sistemleri için
+                process.terminate()
+                try:
+                    process.wait(timeout=3)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+
+            # Subprocess'in gerçekten kapanması için işletim sistemine 1 saniye nefes payı ver
+            time.sleep(1.0)
+
+        except Exception as e:
+            st.error(f"⚠️ Robot durdurulurken pürüz çıktı: {str(e)}")
+        finally:
+            # İşlem bittiğinde global listeden sil
+            if account_id in _ACTIVE_BOTS:
+                del _ACTIVE_BOTS[account_id]
+
+    # 2. AŞAMA (DÜZELTME): MT5 Temizliği (Robot öldükten sonra arkasını biz temizliyoruz)
     try:
         accounts_path = os.path.join(project_root, "configs", "accounts.json")
         if os.path.exists(accounts_path):
@@ -105,38 +135,10 @@ def stop_bot_process(account_id: str) -> bool:
             # Temizlik için geçici olarak MT5'e bağlanıp emirleri iptal et
             if active_account and connect_to_mt5(active_account):
                 if mt5 is not None:
-                    cancel_all_pending_orders(
-                        mt5
-                    )  # Aktiflere dokunmaz, sadece bekleyenleri siler
+                    # BÜYÜK DÜZELTME: Sadece robota ait (Magic: 123456) emirler silinecek!
+                    cancel_all_pending_orders(mt5, magic=123456)
                     mt5.shutdown()
     except Exception as e:
         st.warning(f"MT5 Bekleyen emir temizliği sırasında hata oluştu: {e}")
 
-    # 2. AŞAMA: Python Zombi Sürecini Yok Et
-    if account_id in _ACTIVE_BOTS:
-        process = _ACTIVE_BOTS[account_id]
-        try:
-            if os.name == "nt":
-                # Windows işletim sistemi ise Taskkill ile tüm alt döngüleri acımasızca sonlandır
-                subprocess.call(
-                    ["taskkill", "/F", "/T", "/PID", str(process.pid)],
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                )
-            else:
-                # Mac/Linux sistemleri için
-                process.terminate()
-                try:
-                    process.wait(timeout=3)
-                except subprocess.TimeoutExpired:
-                    process.kill()
-        except Exception as e:
-            st.error(f"⚠️ Robot durdurulurken pürüz çıktı: {str(e)}")
-        finally:
-            # İşlem bittiğinde global listeden sil
-            if account_id in _ACTIVE_BOTS:
-                del _ACTIVE_BOTS[account_id]
-
-        return True
-
-    return False
+    return True
