@@ -4,11 +4,20 @@ import sys
 import os
 import json
 from pathlib import Path
+import platform
+import time
+import streamlit as st
 
-# 1. Çalışma ortamını (.bat dosyasından) oku. Bulamazsa varsayılan olarak "TEST" kabul et.
+# ==========================================
+# 1. YOL AYARLARI (Python'a src klasörünü gösteriyoruz - EN ÜSTTE OLMALI)
+# ==========================================
+sys.path.append(str(Path(__file__).parent / "src"))
+
+# ==========================================
+# 2. ORTAM VE SAYFA AYARI (İLK STREAMLIT KOMUTU)
+# ==========================================
 env = os.getenv("ROBOT_ENV", "TEST").upper()
 
-# 2. Ortama göre sekme başlığı (Title) ve İkon (Favicon) ayarla
 if env == "LIVE":
     PAGE_TITLE = "🔴 [LIVE] Grid Robot Control"
     PAGE_ICON = "🔴"
@@ -16,22 +25,15 @@ else:
     PAGE_TITLE = "🟢 [TEST] Grid Robot Control"
     PAGE_ICON = "🟢"
 
-# 3. Sayfa ayarlarını uygula
-# (DİKKAT: app.py içinde st. ile başlayan İLK komut bu olmak zorundadır!)
 st.set_page_config(page_title=PAGE_TITLE, page_icon=PAGE_ICON, layout="wide")
 
-# src klasörünü Python modül arama yoluna ekler
-sys.path.append(str(Path(__file__).parent / "src"))
-
-import streamlit as st
-import time
-import platform
-
+# ==========================================
+# 3. KENDİ MODÜLLERİMİZİ İÇE AKTARMA
+# ==========================================
 from src.utils.bot_manager import is_bot_running, start_bot_process, stop_bot_process
 from src.components.account_selector import render_account_selector
 from src.components.chart_viewer import render_chart
 from src.utils.mt5_connection import connect_to_mt5
-
 from src.components.header import render_header
 from src.components.settings_panel import render_settings_panel
 from src.components.metrics import render_metrics
@@ -43,7 +45,6 @@ from src.utils.config import load_settings, save_settings
 import src.core.model_1 as model_1
 import src.core.model_2 as model_2
 import src.core.model_3 as model_3
-
 
 def get_live_metrics_from_file(account_id):
     """Liest die aktuellsten Metriken des Subprozesses aus der JSON-Datei."""
