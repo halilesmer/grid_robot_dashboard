@@ -2,7 +2,18 @@
 import subprocess
 import sys
 import os
+import json
 import streamlit as st
+from pathlib import Path
+
+# Proje dizinini al ki utils klasöründeki dosyalara ulaşabilelim
+project_root = Path(__file__).parent.parent.parent
+sys.path.append(str(project_root))
+
+# Gerekli bağlantı ve temizlik fonksiyonlarını içeri aktar
+from src.utils.mt5_connection import connect_to_mt5
+from src.utils.trade_utils import cancel_all_pending_orders
+import MetaTrader5 as mt5
 
 # GLOBALE VARIABLE (Sicher vor Streamlit-Abstürzen!)
 _ACTIVE_BOTS = {}
@@ -37,7 +48,6 @@ def start_bot_process(account_id: str, model_name: str) -> bool:
         log_file = open(log_file_path, "a", encoding="utf-8")
 
         # Ayrı bir Python programı olarak botu tetikle.
-        # DÜZELTME: "-u" (unbuffered) ekledik ki loglar anında dosyaya yazılsın!
         process = subprocess.Popen(
             [sys.executable, "-u", "src/core/bot_runner.py", account_id, model_name],
             stdout=log_file,
@@ -45,7 +55,7 @@ def start_bot_process(account_id: str, model_name: str) -> bool:
             text=True,
         )
 
-        # Mükemmel izolasyon: Süreci SADECE global değişkene yazıyoruz, session_state'e DEĞİL!
+        # Mükemmel izolasyon: Süreci SADECE global değişkene yazıyoruz
         _ACTIVE_BOTS[account_id] = process
         return True
 
@@ -58,20 +68,58 @@ def start_bot_process(account_id: str, model_name: str) -> bool:
 
 
 def stop_bot_process(account_id: str) -> bool:
-    """Çalışan robotu güvenli ve temiz bir şekilde (Graceful shutdown) durdurur."""
+    """Çalışan robotu KESİN olarak durdurur ve MT5'teki BEKLEYEN emirleri siler."""
+
+    # 1. AŞAMA: MT5 Temizliği (Robotu öldürmeden hemen önce MT5'teki bekleyen emirleri temizle)
+    try:
+        accounts_path = os.path.join(project_root, "configs", "accounts.json")
+        if os.path.exists(accounts_path):
+            with open(accounts_path, "r", encoding="utf-8") as f:
+                accounts_data = json.load(f)
+                accounts = (
+                    accounts_data
+                    if isinstance(accounts_data, list)
+                    else accounts_data.get("accounts", [])
+                )
+
+            # Kapatılacak hesabı bul
+            active_account = next(
+                (acc for acc in accounts if str(acc.get("login")) == account_id), None
+            )
+
+            # Temizlik için geçici olarak MT5'e bağlanıp emirleri iptal et
+            if active_account and connect_to_mt5(active_account):
+                cancel_all_pending_orders(
+                    mt5
+                )  # Aktiflere dokunmaz, sadece bekleyenleri siler
+                mt5.shutdown()
+    except Exception as e:
+        st.warning(f"MT5 Bekleyen emir temizliği sırasında hata oluştu: {e}")
+
+    # 2. AŞAMA: Python Zombi Sürecini Yok Et
     if account_id in _ACTIVE_BOTS:
         process = _ACTIVE_BOTS[account_id]
         try:
-            process.terminate()  # Güvenli kapanma sinyali gönder
-            try:
-                process.wait(timeout=3)  # 3 saniye bekle
-            except subprocess.TimeoutExpired:
-                process.kill()  # Kapanmamakta direnirse zorla kapat (Kill)
+            if os.name == "nt":
+                # Windows işletim sistemi ise Taskkill ile tüm alt döngüleri acımasızca sonlandır
+                subprocess.call(
+                    ["taskkill", "/F", "/T", "/PID", str(process.pid)],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+            else:
+                # Mac/Linux sistemleri için
+                process.terminate()
+                try:
+                    process.wait(timeout=3)
+                except subprocess.TimeoutExpired:
+                    process.kill()
         except Exception as e:
             st.error(f"⚠️ Robot durdurulurken pürüz çıktı: {str(e)}")
         finally:
             # İşlem bittiğinde global listeden sil
-            del _ACTIVE_BOTS[account_id]
+            if account_id in _ACTIVE_BOTS:
+                del _ACTIVE_BOTS[account_id]
             return True
 
     return False

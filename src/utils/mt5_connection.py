@@ -80,11 +80,22 @@ def connect_to_mt5(account_config):
             safe_log(
                 f"🔴 MT5 Girişi Başarısız! Hesap No: {login_id}. Hata Kodu: {mt5.last_error()}"
             )
+            mt5.shutdown()  # Hata durumunda hafızada asılı kalmaması için kapatıldı
             return False
+
+        # DÜZELTME: Broker sunucusuyla senkronizasyon için MT5'e 1 saniye nefes payı ver
+        time.sleep(1.0)
     else:
         time.sleep(2.0)
 
-    account_info = mt5.account_info()
+    # DÜZELTME: Hesap verilerini çekmek için 3 denemeli (Retry) güvenli döngü kuruldu
+    account_info = None
+    for _ in range(3):
+        account_info = mt5.account_info()
+        if account_info is not None:
+            break
+        time.sleep(1.0)
+
     if account_info is None:
         safe_log(
             "Hesap bilgileri MetaTrader'dan alınamadı! (Auto-Login gecikmiş veya MT5 kapalı olabilir)"

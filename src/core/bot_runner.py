@@ -9,7 +9,6 @@ from pathlib import Path
 
 # Zwingt die Windows-Konsole dazu, UTF-8 (inkl. türkischer Zeichen) zu akzeptieren!
 # Zwingt die Windows-Konsole dazu, UTF-8 zu akzeptieren UND sofort auf die Festplatte zu schreiben (Live-Modus)
-# Zwingt die Windows-Konsole dazu, UTF-8 zu akzeptieren UND sofort auf die Festplatte zu schreiben (Live-Modus)
 if sys.platform == "win32":
     sys.stdout = io.TextIOWrapper(
         sys.stdout.buffer,
@@ -106,6 +105,20 @@ def main():
         sys.exit(1)
 
     print(f"[{account_id}] MT5 Bağlantısı Başarılı! Robot döngüsü başlıyor...")
+
+    # YENİ EKLENEN KISIM: Başlangıçta eskiye ait bekleyen emirleri çöpe atarak temiz bir sayfa aç
+    try:
+        import MetaTrader5 as mt5
+        from src.utils.trade_utils import cancel_all_pending_orders
+
+        cancel_all_pending_orders(mt5)
+        print(
+            f"[{account_id}] Eski bekleyen emirler temizlendi. (Güncel ayarlarla başlanıyor)"
+        )
+    except Exception as e:
+        print(
+            f"[{account_id}] Emir temizliği yapılamadı (Hata önemli olmayabilir): {e}"
+        )
 
     # İşlem öncesi motorun hafızasının tamamen temiz olduğundan emin ol
     bot_engine.IS_RUNNING = True
