@@ -245,9 +245,9 @@ def normalize_volume(volume):
 
 def get_current_market_price():
     global SIMULATED_PRICE
-    if SIMULATED_PRICE > 0:
+    if IS_MAC_TEST_MODE and SIMULATED_PRICE > 0:
         return SIMULATED_PRICE
-        
+
     tick = mt5.symbol_info_tick(SYMBOL)
     if tick is None:
         return None
