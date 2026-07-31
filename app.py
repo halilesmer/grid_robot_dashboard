@@ -63,14 +63,9 @@ def get_live_metrics_from_file(account_id):
         "algo_trading_error": False,
     }
 
-
 # ==========================================
 # 1. STREAMLIT CONFIG & CSS
 # ==========================================
-# ==========================================
-# 1. STREAMLIT CONFIG & CSS
-# ==========================================
-st.set_page_config(page_title="Grid Robot Control", page_icon="🤖", layout="wide")
 apply_custom_css()
 
 # YENİ: Hesaplara özel SİLİNMEYEN model hafızası
