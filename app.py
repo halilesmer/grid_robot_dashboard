@@ -211,8 +211,16 @@ if platform.system() != "Windows":
         step=0.10,
     )
     current_active_price = mock_price
-    bot_engine.SIMULATED_PRICE = mock_price
+    bot_engine.SIMULATED_PRICE = mock_price  # Arayüzün kendi grafiği için
 
+    # YENİ: Alt sürece (backend) fiyatı iletmek için köprü kuruyoruz
+    sim_file_path = os.path.join("logs", f"simulated_price_{account_id}.json")
+    try:
+        with open(sim_file_path, "w", encoding="utf-8") as f:
+            json.dump({"price": mock_price}, f)
+    except Exception:
+        pass
+    
 col_chart, col_log = st.columns([2, 1])
 
 with col_chart:

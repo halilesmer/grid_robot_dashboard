@@ -36,11 +36,14 @@ def export_metrics_loop(bot_engine, account_id):
     """
     Bu fonksiyon arka planda sürekli çalışarak robotun metriklerini okur
     ve Dashboard'un görebilmesi için bir JSON dosyasına yazar.
+    Aynı zamanda Mac Test Modunda arayüzden gelen sahte fiyatı okur.
     """
     metrics_file = os.path.join(project_root, "logs", f"live_metrics_{account_id}.json")
+    sim_file = os.path.join(project_root, "logs", f"simulated_price_{account_id}.json")
     os.makedirs(os.path.dirname(metrics_file), exist_ok=True)
 
     while bot_engine.IS_RUNNING:
+        # 1. Metrikleri dışarı aktar (Arayüz görsün diye)
         if hasattr(bot_engine, "get_live_metrics"):
             try:
                 metrics = bot_engine.get_live_metrics()
@@ -48,6 +51,16 @@ def export_metrics_loop(bot_engine, account_id):
                     json.dump(metrics, f)
             except Exception as e:
                 pass  # Okuma hatası anlık olabilir, devam et.
+
+        # 2. Arayüzden gelen sahte fiyatı (Simülatörü) içeri al
+        if sys.platform != "win32" and os.path.exists(sim_file):
+            try:
+                with open(sim_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    bot_engine.SIMULATED_PRICE = data.get("price", 75.0)
+            except Exception:
+                pass
+
         time.sleep(1)
 
 
