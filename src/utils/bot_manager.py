@@ -13,7 +13,14 @@ sys.path.append(str(project_root))
 # Gerekli bağlantı ve temizlik fonksiyonlarını içeri aktar
 from src.utils.mt5_connection import connect_to_mt5
 from src.utils.trade_utils import cancel_all_pending_orders
-import MetaTrader5 as mt5
+
+# ==========================================
+# MAC KORUMASI (Crash Önleyici Zırh)
+# ==========================================
+try:
+    import MetaTrader5 as mt5
+except ImportError:
+    mt5 = None  # Mac ortamında çökmemesi için mt5 modülünü boş (None) atıyoruz
 
 # GLOBALE VARIABLE (Sicher vor Streamlit-Abstürzen!)
 _ACTIVE_BOTS = {}
@@ -38,6 +45,7 @@ def start_bot_process(account_id: str, model_name: str) -> bool:
     if is_bot_running(account_id):
         return True  # Zaten çalışıyor
 
+    log_file = None
     try:
         # Her hesaba özel log dosyası oluştur
         log_dir = "logs"
@@ -65,6 +73,13 @@ def start_bot_process(account_id: str, model_name: str) -> bool:
             f"🚨 Sistem Hatası: {account_id} için robot başlatılamadı!\n\nDetay: {str(e)}"
         )
         return False
+    finally:
+        # GÜVENLİK DÜZELTMESİ: Açılan dosya akışı (file descriptor) hafızada kilitli kalmasın diye kapatılıyor
+        if log_file is not None:
+            try:
+                log_file.close()
+            except Exception:
+                pass
 
 
 def stop_bot_process(account_id: str) -> bool:
@@ -89,10 +104,11 @@ def stop_bot_process(account_id: str) -> bool:
 
             # Temizlik için geçici olarak MT5'e bağlanıp emirleri iptal et
             if active_account and connect_to_mt5(active_account):
-                cancel_all_pending_orders(
-                    mt5
-                )  # Aktiflere dokunmaz, sadece bekleyenleri siler
-                mt5.shutdown()
+                if mt5 is not None:
+                    cancel_all_pending_orders(
+                        mt5
+                    )  # Aktiflere dokunmaz, sadece bekleyenleri siler
+                    mt5.shutdown()
     except Exception as e:
         st.warning(f"MT5 Bekleyen emir temizliği sırasında hata oluştu: {e}")
 
@@ -120,6 +136,7 @@ def stop_bot_process(account_id: str) -> bool:
             # İşlem bittiğinde global listeden sil
             if account_id in _ACTIVE_BOTS:
                 del _ACTIVE_BOTS[account_id]
-            return True
+
+        return True
 
     return False
