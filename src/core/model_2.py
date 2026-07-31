@@ -431,10 +431,10 @@ def manage_dynamic_grid():
     robot_positions = get_all_robot_positions()
     manual_positions = get_all_manual_positions()
     robot_orders = get_all_robot_orders()
-    
+
     if robot_positions is None or manual_positions is None or robot_orders is None:
         return False 
-        
+
     current_price = get_current_market_price()
     if current_price is None: return False
 
@@ -451,7 +451,7 @@ def manage_dynamic_grid():
                 robot_orders = get_all_robot_orders()
             else:
                 log_message(f"🪤 Bölge ({ACTIVE_ZONE.get('min_price')}-{ACTIVE_ZONE.get('max_price')}) dışına çıkıldı. Temizlik KAPALI: Mevcut bekleyen emirler tuzak olarak bırakıldı.")
-                
+
         ACTIVE_ZONE = current_zone
         # DÜZELTME 1: Yeni bölgeye geçince eski merkez hafızasını sıfırla! (Matematiksel Uyum)
         REFERENCE_PRICE = None
@@ -462,7 +462,7 @@ def manage_dynamic_grid():
         tp_val = float(ACTIVE_ZONE.get("take_profit", 0.05))
         lot_val = float(ACTIVE_ZONE.get("lot_size", 0.01))
         sl_val = float(ACTIVE_ZONE.get("stop_loss", 0.0))
-        
+
         yeni_referans = calculate_reference_price(grid_step)
         if REFERENCE_PRICE != yeni_referans:
             REFERENCE_PRICE = yeni_referans
@@ -473,14 +473,16 @@ def manage_dynamic_grid():
 
     desired_levels = calculate_grid_levels(REFERENCE_PRICE, ACTIVE_ZONE)
     tolerance = (SYMBOL_INFO.point * 2) if SYMBOL_INFO else 0.02
-    
+
     # UZAKTA KALAN BEKLEYEN EMİRLERİ SİL
     z_min = float(ACTIVE_ZONE.get("min_price", 0))
     z_max = float(ACTIVE_ZONE.get("max_price", 0))
 
+    silinen_emir_sayisi = 0  # <--- YENİ: Sayaç eklendi
+
     for order in robot_orders:
         order_price = normalize_price(order.price_open)
-        
+
         # DÜZELTME 2: (Model 2 Özelliği) Eğer emir şu anki aktif bölgenin dışındaysa,
         # ve clear_on_exit = False sayesinde hayatta kalmışsa, ONA DOKUNMA (Tuzak Koruma)
         if not (z_min <= order_price <= z_max):
@@ -491,19 +493,31 @@ def manage_dynamic_grid():
             if abs(order_price - dl) <= tolerance:
                 is_valid = True
                 break
-                
+
         if not is_valid:
             cancel_order(order)
+            silinen_emir_sayisi += (
+                1  
+            )
+
+    # <--- YENİ: Döngü bitince (for ile aynı hizada) log yazdır
+    if silinen_emir_sayisi > 0:
+        log_message(
+            f"🧹 Ağ kaydı: Uzakta kalan/Gereksiz {silinen_emir_sayisi} adet bekleyen emir silindi."
+        )
 
     # EKSİK OLAN SEVİYELERİ DOLDUR
     mevcut_seviyeler = get_existing_levels(grid_step) 
+
+    eklenen_emir_sayisi = 0  # <--- YENİ: Sayaç eklendi
+
     for level_price in desired_levels:
         is_occupied = False
         for exist_lvl in mevcut_seviyeler:
             if abs(level_price - exist_lvl) <= tolerance:
                 is_occupied = True
                 break
-                 
+
         if not is_occupied:
             if ORDER_TYPE.upper() == "BUY":
                 tp_price = normalize_price(level_price + tp_val)
@@ -511,8 +525,16 @@ def manage_dynamic_grid():
             else:
                 tp_price = normalize_price(level_price - tp_val)
                 sl_price = normalize_price(level_price + sl_val) if sl_val > 0 else None
-                
-            send_pending_order(level_price, lot_val, tp_price, sl_price)
+
+            # <--- YENİ: Sadece 'send_pending_order' yazan satırı aşağıdaki gibi if içine al
+            if send_pending_order(level_price, lot_val, tp_price, sl_price):
+                eklenen_emir_sayisi += 1
+
+    # <--- YENİ: Döngü bitince (for ile aynı hizada) log yazdır
+    if eklenen_emir_sayisi > 0:
+        log_message(
+            f"🌱 Ağ kaydı: {eklenen_emir_sayisi} adet yeni nöbetçi emir ufuk çizgisine eklendi."
+        )
 
     return True
 
