@@ -51,20 +51,15 @@ def get_live_metrics_from_file(account_id):
 # ==========================================
 # 1. STREAMLIT CONFIG & CSS
 # ==========================================
+# ==========================================
+# 1. STREAMLIT CONFIG & CSS
+# ==========================================
 st.set_page_config(page_title="Grid Robot Control", page_icon="🤖", layout="wide")
 apply_custom_css()
 
-# Session State Başlangıç Değerleri (robot_running KESİNLİKLE YOK!)
-if "selected_model" not in st.session_state:
-    st.session_state.selected_model = "Model 1"
-
-if st.session_state.selected_model == "Model 1":
-    bot_engine = model_1
-elif st.session_state.selected_model == "Model 2":
-    bot_engine = model_2
-else:
-    bot_engine = model_3
-
+# YENİ: Hesaplara özel SİLİNMEYEN model hafızası
+if "account_models_memory" not in st.session_state:
+    st.session_state.account_models_memory = {}
 
 # ==========================================
 # 2. ÖNCE HESABI SEÇ (TAM GENİŞLİKTE)
@@ -75,8 +70,27 @@ active_account = render_account_selector()
 if not active_account:
     st.stop()
 
-# YENİ: Seçili hesabın benzersiz ID'sini alıyoruz
+# Seçili hesabın benzersiz ID'sini alıyoruz
 account_id = str(active_account.get("login", "default"))
+
+# ==========================================
+# MOTOR SEÇİMİNİ HESABA GÖRE BELİRLE
+# ==========================================
+# Hafızada bu hesap için model yoksa Model 1 yap
+if account_id not in st.session_state.account_models_memory:
+    st.session_state.account_models_memory[account_id] = "Model 1"
+
+# Bu hesabın hafızasındaki modeli aktif yapıyoruz
+st.session_state.selected_model = st.session_state.account_models_memory[account_id]
+
+# Motoru seçili modele göre ayarla
+if st.session_state.selected_model == "Model 1":
+    bot_engine = model_1
+elif st.session_state.selected_model == "Model 2":
+    bot_engine = model_2
+else:
+    bot_engine = model_3
+
 
 st.markdown("---")
 
@@ -144,10 +158,13 @@ with col_controls:
     action, chosen_model = render_controls(
         is_running=account_is_running,
         account_id=account_id,
+        current_model=st.session_state.selected_model,  # <--- NEU
     )
 
 if chosen_model and chosen_model != st.session_state.selected_model:
     st.session_state.selected_model = chosen_model
+    # NEU: Wir speichern die Auswahl in unserem unlöschbaren Gedächtnis
+    st.session_state.account_models_memory[account_id] = chosen_model
     st.rerun()
 
 
@@ -220,7 +237,7 @@ if platform.system() != "Windows":
             json.dump({"price": mock_price}, f)
     except Exception:
         pass
-    
+
 col_chart, col_log = st.columns([2, 1])
 
 with col_chart:

@@ -3,7 +3,9 @@ import streamlit as st
 from src.constants.tooltips import SETTINGS_TOOLTIPS
 
 
-def render_controls(is_running: bool, account_id: str = "default"):
+def render_controls(
+    is_running: bool, account_id: str = "default", current_model: str = "Model 1"
+):
     """
     Dinamik Tek Butonlu Kontrol Paneli, Anında Açılan Tooltip ve Motor Seçimi (%100 Multi-Account Uyumlu)
     """
@@ -11,28 +13,26 @@ def render_controls(is_running: bool, account_id: str = "default"):
 
     col1, col2, col3 = st.columns([2.5, 0.8, 2.5], vertical_alignment="center")
 
-    # ==========================================
-    # KUSURSUZ İZOLASYON: Hesaba özel hafıza!
-    # ==========================================
-    model_key = f"selected_model_{account_id}"
-
-    # Eğer bu hesap için henüz bir model seçilmediyse varsayılanı Model 1 yap
-    if model_key not in st.session_state:
-        st.session_state[model_key] = "Model 1"
-
     with col1:
         models = ["Model 1", "Model 2", "Model 3"]
+
+        # Finde heraus, an welcher Position (Index) das aktuelle Modell steht
+        try:
+            default_index = models.index(current_model)
+        except ValueError:
+            default_index = 0
+
         selected_model = st.selectbox(
             "⚙️ Motor Seçimi",
             options=models,
+            index=default_index,  # NEU: Wir erzwingen die Auswahl per Index!
             disabled=is_running,
             label_visibility="collapsed",
-            key=model_key,  # Streamlit seçimi otomatik olarak izole edilen bu key'de tutacak!
+            key=f"selectbox_motor_{account_id}",
         )
 
     with col2:
-        # Tooltip metinleri artık dışarıdan gelen current_model'den değil,
-        # doğrudan bu hesaba ait olan 'selected_model' üzerinden besleniyor.
+        # Tooltip metinleri artık dışarıdan gelen selected_model üzerinden besleniyor.
         if is_running:
             status_text = SETTINGS_TOOLTIPS["ROBOT_ACTIVE"].format(model=selected_model)
             icon = "🟢"
@@ -97,7 +97,7 @@ def render_controls(is_running: bool, account_id: str = "default"):
             button_label,
             type=button_type,
             use_container_width=True,
-            key=f"toggle_btn_{account_id}",  # Başlat/Durdur butonu %100 izole edildi
+            key=f"toggle_btn_{account_id}",
         )
 
     action = "TOGGLE" if toggle_btn else None

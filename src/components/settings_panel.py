@@ -235,7 +235,10 @@ def render_model_2_settings(current_settings, account_id):
                     "<div style='margin-top: 28px;'></div>", unsafe_allow_html=True
                 )
                 delete_btn = st.checkbox(
-                    f"🗑️##del_{idx}_{account_id}", help="Bu bölgeyi sil."
+                    "🗑️",
+                    key=f"del_{idx}_{account_id}",
+                    label_visibility="collapsed",
+                    help="Bu bölgeyi sil.",
                 )
 
             if not delete_btn:
