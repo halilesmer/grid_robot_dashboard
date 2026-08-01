@@ -19,10 +19,10 @@ sys.path.append(str(Path(__file__).parent / "src"))
 env = os.getenv("ROBOT_ENV", "TEST").upper()
 
 if env == "LIVE":
-    PAGE_TITLE = "🔴 [LIVE] Grid Robot Control"
+    PAGE_TITLE = "[LIVE] Grid Robot Control"
     PAGE_ICON = "🔴"
 else:
-    PAGE_TITLE = "🟢 [TEST] Grid Robot Control"
+    PAGE_TITLE = "[TEST] Grid Robot Control"
     PAGE_ICON = "🟢"
 
 st.set_page_config(page_title=PAGE_TITLE, page_icon=PAGE_ICON, layout="wide")
