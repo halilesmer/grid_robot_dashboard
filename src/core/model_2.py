@@ -2,7 +2,8 @@ import time
 import datetime
 import platform
 import json
-from src.utils.trade_utils import safe_send_order
+import os
+from src.utils.trade_utils import safe_send_order, close_position
 from src.utils.config import get_settings_file
 
 # ==========================================
@@ -20,11 +21,14 @@ REFERENCE_PRICE = None
 SYMBOL_INFO = None
 FILLING_MODE = None
 ACTIVE_ZONE = None
+ACTIVE_ZONE_IDX = None
 
-# DÜZELTME: IS_RUNNING ilk başta KESİNLİKLE False olmalı! Subprocess bunu True yapar.
 IS_RUNNING = False
 INITIAL_CLEANUP_DONE = False
 SIMULATED_PRICE = 0.0
+
+active_zones_state = {} # Hafıza Kurtarma ve Zombi Emir Yönetimi
+
 
 
 # ==========================================
@@ -213,7 +217,7 @@ if IS_MAC_TEST_MODE:
 # KULLANICI AYARLARI
 # ═══════════════════════════════════════════════════════════════════════════════
 
-MAGIC_NUMBER  = 123456            
+BASE_MAGIC_NUMBER = 200000            
 MAX_DEVIATION = 20      
 MARKET_CLOSED_CHECK_INTERVAL = 60    
 LOG_TO_FILE = True                   
@@ -248,13 +252,17 @@ def get_current_market_price():
     if IS_MAC_TEST_MODE and SIMULATED_PRICE > 0:
         return SIMULATED_PRICE
 
-    tick = mt5.symbol_info_tick(SYMBOL)
-    if tick is None:
+    try:
+        tick = mt5.symbol_info_tick(SYMBOL)
+        if tick is None:
+            return None
+        if ORDER_TYPE.upper() == "BUY":
+            return tick.ask
+        else:
+            return tick.bid
+    except Exception as e:
+        log_message(f"Fiyat alınamadı (Bağlantı koptu): {e}", "ERROR")
         return None
-    if ORDER_TYPE.upper() == "BUY":
-        return tick.ask
-    else:
-        return tick.bid
 
 def is_market_open():
     info = mt5.symbol_info(SYMBOL)
@@ -287,19 +295,19 @@ def get_pending_order_type(target_price, current_price):
 def get_all_robot_orders():
     orders = mt5.orders_get(symbol=SYMBOL)
     if orders is None: return None  
-    return [o for o in orders if o.magic == MAGIC_NUMBER]
+    return [o for o in orders if BASE_MAGIC_NUMBER <= o.magic < BASE_MAGIC_NUMBER + 1000]
 
 def get_all_robot_positions():
     positions = mt5.positions_get(symbol=SYMBOL)
     if positions is None: return None
     target_type = mt5.POSITION_TYPE_BUY if ORDER_TYPE.upper() == "BUY" else mt5.POSITION_TYPE_SELL
-    return [p for p in positions if p.magic == MAGIC_NUMBER and p.type == target_type]
+    return [p for p in positions if BASE_MAGIC_NUMBER <= p.magic < BASE_MAGIC_NUMBER + 1000 and p.type == target_type]
 
 def get_all_manual_positions():
     positions = mt5.positions_get(symbol=SYMBOL)
     if positions is None: return None
     target_type = mt5.POSITION_TYPE_BUY if ORDER_TYPE.upper() == "BUY" else mt5.POSITION_TYPE_SELL
-    return [p for p in positions if p.magic != MAGIC_NUMBER and p.type == target_type]
+    return [p for p in positions if not (BASE_MAGIC_NUMBER <= p.magic < BASE_MAGIC_NUMBER + 1000) and p.type == target_type]
 
 # DÜZELTME: Kayma (Slippage) yuvarlaması (Dinamik Zone grid_step'i ile)
 def get_existing_levels(grid_step):
@@ -350,10 +358,10 @@ def calculate_reference_price(grid_step):
     return REFERENCE_PRICE
 
 def get_active_zone(price):
-    for zone in ZONES:
+    for i, zone in enumerate(ZONES):
         if float(zone.get("min_price", 0)) <= price <= float(zone.get("max_price", 0)):
-            return zone
-    return None
+            return zone, i
+    return None, None
 
 def calculate_grid_levels(reference_price, zone_info):
     levels = []
@@ -377,12 +385,14 @@ def calculate_grid_levels(reference_price, zone_info):
     return sorted(set(levels))
 
 
-def send_pending_order(price, lot, tp_price, sl_price=None):
+def send_pending_order(price, lot, tp_price, sl_price=None, zone_idx=0):
     current_price = get_current_market_price()
     if current_price is None:
         return False
     order_type = get_pending_order_type(price, current_price)
 
+    magic_num = BASE_MAGIC_NUMBER + zone_idx + 1
+    
     request = {
         "action": mt5.TRADE_ACTION_PENDING,
         "symbol": SYMBOL,
@@ -390,8 +400,8 @@ def send_pending_order(price, lot, tp_price, sl_price=None):
         "type": order_type,
         "price": price,
         "deviation": MAX_DEVIATION,
-        "magic": MAGIC_NUMBER,
-        "comment": f"GridBot_{ORDER_TYPE}",
+        "magic": magic_num,
+        "comment": f"Model2_Zone{zone_idx + 1}",
         "type_time": mt5.ORDER_TIME_GTC,
         "type_filling": (
             FILLING_MODE if FILLING_MODE is not None else mt5.ORDER_FILLING_IOC
@@ -425,8 +435,40 @@ def modify_position_tp_sl(position, tp_price, sl_price=None):
 # ANA DİNAMİK YÖNETİM MOTORU (MODEL 2)
 # ═══════════════════════════════════════════════════════════════════════════════
 
+def process_zone_commands():
+    """UI'dan gelen zone komutlarını (Başlat/Beklet/Temizle) okur ve uygular."""
+    global active_zones_state
+    account_id = os.environ.get("ACTIVE_ACCOUNT_ID", "default")
+    commands_file = f"logs/commands_{account_id}.json"
+    
+    if os.path.exists(commands_file):
+        try:
+            with open(commands_file, "r", encoding="utf-8") as f:
+                content = f.read().strip()
+                if not content:
+                    return # Dosya henüz boşsa bir sonraki turda dene
+                commands = json.loads(content)
+            
+            # Her bir zone komutu için işlem yap
+            for zone_idx_str, command in commands.items():
+                zone_idx = int(zone_idx_str)
+                state = command.get("state", "START") # START, PAUSE, CLEAR
+                
+                # Durum değişikliğini kaydet
+                active_zones_state[zone_idx] = state
+                
+            # İşlenmiş komut dosyasını sil ki tekrar tekrar işlenmesin
+            os.remove(commands_file)
+        except json.JSONDecodeError:
+            # Race condition: Streamlit dosyayı yazarken yarıda yakaladık
+            pass # Bir sonraki turda tekrar okumayı deneyecek
+        except Exception as e:
+            log_message(f"Komutlar işlenirken hata: {e}", "ERROR")
+
 def manage_dynamic_grid():
-    global REFERENCE_PRICE, ACTIVE_ZONE
+    global REFERENCE_PRICE, ACTIVE_ZONE, ACTIVE_ZONE_IDX
+
+    process_zone_commands()
 
     robot_positions = get_all_robot_positions()
     manual_positions = get_all_manual_positions()
@@ -438,7 +480,64 @@ def manage_dynamic_grid():
     current_price = get_current_market_price()
     if current_price is None: return False
 
-    current_zone = get_active_zone(current_price)
+    # 1. Zombi Emir Temizliği (Garbage Collection) ve CLEAR Pozisyon Kapatma
+    for order in robot_orders:
+        order_zone_idx = order.magic - BASE_MAGIC_NUMBER - 1
+        if active_zones_state.get(order_zone_idx, "START") != "START":
+            log_message(f"🧹 Zombi Emir Temizliği: Bölge {order_zone_idx+1} pasif, emir siliniyor. (Bilet: {order.ticket})")
+            cancel_order(order)
+            
+    # CLEAR olan bölgeler için pozisyonları kapat
+    for pos in robot_positions:
+        pos_zone_idx = pos.magic - BASE_MAGIC_NUMBER - 1
+        if active_zones_state.get(pos_zone_idx, "START") == "CLEAR":
+            log_message(f"🧹 BÖLGE {pos_zone_idx+1} TEMİZLENİYOR: Pozisyon kapatılıyor (Bilet: {pos.ticket})")
+            close_position(mt5, pos, SYMBOL, log_message)
+            
+    # Listeyi güncelle
+    robot_orders = get_all_robot_orders()
+    robot_positions = get_all_robot_positions() # Pozisyonlar da kapanmış olabilir
+    if robot_orders is None or robot_positions is None:
+        return False
+    
+    # 2. Kısmi Dolum (Partial Fill) Kontrolü
+    # Her pozisyon için, volume kontrolü yap.
+    for pos in robot_positions:
+        pos_zone_idx = pos.magic - BASE_MAGIC_NUMBER - 1
+        if 0 <= pos_zone_idx < len(ZONES):
+            target_lot = max(0.01, min(5.0, float(ZONES[pos_zone_idx].get("lot_size", 0.01))))
+            
+            # Hassasiyet sorunu: Float kaynaklı mikro farklar için round kullan
+            remaining_lot = round(target_lot - pos.volume, 8)
+            
+            # Eğer gerçekleşen hacim hedeflenenden küçükse ve min volume sınırından büyükse
+            vol_min = SYMBOL_INFO.volume_min if SYMBOL_INFO else 0.01
+            if remaining_lot >= vol_min:
+                # Kalan hacim için limit emir var mı diye bak
+                has_pending = False
+                for order in robot_orders:
+                    if order.magic == pos.magic and abs(order.price_open - pos.price_open) < (SYMBOL_INFO.point * 2 if SYMBOL_INFO else 0.02):
+                        has_pending = True
+                        break
+                
+                if not has_pending and active_zones_state.get(pos_zone_idx, "START") == "START":
+                    log_message(f"🔄 Kısmi Dolum Tespit Edildi: Bölge {pos_zone_idx+1} | Kalan {remaining_lot} lot için emir gönderiliyor.")
+                    
+                    if ORDER_TYPE.upper() == "BUY":
+                        tp_price = normalize_price(pos.price_open + float(ZONES[pos_zone_idx].get("take_profit", 0.05)))
+                        sl_val = float(ZONES[pos_zone_idx].get("stop_loss", 0.0))
+                        sl_price = normalize_price(pos.price_open - sl_val) if sl_val > 0 else None
+                    else:
+                        tp_price = normalize_price(pos.price_open - float(ZONES[pos_zone_idx].get("take_profit", 0.05)))
+                        sl_val = float(ZONES[pos_zone_idx].get("stop_loss", 0.0))
+                        sl_price = normalize_price(pos.price_open + sl_val) if sl_val > 0 else None
+                        
+                    send_pending_order(pos.price_open, remaining_lot, tp_price, sl_price, zone_idx=pos_zone_idx)
+
+    # Listeyi tekrar güncelle
+    robot_orders = get_all_robot_orders()
+
+    current_zone, current_zone_idx = get_active_zone(current_price)
 
     # BÖLGE DEĞİŞİMİ / ÇIKIŞI
     if current_zone != ACTIVE_ZONE:
@@ -447,12 +546,16 @@ def manage_dynamic_grid():
             if zone_clear_flag:
                 log_message(f"🧹 Bölge ({ACTIVE_ZONE.get('min_price')}-{ACTIVE_ZONE.get('max_price')}) dışına çıkıldı. Temizlik AÇIK: Eski emirler siliniyor...")
                 for order in robot_orders:
-                    cancel_order(order)
+                    # Sadece çıktığımız bölgenin emirlerini silmek daha güvenli olabilir
+                    target_magic = BASE_MAGIC_NUMBER + ACTIVE_ZONE_IDX + 1
+                    if order.magic == target_magic:
+                        cancel_order(order)
                 robot_orders = get_all_robot_orders()
             else:
                 log_message(f"🪤 Bölge ({ACTIVE_ZONE.get('min_price')}-{ACTIVE_ZONE.get('max_price')}) dışına çıkıldı. Temizlik KAPALI: Mevcut bekleyen emirler tuzak olarak bırakıldı.")
 
         ACTIVE_ZONE = current_zone
+        ACTIVE_ZONE_IDX = current_zone_idx
         # DÜZELTME 1: Yeni bölgeye geçince eski merkez hafızasını sıfırla! (Matematiksel Uyum)
         REFERENCE_PRICE = None
 
@@ -475,9 +578,14 @@ def manage_dynamic_grid():
         if REFERENCE_PRICE != yeni_referans:
             REFERENCE_PRICE = yeni_referans
             log_message(f"📍 BÖLGE İÇİ OTONOM AĞ: Yeni Merkez -> {REFERENCE_PRICE}")
+            
+        # Eğer bölge PAUSE (Beklet) durumundaysa yeni emir dizilimi yapma
+        if active_zones_state.get(ACTIVE_ZONE_IDX, "START") != "START":
+            return True
+            
     else:
         REFERENCE_PRICE = None
-        return True 
+        return True
 
     desired_levels = calculate_grid_levels(REFERENCE_PRICE, ACTIVE_ZONE)
     tolerance = (SYMBOL_INFO.point * 2) if SYMBOL_INFO else 0.02
@@ -535,7 +643,7 @@ def manage_dynamic_grid():
                 sl_price = normalize_price(level_price + sl_val) if sl_val > 0 else None
 
             # <--- YENİ: Sadece 'send_pending_order' yazan satırı aşağıdaki gibi if içine al
-            if send_pending_order(level_price, lot_val, tp_price, sl_price):
+            if send_pending_order(level_price, lot_val, tp_price, sl_price, zone_idx=ACTIVE_ZONE_IDX):
                 eklenen_emir_sayisi += 1
 
     # <--- YENİ: Döngü bitince (for ile aynı hizada) log yazdır
@@ -583,6 +691,31 @@ def run_startup_checks():
         if tick:
             log_message(f"Piyasa acik. Bid: {tick.bid}, Ask: {tick.ask}")
 
+    # 2. Uyanış Taraması ve Hafıza Kurtarma (State Recovery)
+    global active_zones_state
+    active_zones_state = {}
+    
+    robot_positions = get_all_robot_positions()
+    robot_orders = get_all_robot_orders()
+    
+    # 1. Eğer mt5 sunucusu o anda koptuysa None döner. Kesinlikle listeye atayıp devam etme!
+    if robot_positions is None or robot_orders is None:
+        log_message("Kritik Hata: MT5'ten mevcut pozisyon veya emir listesi alınamadı (None döndü). Bağlantı stabil değil, başlangıç reddedildi.", "ERROR")
+        mt5.shutdown()
+        return False
+    
+    # Hangi bölgelerde işlem/emir varsa onları START olarak kabul et.
+    for pos in robot_positions:
+        zone_idx = pos.magic - BASE_MAGIC_NUMBER - 1
+        active_zones_state[zone_idx] = "START"
+        
+    for order in robot_orders:
+        zone_idx = order.magic - BASE_MAGIC_NUMBER - 1
+        active_zones_state[zone_idx] = "START"
+        
+    if active_zones_state:
+        log_message(f"🧠 Hafıza Kurtarıldı: Aktif bölgeler: {list(active_zones_state.keys())}")
+
     log_message("Tum baslangic kontrolleri basarili!")
     return True
 
@@ -599,6 +732,14 @@ def main_loop():
     try:
         while IS_RUNNING:
             load_dynamic_settings() 
+            
+            # 6. Kritik Hata (Crash / Disconnect) Koruması
+            term_info = mt5.terminal_info()
+            if term_info is None or not term_info.trade_allowed:
+                log_message("⚠️ Terminal kapalı veya Algo Trading devre dışı! Bağlantı bekleniyor...", "WARN")
+                time.sleep(10)
+                continue
+                
             if not is_market_open():
                 time.sleep(MARKET_CLOSED_CHECK_INTERVAL)
                 continue
@@ -612,7 +753,10 @@ def main_loop():
                     log_message("✅ Temizlik bitti. Ağ, yeni ayarlarınızla güncel merkeze göre sıfırdan örülecek.")
                 INITIAL_CLEANUP_DONE = True
 
-            manage_dynamic_grid()
+            try:
+                manage_dynamic_grid()
+            except Exception as e:
+                log_message(f"🚨 Hata (Crash Koruması): manage_dynamic_grid'de hata: {e}", "ERROR")
             
             time.sleep(LOOP_INTERVAL_SECONDS)
 
