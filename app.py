@@ -39,7 +39,6 @@ from src.components.settings_panel import render_settings_panel
 from src.components.metrics import render_metrics
 from src.components.controls import render_controls
 from src.components.log_viewer import render_log_viewer
-from src.components.zone_controls import render_zone_controls
 from src.styles.custom_css import apply_custom_css
 from src.utils.config import load_settings, save_settings
 
@@ -227,10 +226,6 @@ if updated_settings:
     st.rerun()
 
 st.divider()
-
-if st.session_state.selected_model == "Model 2":
-    render_zone_controls(account_id, current_settings.get("ZONES", []))
-    st.divider()
 
 current_active_price = live_data.get("current_price", 0.0)
 

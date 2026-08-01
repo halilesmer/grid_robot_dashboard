@@ -1,6 +1,8 @@
 # components/settings_panel.py
 import streamlit as st
 import uuid
+import json
+import os
 from src.constants.tooltips import SETTINGS_TOOLTIPS
 
 # Yeni model 3 bileşenimizi içeri alıyoruz:
@@ -14,20 +16,16 @@ def render_settings_panel(current_settings, model_name="Model 1", account_id="de
     st.markdown(f"##### ⚙️ {model_name} Parametreleri")
 
     if model_name == "Model 1":
-        # account_id'yi iletiyoruz
         return render_model_1_settings(current_settings, account_id)
     elif model_name == "Model 2":
-        # account_id'yi iletiyoruz
         return render_model_2_settings(current_settings, account_id)
     elif model_name == "Model 3":
-        # Model 3 için de uyumluysa account_id eklenebilir
         return render_model_3_settings(current_settings)
 
     return None
 
 
 def render_model_1_settings(current_settings, account_id):
-    # Form key'ine account_id ekledik ki hesap değişince form sıfırlansın!
     with st.form(f"settings_form_m1_{account_id}"):
         col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
 
@@ -122,160 +120,243 @@ def render_model_1_settings(current_settings, account_id):
     return None
 
 
+def _default_zone():
+    return {
+        "min_price": 70.0,
+        "max_price": 80.0,
+        "grid_step": 0.05,
+        "lot_size": 0.01,
+        "take_profit": 0.05,
+        "stop_loss": 0.0,
+        "clear_on_exit": True,
+    }
+
+
+def _send_zone_command(account_id: str, zone_idx: int, state: str):
+    """Atomik yazma ile commands JSON dosyasına komut gönderir."""
+    commands_file = f"logs/commands_{account_id}.json"
+    current = {}
+    if os.path.exists(commands_file):
+        try:
+            with open(commands_file, "r", encoding="utf-8") as f:
+                current = json.load(f)
+        except Exception:
+            pass
+    current[str(zone_idx)] = {"state": state}
+    os.makedirs("logs", exist_ok=True)
+    tmp = commands_file + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(current, f)
+    os.replace(tmp, commands_file)
+
+
 def render_model_2_settings(current_settings, account_id):
-    # DİKKAT: Session State ismine account_id ekliyoruz ki Demo 1'in bölgeleri Demo 2'ye geçmesin!
     zones_session_key = f"model2_zones_{account_id}"
 
+    # İlk açılışta: config boşsa 1 default bölge ile başlat
     if zones_session_key not in st.session_state:
-        st.session_state[zones_session_key] = current_settings.get("ZONES", [])
+        saved_zones = current_settings.get("ZONES", [])
+        if not saved_zones:
+            saved_zones = [_default_zone()]
+        st.session_state[zones_session_key] = saved_zones
 
-    # Form key'ine de account_id ekliyoruz
-    with st.form(f"settings_form_m2_{account_id}"):
-        st.markdown("###### ⚖️ Temel İşlem Ayarları")
-        t_col1, t_col2, t_col3 = st.columns([1, 1, 1])
-        with t_col1:
-            order_type_val = current_settings.get("ORDER_TYPE", "BUY")
-            order_type = st.selectbox(
-                "İşlem Yönü",
-                options=["BUY", "SELL"],
-                index=0 if order_type_val == "BUY" else 1,
-            )
-        with t_col2:
-            symbol = st.text_input(
-                "Sembol", value=current_settings.get("SYMBOL", "USOUSD")
-            )
-        with t_col3:
-            loop_interval = st.number_input(
-                "Kontrol Sıklığı (Sn)",
-                value=float(current_settings.get("LOOP_INTERVAL_SECONDS", 1.0)),
-                step=0.1,
-            )
+    # Komut geçmişini JSON'dan oku ki buton durumlarını bilelim
+    commands_file = f"logs/commands_{account_id}.json"
+    zone_states = {}
+    if os.path.exists(commands_file):
+        try:
+            with open(commands_file, "r", encoding="utf-8") as f:
+                zone_states = json.load(f)
+        except Exception:
+            pass
 
-        st.markdown("---")
-        st.markdown("###### 🎯 Dinamik Bölgeler (Zones)")
+    # ── Temel Ayarlar ──────────
+    st.markdown("###### ⚖️ Temel İşlem Ayarları")
+    t_col1, t_col2, t_col3 = st.columns([1, 1, 1])
+    with t_col1:
+        order_type_val = current_settings.get("ORDER_TYPE", "BUY")
+        order_type = st.selectbox(
+            "İşlem Yönü",
+            options=["BUY", "SELL"],
+            index=0 if order_type_val == "BUY" else 1,
+            key=f"m2_order_type_{account_id}",
+        )
+    with t_col2:
+        symbol = st.text_input(
+            "Sembol",
+            value=current_settings.get("SYMBOL", "USOUSD"),
+            key=f"m2_symbol_{account_id}",
+        )
+    with t_col3:
+        loop_interval = st.number_input(
+            "Kontrol Sıklığı (Sn)",
+            value=float(current_settings.get("LOOP_INTERVAL_SECONDS", 1.0)),
+            step=0.1,
+            key=f"m2_loop_{account_id}",
+        )
 
-        updated_zones = []
-        for idx, zone in enumerate(st.session_state[zones_session_key]):
-            st.markdown(f"**Bölge {idx + 1}**")
-            zc1, zc2, zc3, zc4, zc5, zc6, zc7, zc8 = st.columns(
-                [1, 1, 1, 1, 1, 1, 1.2, 0.5]
-            )
+    st.markdown("---")
+    st.markdown("###### 🎯 Dinamik Bölgeler (Zones)")
+
+    updated_zones = []
+    delete_any = False
+
+    for idx, zone in enumerate(st.session_state[zones_session_key]):
+        # Bu bölgenin güncel durumunu tespit et (Varsayılan olarak temizlenmiş kabul et)
+        current_state = zone_states.get(str(idx), {}).get("state", "CLEAR")
+
+        # Dinamik Buton Metinleri
+        start_label = "✅ Başladı" if current_state == "START" else "▶️ Başlat"
+        pause_label = "🟡 Beklemede" if current_state == "PAUSE" else "⏸️ Beklet"
+        clear_label = "🗑️ Temizlendi" if current_state == "CLEAR" else "🗑️ Temizle"
+
+        with st.container(border=True):
+            hdr_col, bc1, bc2, bc3 = st.columns([2.5, 1, 1, 1])
+            with hdr_col:
+                st.markdown(
+                    f"**🗺️ Bölge {idx + 1}** — "
+                    f"${zone.get('min_price', '?')} → ${zone.get('max_price', '?')}"
+                )
+
+            with bc1:
+                if st.button(
+                    start_label,
+                    key=f"start_{account_id}_{idx}",
+                    use_container_width=True,
+                    type="primary" if current_state == "START" else "secondary",
+                    help="Bölgeyi aktif hale getirir, robot belirlenen ayarlarla emir göndermeye başlar.",
+                ):
+                    _send_zone_command(account_id, idx, "START")
+                    st.rerun()  # UI'yi anında güncellemek için
+
+            with bc2:
+                if st.button(
+                    pause_label,
+                    key=f"pause_{account_id}_{idx}",
+                    use_container_width=True,
+                    type="primary" if current_state == "PAUSE" else "secondary",
+                    help="Sadece bekleyen emirleri iptal eder, açık pozisyonlara dokunmaz.",
+                ):
+                    _send_zone_command(account_id, idx, "PAUSE")
+                    st.rerun()
+
+            with bc3:
+                if st.button(
+                    clear_label,
+                    key=f"clear_{account_id}_{idx}",
+                    use_container_width=True,
+                    type="primary" if current_state == "CLEAR" else "secondary",
+                    help="Bu bölgedeki bekleyen tüm emirleri siler ve açık pozisyonları anında kapatır.",
+                ):
+                    _send_zone_command(account_id, idx, "CLEAR")
+                    st.rerun()
+
+            # Alt satır: Parametre girişleri (TEMİZ LABELLAR)
+            zc1, zc2, zc3, zc4, zc5, zc6 = st.columns([1, 1, 1, 1, 1, 1])
             with zc1:
-                # KORREKTUR: Darf nicht negativ sein
                 z_min = st.number_input(
-                    f"Alt Sınır ($)##{idx}_{account_id}",
+                    "Alt Sınır ($)",
+                    key=f"min_price_{idx}_{account_id}",
                     min_value=0.0,
                     value=max(0.0, float(zone.get("min_price", 0.0))),
                     step=0.1,
                     format="%.2f",
-                    help="💵 Dolar cinsi: Robotun çalışacağı EN DÜŞÜK varil fiyatı ($).",
+                    help="💵 Robotun çalışacağı EN DÜŞÜK varil fiyatı ($).",
                 )
             with zc2:
-                # KORREKTUR: Darf nicht negativ sein
                 z_max = st.number_input(
-                    f"Üst Sınır ($)##{idx}_{account_id}",
+                    "Üst Sınır ($)",
+                    key=f"max_price_{idx}_{account_id}",
                     min_value=0.0,
                     value=max(0.0, float(zone.get("max_price", 0.0))),
                     step=0.1,
                     format="%.2f",
-                    help="💵 Dolar cinsi: Robotun çalışacağı EN YÜKSEK varil fiyatı ($).",
+                    help="💵 Robotun çalışacağı EN YÜKSEK varil fiyatı ($).",
                 )
             with zc3:
-                # Grid en az 0.05 olabilir
                 z_grid = st.number_input(
-                    f"Grid Adımı ($)##{idx}_{account_id}",
+                    "Grid Adımı ($)",
+                    key=f"grid_step_{idx}_{account_id}",
                     min_value=0.05,
                     value=max(0.05, float(zone.get("grid_step", 0.05))),
                     step=0.05,
                     format="%.2f",
-                    help="📏 Dolar cinsi: Emirlerin kaç $ aralıkla dizileceği (Ağ adımı).",
+                    help="📏 Emirlerin kaç $ aralıkla dizileceği (Ağ adımı).",
                 )
             with zc4:
-                # Lot en az 0.01, en çok 5.0 olabilir
                 z_lot = st.number_input(
-                    f"Lot (📦)##{idx}_{account_id}",
+                    "Lot (📦)",
+                    key=f"lot_size_{idx}_{account_id}",
                     min_value=0.01,
                     max_value=5.0,
                     value=max(0.01, min(5.0, float(zone.get("lot_size", 0.01)))),
                     step=0.01,
                     format="%.2f",
-                    help="📦 Hacim: İşlem başına açılacak pozisyon büyüklüğü (Lot).",
+                    help="📦 İşlem başına pozisyon büyüklüğü (Lot).",
                 )
             with zc5:
-                # KORREKTUR: Take Profit MUSS mindestens 0.01 sein (0 macht keinen Sinn und blockiert MT5)
                 z_tp = st.number_input(
-                    f"Kâr Al ($)##{idx}_{account_id}",
+                    "Kâr Al ($)",
+                    key=f"take_profit_{idx}_{account_id}",
                     min_value=0.01,
                     value=max(0.01, float(zone.get("take_profit", 0.05))),
                     step=0.01,
                     format="%.2f",
-                    help="🎯 Dolar cinsi: Pozisyon başına hedeflenen kâr miktarı ($).",
+                    help="🎯 Pozisyon başına hedeflenen kâr ($).",
                 )
             with zc6:
-                # KORREKTUR: Stop Loss darf 0.0 sein (deaktiviert), aber niemals negativ!
                 z_sl = st.number_input(
-                    f"Stop Loss ($)##{idx}_{account_id}",
+                    "Stop Loss ($)",
+                    key=f"stop_loss_{idx}_{account_id}",
                     min_value=0.0,
                     value=max(0.0, float(zone.get("stop_loss", 0.0))),
                     step=0.01,
                     format="%.2f",
-                    help="🛡️ Dolar cinsi: Zarar kes mesafesi ($). 0.00 ise kapalıdır.",
+                    help="🛡️ Zarar kes mesafesi ($). 0.00 ise kapalıdır.",
                 )
-            with zc7:
-                st.markdown(
-                    "<div style='margin-top: 28px;'></div>", unsafe_allow_html=True
-                )
+
+            opt_c1, opt_c2 = st.columns([3, 1])
+            with opt_c1:
                 z_clear = st.checkbox(
-                    f"Çıkışta Temizle##{idx}_{account_id}",
+                    "🧹 Çıkışta Temizle",
+                    key=f"clear_on_exit_{idx}_{account_id}",
                     value=bool(zone.get("clear_on_exit", True)),
-                    help="🧹 İşaretliyken, fiyat bölgeden çıkarsa o bölgedeki bekleyen emirler silinir.",
+                    help="🧹 İşaretliyken, fiyat bölgeden çıkarsa bekleyen emirler silinir.",
                 )
-            with zc8:
-                st.markdown(
-                    "<div style='margin-top: 28px;'></div>", unsafe_allow_html=True
-                )
+            with opt_c2:
                 delete_btn = st.checkbox(
-                    "🗑️",
+                    "🗑️ Bu bölgeyi sil",
                     key=f"del_{idx}_{account_id}",
-                    label_visibility="collapsed",
-                    help="Bu bölgeyi sil.",
+                    help="Bu bölgeyi kaldır.",
                 )
 
-            if not delete_btn:
-                updated_zones.append(
-                    {
-                        "min_price": z_min,
-                        "max_price": z_max,
-                        "grid_step": z_grid,
-                        "lot_size": z_lot,
-                        "take_profit": z_tp,
-                        "stop_loss": z_sl,
-                        "clear_on_exit": z_clear,
-                    }
-                )
-        st.session_state[zones_session_key] = updated_zones
-
-        col_b1, col_b2 = st.columns([1, 1])
-        with col_b1:
-            add_zone = st.form_submit_button("➕ Yeni Bölge Ekle")
-        with col_b2:
-            submitted = st.form_submit_button("💾 Ayarları Güncelle")
-
-        if add_zone:
-            st.session_state[zones_session_key].append(
+        if not delete_btn:
+            updated_zones.append(
                 {
-                    "min_price": 90.0,
-                    "max_price": 100.0,
-                    "grid_step": 0.05,
-                    "lot_size": 0.01,
-                    "take_profit": 0.05,
-                    "stop_loss": 0.0,
-                    "clear_on_exit": True,
+                    "min_price": z_min,
+                    "max_price": z_max,
+                    "grid_step": z_grid,
+                    "lot_size": z_lot,
+                    "take_profit": z_tp,
+                    "stop_loss": z_sl,
+                    "clear_on_exit": z_clear,
                 }
             )
-            st.rerun()
+        else:
+            delete_any = True
 
-        if submitted:
+    if delete_any:
+        st.session_state[zones_session_key] = updated_zones
+        st.rerun()
+
+    # ── Alt Aksiyon Butonları ─────────────────────────────────────────────────
+    col_b1, col_b2, col_b3 = st.columns([1, 1, 1])
+    with col_b1:
+        if st.button("➕ Yeni Bölge Ekle", use_container_width=True):
+            st.session_state[zones_session_key].append(_default_zone())
+            st.rerun()
+    with col_b2:
+        if st.button("💾 Ayarları Güncelle", use_container_width=True, type="primary"):
             return {
                 "ORDER_TYPE": order_type,
                 "SYMBOL": symbol,
