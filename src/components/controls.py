@@ -90,13 +90,22 @@ def render_controls(
         )
 
     with col3:
-        button_label = "⏹️ Durdur" if is_running else "▶️ Başlat"
+        # --- BUTON GÜNCELLEMESİ BURADA ---
+        button_label = (
+            "🛑 Ana Motoru Durdur" if is_running else "🔌 Ana Motoru Çalıştır"
+        )
         button_type = "secondary" if is_running else "primary"
+        button_help = (
+            "Arka plan motorunu tamamen kapatır. Açık pozisyonlara dokunulmaz."
+            if is_running
+            else "MT5 ile iletişim kuran arka plan ticaret motorunu başlatır."
+        )
 
         toggle_btn = st.button(
             button_label,
             type=button_type,
             use_container_width=True,
+            help=button_help,
             key=f"toggle_btn_{account_id}",
         )
 
