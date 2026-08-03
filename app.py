@@ -162,16 +162,15 @@ col_metrics, col_controls = st.columns([2.5, 1.5])
 @st.fragment(run_every=2)
 def live_metrics_fragment(acc_id):
     # En güncel veriyi JSON dosyasından ANLIK olarak oku
-    fresh_data = (
-        get_live_metrics_from_file(acc_id)
-        if is_bot_running(acc_id)
-        else {
+    if is_bot_running(acc_id):
+        fresh_data = get_live_metrics_from_file(acc_id)
+    else:
+        fresh_data = {
             "profit": 0.0,
             "open_positions": 0,
             "pending_orders": 0,
             "current_price": 0.0,
         }
-    )
 
     render_metrics(
         profit=fresh_data["profit"],
