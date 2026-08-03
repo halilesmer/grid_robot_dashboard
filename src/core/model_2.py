@@ -122,6 +122,7 @@ else:
             self.dummy_orders = []
             self.ticket_counter = 1
 
+        TRADE_ACTION_DEAL = 1
         TRADE_ACTION_PENDING = 5
         TRADE_ACTION_REMOVE = 8
         TRADE_ACTION_SLTP = 6
@@ -468,17 +469,30 @@ def send_pending_order(
 def process_zone_commands():
     global active_zones_state
     account_id = os.environ.get("ACTIVE_ACCOUNT_ID", "default")
-    commands_file = f"logs/commands_{account_id}.json"
 
+    # 1. Önce kalıcı UI Hafızasını oku (Senin arayüzdeki kararların)
+    ui_states_file = f"logs/ui_states_{account_id}.json"
+    if os.path.exists(ui_states_file):
+        try:
+            with open(ui_states_file, "r", encoding="utf-8") as f:
+                ui_states = json.load(f)
+                for zone_idx_str, state in ui_states.items():
+                    active_zones_state[int(zone_idx_str)] = state
+        except Exception:
+            pass
+
+    # 2. Varsa anlık butona basılma komutunu oku ve sil (Eski mantık)
+    commands_file = f"logs/commands_{account_id}.json"
     if os.path.exists(commands_file):
         try:
             with open(commands_file, "r", encoding="utf-8") as f:
                 content = f.read().strip()
-                if not content:
-                    return
-                commands = json.loads(content)
-            for zone_idx_str, command in commands.items():
-                active_zones_state[int(zone_idx_str)] = command.get("state", "START")
+                if content:
+                    commands = json.loads(content)
+                    for zone_idx_str, command in commands.items():
+                        active_zones_state[int(zone_idx_str)] = command.get(
+                            "state", "START"
+                        )
             os.remove(commands_file)
         except json.JSONDecodeError:
             pass
@@ -656,11 +670,12 @@ def manage_dynamic_grid():
             f"📍 Yeni Bölgeye Girildi: Bölge {ACTIVE_ZONE_IDX+1} ({ACTIVE_ZONE.get('min_price')}-{ACTIVE_ZONE.get('max_price')})"
         )
 
-    # 4. YENİ AĞ ÖRÜLMESİ (SABİT ÇİFT YÖNLÜ ANCHOR MANTIĞI)
+    # 4. YENİ AĞ ÖRÜLMESİ (KULLANICI BLOKAJI KONTROLÜ - HATA C ÇÖZÜMÜ)
     if (
         ACTIVE_ZONE is None
         or active_zones_state.get(ACTIVE_ZONE_IDX, "START") != "START"
     ):
+        # Kullanıcı arayüzden bölgeyi durdurduysa (PAUSE/CLEAR) emir dizmeyi es geç!
         return True
 
     z_type = ACTIVE_ZONE.get("order_type", "BUY")
