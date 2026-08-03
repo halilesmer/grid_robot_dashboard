@@ -219,7 +219,7 @@ def render_model_2_settings(current_settings, account_id):
         <style>
         /* Sadece içinde .zone-marker olan EN İÇTEKİ stVerticalBlock'u bulur */
         div[data-testid="stVerticalBlock"]:has(.zone-marker):not(:has(div[data-testid="stVerticalBlock"] .zone-marker)) {
-            border: 3px solid #3b82f6 !important;
+            border: 1px solid #3b82f6 !important;
             border-radius: 12px !important;
             
             /* Siyah Gölgemiz */
