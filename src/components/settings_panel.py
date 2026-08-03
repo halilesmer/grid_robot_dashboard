@@ -122,7 +122,7 @@ def render_model_1_settings(current_settings, account_id):
 
 def _default_zone():
     return {
-        "id": str(uuid.uuid4()),  # YENİ: Hafıza kaybını önleyen benzersiz kimlik
+        "id": str(uuid.uuid4()),  # Hafıza kaybını önleyen benzersiz kimlik
         "symbol": "USOUSD",
         "order_type": "BUY",
         "min_price": 70.0,
@@ -156,30 +156,15 @@ def _send_zone_command(account_id: str, zone_idx: int, state: str):
     os.replace(tmp, commands_file)
 
 
-def _handle_zone_action(account_id: str, idx: int, state: str):
+def _handle_zone_action(account_id: str, zone_id: str, idx: int, state: str):
     """Buton tıklamalarında UI'ı çökertmeden durumu güncelleyen Callback fonksiyonu."""
-    # 1. Bota komut gönder (Bot bunu okuyup silebilir)
+    # 1. Bota komut gönder (Bot idx kullanır)
     _send_zone_command(account_id, idx, state)
 
-    # 2. Anlık UI hafızasını güncelle
+    # 2. Anlık UI hafızasını GÜVENLİ (ID bazlı) güncelle
     ui_state_key = f"ui_zone_states_{account_id}"
     if ui_state_key in st.session_state:
-        st.session_state[ui_state_key][str(idx)] = state
-
-    # 3. YENİ: Sayfa yenilendiğinde hatırlaması için KALICI UI HAFIZASINA kaydet
-    states_file = f"logs/ui_states_{account_id}.json"
-    current_states = {}
-    if os.path.exists(states_file):
-        try:
-            with open(states_file, "r", encoding="utf-8") as f:
-                current_states = json.load(f)
-        except Exception:
-            pass
-
-    current_states[str(idx)] = state
-    os.makedirs("logs", exist_ok=True)
-    with open(states_file, "w", encoding="utf-8") as f:
-        json.dump(current_states, f)
+        st.session_state[ui_state_key][zone_id] = state
 
 
 def render_model_2_settings(current_settings, account_id):
@@ -197,23 +182,24 @@ def render_model_2_settings(current_settings, account_id):
             saved_zones = [_default_zone()]
         st.session_state[zones_session_key] = saved_zones
 
-    # 2. Arayüz Kalıcı Hafızasını Yükle
+    # 2. Arayüz Kalıcı Hafızasını Yükle (Eski index bazlı dosyayı güvenli ID yapısına çevir)
     if ui_state_key not in st.session_state:
         st.session_state[ui_state_key] = {}
 
-        # Sayfa yenilendiğinde (F5) son durumu özel dosyadan çek
         states_file = f"logs/ui_states_{account_id}.json"
         if os.path.exists(states_file):
             try:
                 with open(states_file, "r", encoding="utf-8") as f:
                     saved_states = json.load(f)
-                    for k, v in saved_states.items():
-                        st.session_state[ui_state_key][k] = v
+                    # Eski indexleri yeni ID'lerle eşleştir
+                    for i, z in enumerate(st.session_state[zones_session_key]):
+                        st.session_state[ui_state_key][z["id"]] = saved_states.get(
+                            str(i), "CLEAR"
+                        )
             except Exception:
                 pass
 
     st.markdown("###### ⚖️ Temel İşlem Ayarları")
-    # ... Fonksiyonun geri kalanı aynı kalacak ...
     loop_interval = st.number_input(
         "Kontrol Sıklığı (Sn)",
         value=float(current_settings.get("LOOP_INTERVAL_SECONDS", 1.0)),
@@ -227,20 +213,52 @@ def render_model_2_settings(current_settings, account_id):
     updated_zones = []
     delete_any = False
 
+    # 🎨 KESİN ÇÖZÜM CSS: Matruşka sorununu çözer, SADECE en içteki gerçek bölge kutusunu hedefler!
+    st.markdown(
+        """
+        <style>
+        /* Sadece içinde .zone-marker olan EN İÇTEKİ stVerticalBlock'u bulur */
+        div[data-testid="stVerticalBlock"]:has(.zone-marker):not(:has(div[data-testid="stVerticalBlock"] .zone-marker)) {
+            border: 3px solid #3b82f6 !important;
+            border-radius: 12px !important;
+            
+            /* Siyah Gölgemiz */
+            box-shadow: 0px 0px 21px 7px rgba(0, 0, 0, 0.45) !important;
+            background-color: #ffffff !important;
+            
+            /* Streamlit'in makasını kırıyoruz (Taşmaları göster) */
+            overflow: visible !important;
+            
+            /* Kutular arası boşluk */
+            margin-top: 25px !important;
+            margin-bottom: 25px !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    # Bölgeleri Ekrana Çiz
     for idx, zone in enumerate(st.session_state[zones_session_key]):
-        # Her bölge için sabit bir Kimlik (ID) garantisi
         zone_id = zone.get("id")
         if not zone_id:
             zone_id = str(uuid.uuid4())
             zone["id"] = zone_id
 
-        current_state = st.session_state[ui_state_key].get(str(idx), "CLEAR")
+        current_state = st.session_state[ui_state_key].get(zone_id, "CLEAR")
 
         start_label = "✅ Başladı" if current_state == "START" else "▶️ Başlat"
         pause_label = "🟡 Beklemede" if current_state == "PAUSE" else "⏸️ Beklet"
         clear_label = "🗑️ Temizlendi" if current_state == "CLEAR" else "🗑️ Temizle"
 
+        # 🛠️ Streamlit'in kendi çerçevesini kullanıyoruz
         with st.container(border=True):
+            # 🎯 TRUVA ATI İŞARETÇİSİ
+            st.markdown(
+                "<div class='zone-marker' style='display:none;'></div>",
+                unsafe_allow_html=True,
+            )
+
             hdr_col, bc1, bc2, bc3 = st.columns([3.5, 1, 1, 1])
             with hdr_col:
                 st.markdown(
@@ -257,7 +275,7 @@ def render_model_2_settings(current_settings, account_id):
                     type="primary" if current_state == "START" else "secondary",
                     help="Bu bölgedeki ağ örme işlemini başlatır ve güncel fiyatı takip eder.",
                     on_click=_handle_zone_action,
-                    args=(account_id, idx, "START"),
+                    args=(account_id, zone_id, idx, "START"),
                 )
             with bc2:
                 st.button(
@@ -267,7 +285,7 @@ def render_model_2_settings(current_settings, account_id):
                     type="primary" if current_state == "PAUSE" else "secondary",
                     help="Yeni emir göndermeyi durdurur ve bekleyen emirleri siler. Açık işlemlere dokunmaz.",
                     on_click=_handle_zone_action,
-                    args=(account_id, idx, "PAUSE"),
+                    args=(account_id, zone_id, idx, "PAUSE"),
                 )
             with bc3:
                 st.button(
@@ -277,7 +295,7 @@ def render_model_2_settings(current_settings, account_id):
                     type="primary" if current_state == "CLEAR" else "secondary",
                     help="Acil Durum: Bekleyen emirleri siler ve AÇIK POZİSYONLARI ayara göre kapatır.",
                     on_click=_handle_zone_action,
-                    args=(account_id, idx, "CLEAR"),
+                    args=(account_id, zone_id, idx, "CLEAR"),
                 )
 
             zc1, zc2, zc3, zc4 = st.columns(4)
@@ -367,7 +385,7 @@ def render_model_2_settings(current_settings, account_id):
             with opt_c1:
                 z_clear = st.checkbox(
                     "🧹 Bölgeden Çıkıldığında Temizlik Yap",
-                    key=f"clear_on_exit_{zone_id}_{account_id}",  # 🛠️ HATA BURADAYDI: clear_ yerine clear_on_exit_ yapıldı
+                    key=f"clear_on_exit_{zone_id}_{account_id}",
                     value=bool(zone.get("clear_on_exit", True)),
                     help="İşaretliyken, fiyat bölgeden çıkarsa belirlenen kurala göre robot temizlik yapar.",
                 )
@@ -426,7 +444,6 @@ def render_model_2_settings(current_settings, account_id):
                         )
                     else:
                         z_exit_tf = zone.get("exit_timeframe", "M15")
-
         if not delete_btn:
             updated_zones.append(
                 {
@@ -450,6 +467,14 @@ def render_model_2_settings(current_settings, account_id):
 
     # Hafıza kaybını önlemek için her renderda listeyi eşitle!
     st.session_state[zones_session_key] = updated_zones
+
+    # Robot (model_2.py) arka planda hala IDX kullandığı için ona uygun JSON köprüsü oluşturuyoruz
+    backend_states = {}
+    for i, z in enumerate(updated_zones):
+        backend_states[str(i)] = st.session_state[ui_state_key].get(z["id"], "CLEAR")
+    os.makedirs("logs", exist_ok=True)
+    with open(f"logs/ui_states_{account_id}.json", "w", encoding="utf-8") as f:
+        json.dump(backend_states, f)
 
     if delete_any:
         st.rerun()
