@@ -1,6 +1,7 @@
-# Python Ön Bellek Dosyaları
+# Streamlit ve Python önbellekleri
 __pycache__/
-*.py[cod]
+.pytest_cache/
+.streamlit/
 
 
 # Sanal Ortamlar
@@ -11,5 +12,9 @@ venv/
 configs/accounts.json
 configs/settings_*.json
 
-# Logs ignorieren (damit GitHub nicht zugemüllt wird)
+# 📄 Log Dosyaları ve Klasörleri
+*.log
+logs/
+*.tmp
 logs/*.txt
+

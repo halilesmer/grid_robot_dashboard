@@ -13,4 +13,7 @@ SETTINGS_TOOLTIPS = {
     # KONTROL PANELİ TOOLTİPLERİ
     "ROBOT_ACTIVE": "ROBOT AKTİF ({model}) - Robot piyasayı izliyor, şartlar uyduğunda işleme girecek.",
     "ROBOT_PASSIVE": "ROBOT PASİF ({model}) - Robot durduruldu. Yeni işlem açılmaz.",
+    "ZONE_START": "Bölgeyi aktif hale getirir, robot belirlenen ayarlarla emir göndermeye başlar.",
+    "ZONE_PAUSE": "Bölgeyi duraklatır. Bekleyen emirleri iptal eder ama açık pozisyonlara dokunmaz.",
+    "ZONE_CLEAR": "Bölgeyi sıfırlar. Bekleyen emirleri siler ve AÇIK POZİSYONLARI piyasa fiyatından anında kapatır.",
 }
