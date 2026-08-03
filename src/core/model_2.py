@@ -100,7 +100,8 @@ def log_message(msg, level="INFO"):
 # ===============================================================================
 # 🍏🪟 MAC / WINDOWS UYUMLULUK KÖPRÜSÜ
 # ===============================================================================
-if platform.system() == "Windows":
+try:
+    # 🚨 KESİN KONTROL: Eğer kütüphane varsa KESİNLİKLE gerçek MT5'i kullan!
     import MetaTrader5 as mt5
 
     IS_MAC_TEST_MODE = False
@@ -108,9 +109,12 @@ if platform.system() == "Windows":
     def set_mock_price(new_price):
         pass
 
-else:
+except ImportError:
+    # Gerçek kütüphane YOKSA (Geliştirici Mac'indeysen) Sahte Moda Geç
     IS_MAC_TEST_MODE = True
-    print("⚠️ UYARI: Mac işletim sistemi algılandı. MT5 Sahte (Mock) modda çalışıyor!")
+    print(
+        "⚠️ UYARI: MetaTrader5 kütüphanesi bulunamadı! MT5 Sahte (Mock) modda çalışıyor!"
+    )
     MOCK_CURRENT_PRICE = 75.00
 
     def set_mock_price(new_price):
@@ -147,14 +151,12 @@ else:
         def last_error(self):
             return (1, "Mock Error")
 
-        # 👇 YENİ EKLENEN KISIM 👇
         def terminal_info(self):
             class TerminalInfo:
                 trade_allowed = True
 
             return TerminalInfo()
 
-        # 👆 YENİ EKLENEN KISIM 👆
         def symbol_info(self, symbol):
             class SymbolInfo:
                 visible = True
@@ -464,40 +466,21 @@ def send_pending_order(
 # ═══════════════════════════════════════════════════════════════════════════════
 # ANA DİNAMİK YÖNETİM MOTORU (MODEL 2)
 # ═══════════════════════════════════════════════════════════════════════════════
-
-
 def process_zone_commands():
     global active_zones_state
     account_id = os.environ.get("ACTIVE_ACCOUNT_ID", "default")
 
-    # 1. Önce kalıcı UI Hafızasını oku (Senin arayüzdeki kararların)
+    # Yalnızca Kalıcı UI Hafızasını Oku (Arayüz Köprüsüne Sadık Kalarak)
     ui_states_file = f"logs/ui_states_{account_id}.json"
     if os.path.exists(ui_states_file):
         try:
             with open(ui_states_file, "r", encoding="utf-8") as f:
                 ui_states = json.load(f)
                 for zone_idx_str, state in ui_states.items():
+                    # 🚨 DİKKAT: MT5 Magic eşleşmesi için burası KESİNLİKLE 'int' kalmalı!
                     active_zones_state[int(zone_idx_str)] = state
         except Exception:
             pass
-
-    # 2. Varsa anlık butona basılma komutunu oku ve sil (Eski mantık)
-    commands_file = f"logs/commands_{account_id}.json"
-    if os.path.exists(commands_file):
-        try:
-            with open(commands_file, "r", encoding="utf-8") as f:
-                content = f.read().strip()
-                if content:
-                    commands = json.loads(content)
-                    for zone_idx_str, command in commands.items():
-                        active_zones_state[int(zone_idx_str)] = command.get(
-                            "state", "START"
-                        )
-            os.remove(commands_file)
-        except json.JSONDecodeError:
-            pass
-        except Exception as e:
-            log_message(f"Komutlar işlenirken hata: {e}", "ERROR")
 
 
 # 2. ESKİ manage_dynamic_grid FONKSİYONUNU BUNUNLA DEĞİŞTİR (Canlı Güncelleme Çözümü)
@@ -670,46 +653,103 @@ def manage_dynamic_grid():
             f"📍 Yeni Bölgeye Girildi: Bölge {ACTIVE_ZONE_IDX+1} ({ACTIVE_ZONE.get('min_price')}-{ACTIVE_ZONE.get('max_price')})"
         )
 
-    # 4. YENİ AĞ ÖRÜLMESİ (KULLANICI BLOKAJI KONTROLÜ - HATA C ÇÖZÜMÜ)
+    # 4. KAYAN AĞ (SLIDING GRID) ÖRÜLMESİ VE EKSİK TAMAMLAMA
+
+    # 🛑 GÜVENLİK DUVARI 1: Arayüzden bu bölge Başlatılmadıysa (PAUSE/CLEAR) pas geç
     if (
         ACTIVE_ZONE is None
         or active_zones_state.get(ACTIVE_ZONE_IDX, "START") != "START"
     ):
-        # Kullanıcı arayüzden bölgeyi durdurduysa (PAUSE/CLEAR) emir dizmeyi es geç!
         return True
 
+    # Ayarları Çek
     z_type = ACTIVE_ZONE.get("order_type", "BUY")
     z_min = float(ACTIVE_ZONE.get("min_price", 0))
     z_max = float(ACTIVE_ZONE.get("max_price", 0))
-    grid_step = max(0.05, float(ACTIVE_ZONE.get("grid_step", 0.05)))
+    grid_step = max(0.01, float(ACTIVE_ZONE.get("grid_step", 0.05)))
     lot_val = max(0.01, min(5.0, float(ACTIVE_ZONE.get("lot_size", 0.01))))
     tp_val = float(ACTIVE_ZONE.get("take_profit", 0.05))
     sl_val = float(ACTIVE_ZONE.get("stop_loss", 0.0))
 
+    # Yeni Arayüz Parametreleri
+    levels_below = int(ACTIVE_ZONE.get("levels_below", 5))
+    levels_above = int(ACTIVE_ZONE.get("levels_above", 5))
+    max_positions_allowed = int(ACTIVE_ZONE.get("max_positions", 10))
+
+    # 🛑 GÜVENLİK DUVARI 2: Maksimum Açık Pozisyon Sınırı (Hesap Patlama Koruması)
+    target_magic = BASE_MAGIC_NUMBER + ACTIVE_ZONE_IDX + 1
+    current_open_positions = len(
+        [p for p in robot_positions if p.magic == target_magic]
+    )
+
+    if current_open_positions >= max_positions_allowed:
+        log_message(
+            f"⚠️ DİKKAT: Bölge {ACTIVE_ZONE_IDX+1} Maksimum pozisyon sınırına ulaştı ({max_positions_allowed}). Yeni ağ örülmeyecek!",
+            "WARN",
+        )
+        # Bekleyen emir varsa ve pozisyon sınırı dolduysa, tehlikeyi önlemek için onları da sil
+        silinen = 0
+        for order in robot_orders:
+            if order.magic == target_magic:
+                cancel_order(order)
+                silinen += 1
+        if silinen > 0:
+            log_message(
+                f"🛡️ Güvenlik Koruması: Sınır aşıldığı için {silinen} bekleyen emir temizlendi."
+            )
+        return True
+
+    # Merkez Fiyatı (Anchor) Bul: Güncel fiyata en yakın "Grid Katı"
+    anchor_price = round(current_avg_price / grid_step) * grid_step
+
     desired_buy_levels = []
     desired_sell_levels = []
 
+    # KAYAN PENCEREYİ OLUŞTUR (Sliding Window)
+    # KAYAN PENCEREYİ OLUŞTUR (Sliding Window)
     if z_type in ["BUY", "BOTH"]:
-        p = z_min
-        while p <= z_max + 0.0001:
-            desired_buy_levels.append(normalize_price(p))
-            p += grid_step
+        # 🌟 DÜZELTME: Merkezin (Anchor) KENDİSİ unutulmuştu, kör nokta kapatıldı!
+        if z_min <= anchor_price <= z_max:
+            desired_buy_levels.append(normalize_price(anchor_price))
+
+        # Alttaki emirler (Limit)
+        for i in range(1, levels_below + 1):
+            p = anchor_price - (i * grid_step)
+            if z_min <= p <= z_max:
+                desired_buy_levels.append(normalize_price(p))
+        # Üstteki emirler (Stop)
+        for i in range(1, levels_above + 1):
+            p = anchor_price + (i * grid_step)
+            if z_min <= p <= z_max:
+                desired_buy_levels.append(normalize_price(p))
 
     if z_type in ["SELL", "BOTH"]:
-        p = z_max
-        while p >= z_min - 0.0001:
-            desired_sell_levels.append(normalize_price(p))
-            p -= grid_step
+        # 🌟 DÜZELTME: Merkezin (Anchor) KENDİSİ unutulmuştu, kör nokta kapatıldı!
+        if z_min <= anchor_price <= z_max:
+            desired_sell_levels.append(normalize_price(anchor_price))
+
+        # Üstteki emirler (Limit)
+        for i in range(1, levels_above + 1):
+            p = anchor_price + (i * grid_step)
+            if z_min <= p <= z_max:
+                desired_sell_levels.append(normalize_price(p))
+        # Alttaki emirler (Stop)
+        for i in range(1, levels_below + 1):
+            p = anchor_price - (i * grid_step)
+            if z_min <= p <= z_max:
+                desired_sell_levels.append(normalize_price(p))
 
     tolerance = (SYMBOL_INFO.point * 2) if SYMBOL_INFO else 0.02
 
+    # UZAKLAŞAN/GEREKSİZ EMİRLERİ SİL (Pencere Kayması)
     silinen_emir_sayisi = 0
     for order in robot_orders:
-        order_price = normalize_price(order.price_open)
-        if not (z_min <= order_price <= z_max):
+        if order.magic != target_magic:
             continue
 
+        order_price = normalize_price(order.price_open)
         is_valid = False
+
         if order.type in [mt5.ORDER_TYPE_BUY_LIMIT, mt5.ORDER_TYPE_BUY_STOP]:
             is_valid = any(
                 abs(order_price - dl) <= tolerance for dl in desired_buy_levels
@@ -725,12 +765,15 @@ def manage_dynamic_grid():
 
     if silinen_emir_sayisi > 0:
         log_message(
-            f"🧹 Ağ kaydı: Uzakta kalan/Gereksiz {silinen_emir_sayisi} adet bekleyen emir silindi."
+            f"🧹 Pencere Kaydı: Fiyattan uzaklaşan {silinen_emir_sayisi} adet emir silindi."
         )
 
+    # EKSİK EMİRLERİ TAMAMLA (TP Olanların Yerini Doldurur)
+    # EKSİK EMİRLERİ TAMAMLA (TP Olanların Yerini Doldurur)
     exist_buy_levels, exist_sell_levels = get_existing_levels_by_direction(grid_step)
     eklenen_emir_sayisi = 0
 
+    # BUY Eksikleri
     for level_price in desired_buy_levels:
         is_occupied = any(abs(level_price - el) <= tolerance for el in exist_buy_levels)
         if not is_occupied:
@@ -746,6 +789,7 @@ def manage_dynamic_grid():
             ):
                 eklenen_emir_sayisi += 1
 
+    # SELL Eksikleri
     for level_price in desired_sell_levels:
         is_occupied = any(
             abs(level_price - el) <= tolerance for el in exist_sell_levels
@@ -765,11 +809,10 @@ def manage_dynamic_grid():
 
     if eklenen_emir_sayisi > 0:
         log_message(
-            f"🌱 Ağ kaydı: {eklenen_emir_sayisi} adet yeni nöbetçi emir eklendi."
+            f"🌱 Ağ Tazelendi: TP olan/eksik {eklenen_emir_sayisi} adet emir yerleştirildi."
         )
 
     return True
-
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # BAŞLANGIÇ KONTROLLERİ VE ANA DÖNGÜ

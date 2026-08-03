@@ -131,6 +131,9 @@ def _default_zone():
         "lot_size": 0.01,
         "take_profit": 0.05,
         "stop_loss": 0.0,
+        "levels_below": 5,  # 🌟 YENİ: Kayan ağ için alt emir sayısı
+        "levels_above": 5,  # 🌟 YENİ: Kayan ağ için üst emir sayısı
+        "max_positions": 10,  # 🌟 EKSİK OLAN GÜVENLİK KİLİDİ (YENİ)
         "clear_on_exit": True,
         "clear_scope": "Sadece Emirler",
         "exit_condition": "Anlık Fiyat",
@@ -380,6 +383,36 @@ def render_model_2_settings(current_settings, account_id):
                     help="🛡️ Zarar kes mesafesi (0 ise kapalıdır).",
                 )
 
+            # 🌟 YENİ EKLENEN SATIR: Kayan Ağ (Sliding Grid) Emir Sayısı ve Güvenlik
+            zc9, zc10, zc11 = st.columns(3)
+            with zc9:
+                z_levels_below = st.number_input(
+                    "Alt Seviye (LEVELS_BELOW)",
+                    key=f"lb_{zone_id}_{account_id}",
+                    min_value=1,
+                    value=int(zone.get("levels_below", 5)),
+                    step=1,
+                    help="Fiyatın ALTINDA ağda aktif tutulacak bekleyen emir sayısı.",
+                )
+            with zc10:
+                z_levels_above = st.number_input(
+                    "Üst Seviye (LEVELS_ABOVE)",
+                    key=f"la_{zone_id}_{account_id}",
+                    min_value=1,
+                    value=int(zone.get("levels_above", 5)),
+                    step=1,
+                    help="Fiyatın ÜSTÜNDE ağda aktif tutulacak bekleyen emir sayısı.",
+                )
+            with zc11:
+                z_max_pos = st.number_input(
+                    "Maks. Pozisyon",
+                    key=f"mp_{zone_id}_{account_id}",
+                    min_value=1,
+                    value=int(zone.get("max_positions", 10)),
+                    step=1,
+                    help="Bu bölgede aynı anda açık olabilecek MAKSİMUM işlem sayısı (Patlamayı önler).",
+                )
+
             # Alt satır 3: Çıkışta Temizle ve Seçenekleri
             opt_c1, opt_c2 = st.columns([3, 1])
             with opt_c1:
@@ -456,6 +489,9 @@ def render_model_2_settings(current_settings, account_id):
                     "lot_size": z_lot,
                     "take_profit": z_tp,
                     "stop_loss": z_sl,
+                    "levels_below": z_levels_below,  # 🌟 YENİ
+                    "levels_above": z_levels_above,  # 🌟 YENİ
+                    "max_positions": z_max_pos,  # 🌟 YENİ GÜVENLİK KİLİDİ
                     "clear_on_exit": z_clear,
                     "clear_scope": z_clear_scope,
                     "exit_condition": z_exit_cond,
