@@ -4,6 +4,7 @@ import os
 import glob
 from collections import deque
 
+
 MAX_LINES = 20  # Ekranda gösterilecek son satır sayısı
 MAX_FILE_SIZE = 2 * 1024 * 1024  # 2 MB Limit
 
@@ -51,6 +52,8 @@ def get_latest_mt5_log():
     except Exception as e:
         return f"MT5 Log okuma hatası: {e}"
 
+
+@st.fragment(run_every=3)
 
 def render_log_viewer(account_id: str = "default"):
     """Canlı Log Ekranı Bileşeni (Sekmeli Görünüm)"""

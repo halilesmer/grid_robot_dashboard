@@ -157,15 +157,36 @@ if live_data.get("algo_trading_error", False):
 # ==========================================
 col_metrics, col_controls = st.columns([2.5, 1.5])
 
-with col_metrics:
-    render_metrics(
-        profit=live_data["profit"],
-        open_positions=live_data["open_positions"],
-        pending_orders=live_data["pending_orders"],
-        current_price=live_data["current_price"],
+
+# 🌟 YENİ: Sadece metrikleri 2 saniyede bir canlı güncelleyen parça!
+@st.fragment(run_every=2)
+def live_metrics_fragment(acc_id):
+    # En güncel veriyi JSON dosyasından ANLIK olarak oku
+    fresh_data = (
+        get_live_metrics_from_file(acc_id)
+        if is_bot_running(acc_id)
+        else {
+            "profit": 0.0,
+            "open_positions": 0,
+            "pending_orders": 0,
+            "current_price": 0.0,
+        }
     )
 
+    render_metrics(
+        profit=fresh_data["profit"],
+        open_positions=fresh_data["open_positions"],
+        pending_orders=fresh_data["pending_orders"],
+        current_price=fresh_data["current_price"],
+    )
+
+
+with col_metrics:
+    # Parçayı (Fragment) sütunun içine yerleştiriyoruz
+    live_metrics_fragment(account_id)
+
 with col_controls:
+    # EKSİK BIRAKILAN KISIM TAMAMLANDI
     action, chosen_model = render_controls(
         is_running=account_is_running,
         account_id=account_id,
@@ -265,7 +286,3 @@ else:
     # Windows ortamında: Grafik GİZLİ, Loglar TAM EKRAN GENİŞLİĞİNDE
     st.markdown("---")
     render_log_viewer(account_id)
-
-if account_is_running:
-    time.sleep(1)
-    st.rerun()

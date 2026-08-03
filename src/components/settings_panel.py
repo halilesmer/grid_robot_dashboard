@@ -216,31 +216,6 @@ def render_model_2_settings(current_settings, account_id):
     updated_zones = []
     delete_any = False
 
-    # 🎨 KESİN ÇÖZÜM CSS: Matruşka sorununu çözer, SADECE en içteki gerçek bölge kutusunu hedefler!
-    st.markdown(
-        """
-        <style>
-        /* Sadece içinde .zone-marker olan EN İÇTEKİ stVerticalBlock'u bulur */
-        div[data-testid="stVerticalBlock"]:has(.zone-marker):not(:has(div[data-testid="stVerticalBlock"] .zone-marker)) {
-            border: 1px solid #3b82f6 !important;
-            border-radius: 12px !important;
-            
-            /* Siyah Gölgemiz */
-            box-shadow: 0px 0px 21px 7px rgba(0, 0, 0, 0.45) !important;
-            background-color: #ffffff !important;
-            
-            /* Streamlit'in makasını kırıyoruz (Taşmaları göster) */
-            overflow: visible !important;
-            
-            /* Kutular arası boşluk */
-            margin-top: 25px !important;
-            margin-bottom: 25px !important;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
-
     # Bölgeleri Ekrana Çiz
     for idx, zone in enumerate(st.session_state[zones_session_key]):
         zone_id = zone.get("id")
@@ -256,13 +231,8 @@ def render_model_2_settings(current_settings, account_id):
 
         # 🛠️ Streamlit'in kendi çerçevesini kullanıyoruz
         with st.container(border=True):
-            # 🎯 TRUVA ATI İŞARETÇİSİ
-            st.markdown(
-                "<div class='zone-marker' style='display:none;'></div>",
-                unsafe_allow_html=True,
-            )
-
             hdr_col, bc1, bc2, bc3 = st.columns([3.5, 1, 1, 1])
+            
             with hdr_col:
                 st.markdown(
                     f"**🗺️ Bölge {idx + 1}** — "
