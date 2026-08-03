@@ -122,6 +122,7 @@ def render_model_1_settings(current_settings, account_id):
 
 def _default_zone():
     return {
+        "id": str(uuid.uuid4()),  # YENİ: Hafıza kaybını önleyen benzersiz kimlik
         "symbol": "USOUSD",
         "order_type": "BUY",
         "min_price": 70.0,
@@ -167,14 +168,17 @@ def render_model_2_settings(current_settings, account_id):
     zones_session_key = f"model2_zones_{account_id}"
     ui_state_key = f"ui_zone_states_{account_id}"
 
-    # 1. İlk açılışta: config boşsa default bölge ile başlat
+    # 1. İlk açılış: Kayıtlı bölgelere ID ataması yaparak güvenle yükle
     if zones_session_key not in st.session_state:
         saved_zones = current_settings.get("ZONES", [])
+        for z in saved_zones:
+            if "id" not in z:
+                z["id"] = str(uuid.uuid4())
+
         if not saved_zones:
             saved_zones = [_default_zone()]
         st.session_state[zones_session_key] = saved_zones
 
-    # 2. UI Buton Hafızası: Robot dosyayı silse bile arayüz son basılanı hatırlasın
     if ui_state_key not in st.session_state:
         st.session_state[ui_state_key] = {}
 
@@ -188,7 +192,6 @@ def render_model_2_settings(current_settings, account_id):
         except Exception:
             pass
 
-    # ── Temel Ayarlar (SADECE Kontrol Sıklığı Kaldı) ──────────
     st.markdown("###### ⚖️ Temel İşlem Ayarları")
     loop_interval = st.number_input(
         "Kontrol Sıklığı (Sn)",
@@ -204,16 +207,19 @@ def render_model_2_settings(current_settings, account_id):
     delete_any = False
 
     for idx, zone in enumerate(st.session_state[zones_session_key]):
-        # UI Hafızasından güncel durumu çekiyoruz
+        # Her bölge için sabit bir Kimlik (ID) garantisi
+        zone_id = zone.get("id")
+        if not zone_id:
+            zone_id = str(uuid.uuid4())
+            zone["id"] = zone_id
+
         current_state = st.session_state[ui_state_key].get(str(idx), "CLEAR")
 
-        # Dinamik Buton Metinleri
         start_label = "✅ Başladı" if current_state == "START" else "▶️ Başlat"
         pause_label = "🟡 Beklemede" if current_state == "PAUSE" else "⏸️ Beklet"
         clear_label = "🗑️ Temizlendi" if current_state == "CLEAR" else "🗑️ Temizle"
 
         with st.container(border=True):
-            # Buton sütunlarını daha kompakt (küçük) hale getirdik
             hdr_col, bc1, bc2, bc3 = st.columns([3.5, 1, 1, 1])
             with hdr_col:
                 st.markdown(
@@ -225,29 +231,27 @@ def render_model_2_settings(current_settings, account_id):
             with bc1:
                 st.button(
                     start_label,
-                    key=f"start_{account_id}_{idx}",
+                    key=f"start_{zone_id}_{account_id}",
                     use_container_width=True,
                     type="primary" if current_state == "START" else "secondary",
                     help="Bu bölgedeki ağ örme işlemini başlatır ve güncel fiyatı takip eder.",
                     on_click=_handle_zone_action,
                     args=(account_id, idx, "START"),
                 )
-
             with bc2:
                 st.button(
                     pause_label,
-                    key=f"pause_{account_id}_{idx}",
+                    key=f"pause_{zone_id}_{account_id}",
                     use_container_width=True,
                     type="primary" if current_state == "PAUSE" else "secondary",
                     help="Yeni emir göndermeyi durdurur ve bekleyen emirleri siler. Açık işlemlere dokunmaz.",
                     on_click=_handle_zone_action,
                     args=(account_id, idx, "PAUSE"),
                 )
-
             with bc3:
                 st.button(
                     clear_label,
-                    key=f"clear_{account_id}_{idx}",
+                    key=f"clear_{zone_id}_{account_id}",
                     use_container_width=True,
                     type="primary" if current_state == "CLEAR" else "secondary",
                     help="Acil Durum: Bekleyen emirleri siler ve AÇIK POZİSYONLARI ayara göre kapatır.",
@@ -255,12 +259,11 @@ def render_model_2_settings(current_settings, account_id):
                     args=(account_id, idx, "CLEAR"),
                 )
 
-            # Alt satır 1: Sembol, Yön, Min, Max
             zc1, zc2, zc3, zc4 = st.columns(4)
             with zc1:
                 z_symbol = st.text_input(
                     "Sembol",
-                    key=f"symbol_{idx}_{account_id}",
+                    key=f"sym_{zone_id}_{account_id}",
                     value=zone.get("symbol", "USOUSD"),
                     help="Bu bölgenin çalışacağı parite.",
                 )
@@ -271,13 +274,13 @@ def render_model_2_settings(current_settings, account_id):
                     "İşlem Yönü",
                     options=opts,
                     index=opts.index(cur_val) if cur_val in opts else 0,
-                    key=f"order_type_{idx}_{account_id}",
+                    key=f"ord_{zone_id}_{account_id}",
                     help="Bu bölge ALIM mı, SATIM mı yoksa HER İKİSİNİ BİRDEN mi yapacak?",
                 )
             with zc3:
                 z_min = st.number_input(
                     "Alt Sınır ($)",
-                    key=f"min_price_{idx}_{account_id}",
+                    key=f"min_{zone_id}_{account_id}",
                     min_value=0.0,
                     value=max(0.0, float(zone.get("min_price", 0.0))),
                     step=0.1,
@@ -287,7 +290,7 @@ def render_model_2_settings(current_settings, account_id):
             with zc4:
                 z_max = st.number_input(
                     "Üst Sınır ($)",
-                    key=f"max_price_{idx}_{account_id}",
+                    key=f"max_{zone_id}_{account_id}",
                     min_value=0.0,
                     value=max(0.0, float(zone.get("max_price", 0.0))),
                     step=0.1,
@@ -295,12 +298,11 @@ def render_model_2_settings(current_settings, account_id):
                     help="💵 Robotun çalışacağı EN YÜKSEK fiyat.",
                 )
 
-            # Alt satır 2: Grid Adımı, Lot, TP, SL
             zc5, zc6, zc7, zc8 = st.columns(4)
             with zc5:
                 z_grid = st.number_input(
                     "Grid Adımı ($)",
-                    key=f"grid_step_{idx}_{account_id}",
+                    key=f"grid_{zone_id}_{account_id}",
                     min_value=0.01,
                     value=max(0.01, float(zone.get("grid_step", 0.05))),
                     step=0.01,
@@ -310,7 +312,7 @@ def render_model_2_settings(current_settings, account_id):
             with zc6:
                 z_lot = st.number_input(
                     "Lot (📦)",
-                    key=f"lot_size_{idx}_{account_id}",
+                    key=f"lot_{zone_id}_{account_id}",
                     min_value=0.01,
                     max_value=5.0,
                     value=max(0.01, min(5.0, float(zone.get("lot_size", 0.01)))),
@@ -321,7 +323,7 @@ def render_model_2_settings(current_settings, account_id):
             with zc7:
                 z_tp = st.number_input(
                     "Kâr Al ($)",
-                    key=f"take_profit_{idx}_{account_id}",
+                    key=f"tp_{zone_id}_{account_id}",
                     min_value=0.01,
                     value=max(0.01, float(zone.get("take_profit", 0.05))),
                     step=0.01,
@@ -331,7 +333,7 @@ def render_model_2_settings(current_settings, account_id):
             with zc8:
                 z_sl = st.number_input(
                     "Stop Loss ($)",
-                    key=f"stop_loss_{idx}_{account_id}",
+                    key=f"sl_{zone_id}_{account_id}",
                     min_value=0.0,
                     value=max(0.0, float(zone.get("stop_loss", 0.0))),
                     step=0.01,
@@ -339,19 +341,18 @@ def render_model_2_settings(current_settings, account_id):
                     help="🛡️ Zarar kes mesafesi (0 ise kapalıdır).",
                 )
 
-            # Alt satır 3: Çıkışta Temizle ve Seçenekleri
             opt_c1, opt_c2 = st.columns([3, 1])
             with opt_c1:
                 z_clear = st.checkbox(
                     "🧹 Bölgeden Çıkıldığında Temizlik Yap",
-                    key=f"clear_on_exit_{idx}_{account_id}",
+                    key=f"clear_{zone_id}_{account_id}",
                     value=bool(zone.get("clear_on_exit", True)),
                     help="İşaretliyken, fiyat bölgeden çıkarsa belirlenen kurala göre robot temizlik yapar.",
                 )
             with opt_c2:
                 delete_btn = st.checkbox(
                     "🗑️ Bu bölgeyi sil",
-                    key=f"del_{idx}_{account_id}",
+                    key=f"del_{zone_id}_{account_id}",
                     help="Bu bölgeyi kalıcı olarak kaldır.",
                 )
 
@@ -359,7 +360,6 @@ def render_model_2_settings(current_settings, account_id):
             z_exit_cond = "Anlık Fiyat"
             z_exit_tf = "M15"
 
-            # Kullanıcı "Çıkışta Temizle" seçeneğini işaretlerse detaylı menü açılır
             if z_clear:
                 st.markdown(
                     "<small style='color: gray;'>Temizlik Detayları</small>",
@@ -376,7 +376,7 @@ def render_model_2_settings(current_settings, account_id):
                             == "Sadece Emirler"
                             else 1
                         ),
-                        key=f"scope_{idx}_{account_id}",
+                        key=f"scope_{zone_id}_{account_id}",
                         help="Bölge dışına çıkıldığında açıkta olan işlemler kapatılsın mı?",
                     )
                 with cc2:
@@ -389,7 +389,7 @@ def render_model_2_settings(current_settings, account_id):
                             == "Anlık Fiyat"
                             else 1
                         ),
-                        key=f"cond_{idx}_{account_id}",
+                        key=f"cond_{zone_id}_{account_id}",
                         help="İğne atmalarda işlem yapılmasın diyorsan Mum Kapanışını seçmelisin.",
                     )
                 with cc3:
@@ -400,7 +400,7 @@ def render_model_2_settings(current_settings, account_id):
                             "Zaman Dilimi",
                             options=tf_opts,
                             index=tf_opts.index(cur_tf) if cur_tf in tf_opts else 2,
-                            key=f"tf_{idx}_{account_id}",
+                            key=f"tf_{zone_id}_{account_id}",
                         )
                     else:
                         z_exit_tf = zone.get("exit_timeframe", "M15")
@@ -408,6 +408,7 @@ def render_model_2_settings(current_settings, account_id):
         if not delete_btn:
             updated_zones.append(
                 {
+                    "id": zone_id,
                     "symbol": z_symbol,
                     "order_type": z_order_type,
                     "min_price": z_min,
