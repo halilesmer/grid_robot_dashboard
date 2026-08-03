@@ -26,7 +26,7 @@ def render_controls(
             "⚙️ Motor Seçimi",
             options=models,
             index=default_index,  # NEU: Wir erzwingen die Auswahl per Index!
-            disabled=is_running,
+            disabled=False,
             label_visibility="collapsed",
             key=f"selectbox_motor_{account_id}",
         )

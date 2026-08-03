@@ -87,9 +87,9 @@ account_id = str(active_account.get("login", "default"))
 # ==========================================
 # MOTOR SEÇİMİNİ HESABA GÖRE BELİRLE
 # ==========================================
-# Hafızada bu hesap için model yoksa Model 1 yap
+# Hafızada bu hesap için model yoksa Model 2 yap (VARSAYILAN DEĞİŞTİRİLDİ)
 if account_id not in st.session_state.account_models_memory:
-    st.session_state.account_models_memory[account_id] = "Model 1"
+    st.session_state.account_models_memory[account_id] = "Model 2"
 
 # Bu hesabın hafızasındaki modeli aktif yapıyoruz
 st.session_state.selected_model = st.session_state.account_models_memory[account_id]
