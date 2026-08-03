@@ -146,6 +146,14 @@ else:
         def last_error(self):
             return (1, "Mock Error")
 
+        # 👇 YENİ EKLENEN KISIM 👇
+        def terminal_info(self):
+            class TerminalInfo:
+                trade_allowed = True
+
+            return TerminalInfo()
+
+        # 👆 YENİ EKLENEN KISIM 👆
         def symbol_info(self, symbol):
             class SymbolInfo:
                 visible = True

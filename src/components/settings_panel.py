@@ -341,11 +341,12 @@ def render_model_2_settings(current_settings, account_id):
                     help="🛡️ Zarar kes mesafesi (0 ise kapalıdır).",
                 )
 
+            # Alt satır 3: Çıkışta Temizle ve Seçenekleri
             opt_c1, opt_c2 = st.columns([3, 1])
             with opt_c1:
                 z_clear = st.checkbox(
                     "🧹 Bölgeden Çıkıldığında Temizlik Yap",
-                    key=f"clear_{zone_id}_{account_id}",
+                    key=f"clear_on_exit_{zone_id}_{account_id}",  # 🛠️ HATA BURADAYDI: clear_ yerine clear_on_exit_ yapıldı
                     value=bool(zone.get("clear_on_exit", True)),
                     help="İşaretliyken, fiyat bölgeden çıkarsa belirlenen kurala göre robot temizlik yapar.",
                 )
