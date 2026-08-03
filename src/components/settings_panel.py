@@ -158,10 +158,28 @@ def _send_zone_command(account_id: str, zone_idx: int, state: str):
 
 def _handle_zone_action(account_id: str, idx: int, state: str):
     """Buton tıklamalarında UI'ı çökertmeden durumu güncelleyen Callback fonksiyonu."""
+    # 1. Bota komut gönder (Bot bunu okuyup silebilir)
     _send_zone_command(account_id, idx, state)
+
+    # 2. Anlık UI hafızasını güncelle
     ui_state_key = f"ui_zone_states_{account_id}"
     if ui_state_key in st.session_state:
         st.session_state[ui_state_key][str(idx)] = state
+
+    # 3. YENİ: Sayfa yenilendiğinde hatırlaması için KALICI UI HAFIZASINA kaydet
+    states_file = f"logs/ui_states_{account_id}.json"
+    current_states = {}
+    if os.path.exists(states_file):
+        try:
+            with open(states_file, "r", encoding="utf-8") as f:
+                current_states = json.load(f)
+        except Exception:
+            pass
+
+    current_states[str(idx)] = state
+    os.makedirs("logs", exist_ok=True)
+    with open(states_file, "w", encoding="utf-8") as f:
+        json.dump(current_states, f)
 
 
 def render_model_2_settings(current_settings, account_id):
@@ -179,20 +197,23 @@ def render_model_2_settings(current_settings, account_id):
             saved_zones = [_default_zone()]
         st.session_state[zones_session_key] = saved_zones
 
+    # 2. Arayüz Kalıcı Hafızasını Yükle
     if ui_state_key not in st.session_state:
         st.session_state[ui_state_key] = {}
 
-    commands_file = f"logs/commands_{account_id}.json"
-    if os.path.exists(commands_file):
-        try:
-            with open(commands_file, "r", encoding="utf-8") as f:
-                cmds = json.load(f)
-                for k, v in cmds.items():
-                    st.session_state[ui_state_key][k] = v.get("state")
-        except Exception:
-            pass
+        # Sayfa yenilendiğinde (F5) son durumu özel dosyadan çek
+        states_file = f"logs/ui_states_{account_id}.json"
+        if os.path.exists(states_file):
+            try:
+                with open(states_file, "r", encoding="utf-8") as f:
+                    saved_states = json.load(f)
+                    for k, v in saved_states.items():
+                        st.session_state[ui_state_key][k] = v
+            except Exception:
+                pass
 
     st.markdown("###### ⚖️ Temel İşlem Ayarları")
+    # ... Fonksiyonun geri kalanı aynı kalacak ...
     loop_interval = st.number_input(
         "Kontrol Sıklığı (Sn)",
         value=float(current_settings.get("LOOP_INTERVAL_SECONDS", 1.0)),
