@@ -232,7 +232,7 @@ def render_model_2_settings(current_settings, account_id):
         # 🛠️ Streamlit'in kendi çerçevesini kullanıyoruz
         with st.container(border=True):
             hdr_col, bc1, bc2, bc3 = st.columns([3.5, 1, 1, 1])
-            
+
             with hdr_col:
                 st.markdown(
                     f"**🗺️ Bölge {idx + 1}** — "
@@ -377,10 +377,10 @@ def render_model_2_settings(current_settings, account_id):
                 z_max_pos = st.number_input(
                     "Maks. Pozisyon",
                     key=f"mp_{zone_id}_{account_id}",
-                    min_value=1,
+                    min_value=0,
                     value=int(zone.get("max_positions", 10)),
                     step=1,
-                    help="Bu bölgede aynı anda açık olabilecek MAKSİMUM işlem sayısı (Patlamayı önler).",
+                    help="Bu bölgede aynı anda açık olabilecek maksimum işlem sayısı. Sınırı tamamen kaldırmak (sınırsız işlem) için 0 girin.",
                 )
 
             # Alt satır 3: Çıkışta Temizle ve Seçenekleri
