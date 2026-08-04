@@ -717,10 +717,6 @@ def manage_dynamic_grid():
 
     # KAYAN PENCEREYİ OLUŞTUR (Sliding Window)
     if z_type in ["BUY", "BOTH"]:
-        # Merkezin Kendisi
-        if z_min <= anchor_price <= z_max:
-            desired_buy_levels.append(normalize_price(anchor_price))
-
         # Alttaki emirler (Limit)
         for i in range(1, levels_below + 1):
             p = anchor_price - (i * grid_step)
@@ -734,15 +730,12 @@ def manage_dynamic_grid():
 
         # Toleranslı Kabul Bölgesi (Silinmeyecek Emirler)
         for i in range(-levels_below - buffer_steps, levels_above + buffer_steps + 1):
-            acceptable_buy_levels.append(
-                normalize_price(anchor_price + (i * grid_step))
-            )
+            if i != 0:  # Merkeze (fiyatın kendisine) asla emir konulmaz!
+                acceptable_buy_levels.append(
+                    normalize_price(anchor_price + (i * grid_step))
+                )
 
     if z_type in ["SELL", "BOTH"]:
-        # Merkezin Kendisi
-        if z_min <= anchor_price <= z_max:
-            desired_sell_levels.append(normalize_price(anchor_price))
-
         # Üstteki emirler (Limit)
         for i in range(1, levels_above + 1):
             p = anchor_price + (i * grid_step)
@@ -756,11 +749,12 @@ def manage_dynamic_grid():
 
         # Toleranslı Kabul Bölgesi (Silinmeyecek Emirler)
         for i in range(-levels_below - buffer_steps, levels_above + buffer_steps + 1):
-            acceptable_sell_levels.append(
-                normalize_price(anchor_price + (i * grid_step))
-            )
+            if i != 0:  # Merkeze (fiyatın kendisine) asla emir konulmaz!
+                acceptable_sell_levels.append(
+                    normalize_price(anchor_price + (i * grid_step))
+                )
 
-    # Broker kaymalarını tolere etmek için esnek tolerans (Grid'in %40'ı kadar esneklik)
+    # İKİ KERE YAZILMIŞ KOD TEMİZLENDİ: Tek ve esnek bir tolerans (Grid'in %40'ı)
     tolerance = grid_step * 0.4
 
     # UZAKLAŞAN/GEREKSİZ EMİRLERİ SİL (Pencere Kayması) - YENİ TAMPON BÖLGE İLE
@@ -774,11 +768,13 @@ def manage_dynamic_grid():
 
         if order.type in [mt5.ORDER_TYPE_BUY_LIMIT, mt5.ORDER_TYPE_BUY_STOP]:
             is_valid = any(
-                abs(order_price - al) <= tolerance for al in acceptable_buy_levels
+                abs(round(order_price, 4) - round(al, 4)) <= tolerance
+                for al in acceptable_buy_levels
             )
         elif order.type in [mt5.ORDER_TYPE_SELL_LIMIT, mt5.ORDER_TYPE_SELL_STOP]:
             is_valid = any(
-                abs(order_price - al) <= tolerance for al in acceptable_sell_levels
+                abs(round(order_price, 4) - round(al, 4)) <= tolerance
+                for al in acceptable_sell_levels
             )
 
         if not is_valid:
@@ -796,7 +792,10 @@ def manage_dynamic_grid():
 
     # BUY Eksikleri
     for level_price in desired_buy_levels:
-        is_occupied = any(abs(level_price - el) <= tolerance for el in exist_buy_levels)
+        is_occupied = any(
+            abs(round(level_price, 4) - round(el, 4)) <= tolerance
+            for el in exist_buy_levels
+        )
         if not is_occupied:
             tp_price = normalize_price(level_price + tp_val)
             sl_price = normalize_price(level_price - sl_val) if sl_val > 0 else None
@@ -813,7 +812,8 @@ def manage_dynamic_grid():
     # SELL Eksikleri
     for level_price in desired_sell_levels:
         is_occupied = any(
-            abs(level_price - el) <= tolerance for el in exist_sell_levels
+            abs(round(level_price, 4) - round(el, 4)) <= tolerance
+            for el in exist_sell_levels
         )
         if not is_occupied:
             tp_price = normalize_price(level_price - tp_val)
