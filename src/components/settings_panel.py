@@ -131,9 +131,11 @@ def _default_zone():
         "lot_size": 0.01,
         "take_profit": 0.05,
         "stop_loss": 0.0,
-        "levels_below": 5,  # 🌟 YENİ: Kayan ağ için alt emir sayısı
-        "levels_above": 5,  # 🌟 YENİ: Kayan ağ için üst emir sayısı
-        "max_positions": 10,  # 🌟 EKSİK OLAN GÜVENLİK KİLİDİ (YENİ)
+        "is_breakout": False,  # 🌟 YENİ: Kırılım/Momentum Modu
+        "pullback_distance": 0.50,  # 🌟 YENİ: Geri Çekilme Mesafesi
+        "levels_below": 5,
+        "levels_above": 5,
+        "max_positions": 10,
         "clear_on_exit": True,
         "clear_scope": "Sadece Emirler",
         "exit_condition": "Anlık Fiyat",
@@ -353,7 +355,36 @@ def render_model_2_settings(current_settings, account_id):
                     help="🛡️ Zarar kes mesafesi (0 ise kapalıdır).",
                 )
 
-            # 🌟 YENİ EKLENEN SATIR: Kayan Ağ (Sliding Grid) Emir Sayısı ve Güvenlik
+            # 🌟 YENİ EKLENEN BLOK: Kırılım / Momentum Ayarları
+            st.markdown(
+                "<div style='margin-top: 10px; margin-bottom: 5px;'><small style='color: gray;'>🚀 Kırılım / Momentum (Breakout) Stratejisi</small></div>",
+                unsafe_allow_html=True,
+            )
+            brk_c1, brk_c2 = st.columns(2)
+            with brk_c1:
+                z_breakout = st.checkbox(
+                    "Sadece Trend Yönüne Ağ Ör (Kırılım Modu)",
+                    value=bool(zone.get("is_breakout", False)),
+                    key=f"brk_{zone_id}_{account_id}",
+                    help="Aktif edilirse robot Limit emir (düştükçe al) yerine SADECE Stop emir (kırılım/yükseldikçe al) kullanır. 'BOTH' seçilirse fiyatın üstüne Buy Stop, altına Sell Stop dizer.",
+                )
+            with brk_c2:
+                z_pullback = st.number_input(
+                    "Min. Geri Çekilme Mesafesi ($)",
+                    key=f"pb_{zone_id}_{account_id}",
+                    min_value=0.01,
+                    value=float(zone.get("pullback_distance", 0.50)),
+                    step=0.05,
+                    format="%.2f",
+                    disabled=not z_breakout,
+                    help="TP olan bir emrin yerine yenisinin kurulması için fiyatın o seviyeden en az ne kadar uzağa çekilmesi gerektiğini belirler. (Geçersiz Fiyat hatalarını önler)",
+                )
+
+            # 🌟 Kayan Ağ (Sliding Grid) Emir Sayısı ve Güvenlik
+            # Dinamik Disabled Mantığı: Kırılım açıksa ters yöndeki emir kutusunu soluklaştırır.
+            disable_below = z_breakout and z_order_type == "BUY"
+            disable_above = z_breakout and z_order_type == "SELL"
+
             zc9, zc10, zc11 = st.columns(3)
             with zc9:
                 z_levels_below = st.number_input(
@@ -362,7 +393,8 @@ def render_model_2_settings(current_settings, account_id):
                     min_value=1,
                     value=int(zone.get("levels_below", 5)),
                     step=1,
-                    help="Fiyatın ALTINDA ağda aktif tutulacak bekleyen emir sayısı.",
+                    disabled=disable_below,
+                    help="Fiyatın ALTINDA ağda aktif tutulacak bekleyen emir sayısı. (Kırılım modunda BUY için devre dışı kalır)",
                 )
             with zc10:
                 z_levels_above = st.number_input(
@@ -371,7 +403,8 @@ def render_model_2_settings(current_settings, account_id):
                     min_value=1,
                     value=int(zone.get("levels_above", 5)),
                     step=1,
-                    help="Fiyatın ÜSTÜNDE ağda aktif tutulacak bekleyen emir sayısı.",
+                    disabled=disable_above,
+                    help="Fiyatın ÜSTÜNDE ağda aktif tutulacak bekleyen emir sayısı. (Kırılım modunda SELL için devre dışı kalır)",
                 )
             with zc11:
                 z_max_pos = st.number_input(
@@ -459,9 +492,11 @@ def render_model_2_settings(current_settings, account_id):
                     "lot_size": z_lot,
                     "take_profit": z_tp,
                     "stop_loss": z_sl,
-                    "levels_below": z_levels_below,  # 🌟 YENİ
-                    "levels_above": z_levels_above,  # 🌟 YENİ
-                    "max_positions": z_max_pos,  # 🌟 YENİ GÜVENLİK KİLİDİ
+                    "is_breakout": z_breakout,  # 🌟 YENİ EKLENDİ
+                    "pullback_distance": z_pullback,  # 🌟 YENİ EKLENDİ
+                    "levels_below": z_levels_below,
+                    "levels_above": z_levels_above,
+                    "max_positions": z_max_pos,
                     "clear_on_exit": z_clear,
                     "clear_scope": z_clear_scope,
                     "exit_condition": z_exit_cond,

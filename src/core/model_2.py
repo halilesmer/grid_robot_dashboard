@@ -676,6 +676,10 @@ def manage_dynamic_grid():
     levels_above = int(ACTIVE_ZONE.get("levels_above", 5))
     max_positions_allowed = int(ACTIVE_ZONE.get("max_positions", 10))
 
+    # 🌟 Kırılım (Breakout) Stratejisi Parametreleri
+    is_breakout = bool(ACTIVE_ZONE.get("is_breakout", False))
+    pullback_distance = float(ACTIVE_ZONE.get("pullback_distance", 0.50))
+
     # EĞER 0 GİRİLDİYSE GÜVENLİK İÇİN SINIRI 500 OLARAK BELİRLE
     if max_positions_allowed == 0:
         max_positions_allowed = 500
@@ -709,7 +713,7 @@ def manage_dynamic_grid():
     desired_buy_levels = []
     desired_sell_levels = []
 
-    # --- YENİ: TİTREMEYİ (LOOP) ÖNLEYEN TAMPON BÖLGE ---
+    # --- TİTREMEYİ (LOOP) ÖNLEYEN TAMPON BÖLGE ---
     acceptable_buy_levels = []
     acceptable_sell_levels = []
     buffer_steps = 2  # Silme işlemi için 2 kademe fazladan esneklik (Hysteresis)
@@ -717,43 +721,64 @@ def manage_dynamic_grid():
 
     # KAYAN PENCEREYİ OLUŞTUR (Sliding Window)
     if z_type in ["BUY", "BOTH"]:
-        # Alttaki emirler (Limit)
-        for i in range(1, levels_below + 1):
-            p = anchor_price - (i * grid_step)
-            if z_min <= p <= z_max:
-                desired_buy_levels.append(normalize_price(p))
+        # 🌟 Pullback (Geri Çekilme) Koruması (Kırılım modunda çalışır)
+        # Fiyat, hedeflenen emirden (p) yeterince uzağa (pullback_distance) düşmediyse o emri listeye alma!
+
+        # Alttaki emirler (Limit) - (Kırılım modu açıksa Limit emir DİZİLMEZ)
+        if not is_breakout:
+            for i in range(1, levels_below + 1):
+                p = anchor_price - (i * grid_step)
+                if z_min <= p <= z_max:
+                    desired_buy_levels.append(normalize_price(p))
+
         # Üstteki emirler (Stop)
         for i in range(1, levels_above + 1):
             p = anchor_price + (i * grid_step)
+            # Pullback Kontrolü: Güncel fiyat, p seviyesinden 'pullback_distance' kadar aşağıda mı?
+            if is_breakout and (p - current_avg_price) < pullback_distance:
+                continue  # Fiyat yeterince geri çekilmedi, bu seviyeyi şimdilik pas geç
+
             if z_min <= p <= z_max:
                 desired_buy_levels.append(normalize_price(p))
 
         # Toleranslı Kabul Bölgesi (Silinmeyecek Emirler)
         for i in range(-levels_below - buffer_steps, levels_above + buffer_steps + 1):
             if i != 0:  # Merkeze (fiyatın kendisine) asla emir konulmaz!
+                # 🌟 YENİ: Kırılım moduna geçildiyse, fiyatın altındaki (Limit) emirleri kabul etme ve SİL!
+                if is_breakout and i < 0:
+                    continue
                 acceptable_buy_levels.append(
                     normalize_price(anchor_price + (i * grid_step))
                 )
 
     if z_type in ["SELL", "BOTH"]:
-        # Üstteki emirler (Limit)
-        for i in range(1, levels_above + 1):
-            p = anchor_price + (i * grid_step)
-            if z_min <= p <= z_max:
-                desired_sell_levels.append(normalize_price(p))
+        # Üstteki emirler (Limit) - (Kırılım modu açıksa Limit emir DİZİLMEZ)
+        if not is_breakout:
+            for i in range(1, levels_above + 1):
+                p = anchor_price + (i * grid_step)
+                if z_min <= p <= z_max:
+                    desired_sell_levels.append(normalize_price(p))
+
         # Alttaki emirler (Stop)
         for i in range(1, levels_below + 1):
             p = anchor_price - (i * grid_step)
+            # Pullback Kontrolü: Güncel fiyat, p seviyesinden 'pullback_distance' kadar yukarıda mı?
+            if is_breakout and (current_avg_price - p) < pullback_distance:
+                continue  # Fiyat yeterince yukarı sekti mi? Hayır, o zaman pas geç.
+
             if z_min <= p <= z_max:
                 desired_sell_levels.append(normalize_price(p))
 
         # Toleranslı Kabul Bölgesi (Silinmeyecek Emirler)
         for i in range(-levels_below - buffer_steps, levels_above + buffer_steps + 1):
             if i != 0:  # Merkeze (fiyatın kendisine) asla emir konulmaz!
+                # 🌟 YENİ: Kırılım moduna geçildiyse, fiyatın üstündeki (Limit) emirleri kabul etme ve SİL!
+                if is_breakout and i > 0:
+                    continue
                 acceptable_sell_levels.append(
                     normalize_price(anchor_price + (i * grid_step))
                 )
-
+                
     # İKİ KERE YAZILMIŞ KOD TEMİZLENDİ: Tek ve esnek bir tolerans (Grid'in %40'ı)
     tolerance = grid_step * 0.4
 
@@ -790,10 +815,13 @@ def manage_dynamic_grid():
     exist_buy_levels, exist_sell_levels = get_existing_levels_by_direction(grid_step)
     eklenen_emir_sayisi = 0
 
+    # 🌟 GÜVENLİ TOLERANS: Doldurma işleminde aynı emri 2. kez vermemek için daha katı kontrol
+    fill_tolerance = grid_step * 0.45
+
     # BUY Eksikleri
     for level_price in desired_buy_levels:
         is_occupied = any(
-            abs(round(level_price, 4) - round(el, 4)) <= tolerance
+            abs(round(level_price, 4) - round(el, 4)) <= fill_tolerance
             for el in exist_buy_levels
         )
         if not is_occupied:
@@ -812,7 +840,7 @@ def manage_dynamic_grid():
     # SELL Eksikleri
     for level_price in desired_sell_levels:
         is_occupied = any(
-            abs(round(level_price, 4) - round(el, 4)) <= tolerance
+            abs(round(level_price, 4) - round(el, 4)) <= fill_tolerance
             for el in exist_sell_levels
         )
         if not is_occupied:
