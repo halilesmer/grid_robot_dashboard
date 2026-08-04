@@ -676,14 +676,17 @@ def manage_dynamic_grid():
     levels_above = int(ACTIVE_ZONE.get("levels_above", 5))
     max_positions_allowed = int(ACTIVE_ZONE.get("max_positions", 10))
 
+    # EĞER 0 GİRİLDİYSE GÜVENLİK İÇİN SINIRI 500 OLARAK BELİRLE
+    if max_positions_allowed == 0:
+        max_positions_allowed = 500
+
     # 🛑 GÜVENLİK DUVARI 2: Maksimum Açık Pozisyon Sınırı (Hesap Patlama Koruması)
     target_magic = BASE_MAGIC_NUMBER + ACTIVE_ZONE_IDX + 1
     current_open_positions = len(
         [p for p in robot_positions if p.magic == target_magic]
     )
 
-    # EĞER KULLANICI 0 (SIFIR) GİRDİYSE BU GÜVENLİK DUVARINI TAMAMEN ATLA (Bypass)
-    if max_positions_allowed > 0 and current_open_positions >= max_positions_allowed:
+    if current_open_positions >= max_positions_allowed:
         log_message(
             f"⚠️ DİKKAT: Bölge {ACTIVE_ZONE_IDX+1} Maksimum pozisyon sınırına ulaştı ({max_positions_allowed}). Yeni ağ örülmeyecek!",
             "WARN",

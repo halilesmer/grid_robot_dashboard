@@ -380,7 +380,7 @@ def render_model_2_settings(current_settings, account_id):
                     min_value=0,
                     value=int(zone.get("max_positions", 10)),
                     step=1,
-                    help="Bu bölgede aynı anda açık olabilecek maksimum işlem sayısı. Sınırı tamamen kaldırmak (sınırsız işlem) için 0 girin.",
+                    help="Bu bölgede aynı anda açık olabilecek maksimum işlem sayısı. Sınırı kaldırmak için 0 girin (Sistem güvenliği için arka planda maks 500 olarak çalışır).",
                 )
 
             # Alt satır 3: Çıkışta Temizle ve Seçenekleri
