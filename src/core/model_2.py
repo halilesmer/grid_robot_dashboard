@@ -743,13 +743,14 @@ def manage_dynamic_grid():
 
         # Toleranslı Kabul Bölgesi (Silinmeyecek Emirler)
         for i in range(-levels_below - buffer_steps, levels_above + buffer_steps + 1):
-            if i != 0:  # Merkeze (fiyatın kendisine) asla emir konulmaz!
-                # 🌟 YENİ: Kırılım moduna geçildiyse, fiyatın altındaki (Limit) emirleri kabul etme ve SİL!
-                if is_breakout and i < 0:
-                    continue
-                acceptable_buy_levels.append(
-                    normalize_price(anchor_price + (i * grid_step))
-                )
+            # 🌟 YENİ: Kırılım moduna geçildiyse, fiyatın altındaki (Limit) emirleri kabul etme ve SİL!
+            if is_breakout and i < 0:
+                continue
+
+            # DÜZELTME: Merkeze (i=0) YENİ emir dizmiyoruz, ama fiyata en yakın ESKİ emri silmemek için kabul listesine alıyoruz!
+            acceptable_buy_levels.append(
+                normalize_price(anchor_price + (i * grid_step))
+            )
 
     if z_type in ["SELL", "BOTH"]:
         # Üstteki emirler (Limit) - (Kırılım modu açıksa Limit emir DİZİLMEZ)
@@ -771,14 +772,15 @@ def manage_dynamic_grid():
 
         # Toleranslı Kabul Bölgesi (Silinmeyecek Emirler)
         for i in range(-levels_below - buffer_steps, levels_above + buffer_steps + 1):
-            if i != 0:  # Merkeze (fiyatın kendisine) asla emir konulmaz!
-                # 🌟 YENİ: Kırılım moduna geçildiyse, fiyatın üstündeki (Limit) emirleri kabul etme ve SİL!
-                if is_breakout and i > 0:
-                    continue
-                acceptable_sell_levels.append(
-                    normalize_price(anchor_price + (i * grid_step))
-                )
-                
+            # 🌟 YENİ: Kırılım moduna geçildiyse, fiyatın üstündeki (Limit) emirleri kabul etme ve SİL!
+            if is_breakout and i > 0:
+                continue
+
+            # DÜZELTME: Merkeze (i=0) YENİ emir dizmiyoruz, ama fiyata en yakın ESKİ emri silmemek için kabul listesine alıyoruz!
+            acceptable_sell_levels.append(
+                normalize_price(anchor_price + (i * grid_step))
+            )
+
     # İKİ KERE YAZILMIŞ KOD TEMİZLENDİ: Tek ve esnek bir tolerans (Grid'in %40'ı)
     tolerance = grid_step * 0.4
 
