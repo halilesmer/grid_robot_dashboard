@@ -42,9 +42,7 @@ from src.components.log_viewer import render_log_viewer
 from src.styles.custom_css import apply_custom_css
 from src.utils.config import load_settings, save_settings
 
-import src.core.model_1 as model_1
 import src.core.model_2 as model_2
-import src.core.model_3 as model_3
 
 def get_live_metrics_from_file(account_id):
     """Liest die aktuellsten Metriken des Subprozesses aus der JSON-Datei."""
@@ -68,10 +66,6 @@ def get_live_metrics_from_file(account_id):
 # ==========================================
 apply_custom_css()
 
-# YENİ: Hesaplara özel SİLİNMEYEN model hafızası
-if "account_models_memory" not in st.session_state:
-    st.session_state.account_models_memory = {}
-
 # ==========================================
 # 2. ÖNCE HESABI SEÇ (TAM GENİŞLİKTE)
 # ==========================================
@@ -85,22 +79,9 @@ if not active_account:
 account_id = str(active_account.get("login", "default"))
 
 # ==========================================
-# MOTOR SEÇİMİNİ HESABA GÖRE BELİRLE
+# MOTOR SEÇİMİ (TEK KRAL: MODEL 2)
 # ==========================================
-# Hafızada bu hesap için model yoksa Model 2 yap (VARSAYILAN DEĞİŞTİRİLDİ)
-if account_id not in st.session_state.account_models_memory:
-    st.session_state.account_models_memory[account_id] = "Model 2"
-
-# Bu hesabın hafızasındaki modeli aktif yapıyoruz
-st.session_state.selected_model = st.session_state.account_models_memory[account_id]
-
-# Motoru seçili modele göre ayarla
-if st.session_state.selected_model == "Model 1":
-    bot_engine = model_1
-elif st.session_state.selected_model == "Model 2":
-    bot_engine = model_2
-else:
-    bot_engine = model_3
+bot_engine = model_2
 
 
 st.markdown("---")
@@ -115,7 +96,7 @@ account_is_running = is_bot_running(account_id)
 # ==========================================
 # 4. AYARLARI VE METRİKLERİ YÜKLE
 # ==========================================
-current_settings = load_settings(st.session_state.selected_model)
+current_settings = load_settings("Model 2")
 
 render_header(
     symbol="USOUSD",
@@ -185,18 +166,12 @@ with col_metrics:
     live_metrics_fragment(account_id)
 
 with col_controls:
-    # EKSİK BIRAKILAN KISIM TAMAMLANDI
-    action, chosen_model = render_controls(
-        is_running=account_is_running,
-        account_id=account_id,
-        current_model=st.session_state.selected_model,  # <--- NEU
+    # Arayüzdeki kontrol butonlarını çağır
+    control_result = render_controls(
+        is_running=account_is_running, account_id=account_id
     )
-
-if chosen_model and chosen_model != st.session_state.selected_model:
-    st.session_state.selected_model = chosen_model
-    # NEU: Wir speichern die Auswahl in unserem unlöschbaren Gedächtnis
-    st.session_state.account_models_memory[account_id] = chosen_model
-    st.rerun()
+    # Eğer eski controls.py hala iki değer (tuple) dönüyorsa hata vermemesi için güvenli yakalama
+    action = control_result[0] if isinstance(control_result, tuple) else control_result
 
 
 # ==========================================
@@ -209,7 +184,7 @@ if action == "TOGGLE":
 
         if connection_success:
             # Subprocess (Alt Süreç) başlat!
-            if start_bot_process(account_id, st.session_state.selected_model):
+            if start_bot_process(account_id, "Model 2"):
                 st.toast(
                     f"🚀 {active_account['account_name']} için robot izole olarak başlatıldı!",
                     icon="✅",
@@ -236,12 +211,10 @@ if action == "TOGGLE":
 # ==========================================
 # AYARLAR VE MAC SİMÜLATÖRÜ
 # ==========================================
-updated_settings = render_settings_panel(
-    current_settings, st.session_state.selected_model, account_id
-)
+updated_settings = render_settings_panel(current_settings, "Model 2", account_id)
 
 if updated_settings:
-    save_settings(updated_settings, st.session_state.selected_model)
+    save_settings(updated_settings, "Model 2")
     st.success(f"✅ Ayarlar başarıyla güncellendi ve {account_id} için kaydedildi!")
     st.rerun()
 
@@ -276,9 +249,7 @@ if platform.system() != "Windows":
     # Mac ortamında: Grafik ve Log yan yana (Grafik daha geniş)
     col_chart, col_log = st.columns([2, 1])
     with col_chart:
-        render_chart(
-            current_active_price, current_settings, st.session_state.selected_model
-        )
+        render_chart(current_active_price, current_settings, "Model 2")
     with col_log:
         render_log_viewer(account_id)
 else:

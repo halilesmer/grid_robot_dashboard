@@ -2,6 +2,7 @@
 import streamlit as st
 import json
 import os
+from src.components.dialogs import confirm_delete_account_dialog
 
 ACCOUNTS_FILE = "configs/accounts.json"
 
@@ -104,32 +105,50 @@ def render_account_selector():
         if st.button(
             "🗑️ Sil", use_container_width=True, disabled=not accounts or is_running
         ):
-            st.session_state.delete_account = active_account
-            st.rerun()
+            # Silme işlemini yapacak fonksiyonu tanımlayıp Modal'a gönderiyoruz
+            def delete_current_account():
+                new_accounts = [
+                    a
+                    for a in accounts
+                    if str(a.get("login")) != str(active_account.get("login"))
+                ]
+                try:
+                    with open(ACCOUNTS_FILE, "w", encoding="utf-8") as f:
+                        json.dump(
+                            {"accounts": new_accounts}, f, indent=4, ensure_ascii=False
+                        )
+
+                    st.session_state.selected_account = (
+                        new_accounts[0] if new_accounts else None
+                    )
+                except Exception as e:
+                    st.error(f"Silme sırasında hata: {e}")
+
+            confirm_delete_account_dialog(active_name, delete_current_account)
     with h_col4:
         if st.button("➕ Yeni", use_container_width=True, type="primary"):
             st.session_state.show_add_form = not st.session_state.show_add_form
             st.session_state.edit_account = None
             st.rerun()
 
-    # 1. Görsel Güvenlik Geri Bildirimi (Sadece hesap varsa renderla)
-    if accounts:
-        if is_running:
-            if active_type == "LIVE":
-                st.markdown(
-                    f'<div class="status-container"><div class="pulsing-red"></div> <span>🚨 DİKKAT: CANLI HESAPTA İŞLEM YAPILIYOR [ {active_name} ]</span></div>',
-                    unsafe_allow_html=True,
-                )
-            else:
-                st.markdown(
-                    f'<div class="status-container"><div class="pulsing-green"></div> <span>🟢 TEST ORTAMI AKTİF [ {active_name} ]</span></div>',
-                    unsafe_allow_html=True,
-                )
-        else:
-            if active_type == "LIVE":
-                st.error(f"🔴 SEÇİLİ HESAP: {active_name} (ID: {active_login})")
-            else:
-                st.success(f"🟢 Seçili Hesap: {active_name} (ID: {active_login})")
+    # 1. Buton Renk Stili (Aktif Hesap ve Motor Butonu İçin)
+    st.markdown(
+        """
+    <style>
+    /* Seçili (Primary) butonları şık bir yeşil tonuna çevir */
+    button[kind="primary"] {
+        background-color: #198754 !important;
+        border-color: #198754 !important;
+        color: white !important;
+    }
+    button[kind="primary"]:hover {
+        background-color: #157347 !important;
+        border-color: #146c43 !important;
+    }
+    </style>
+    """,
+        unsafe_allow_html=True,
+    )
 
     # 2. Temiz ve Şık Buton Menüsü
     MAX_BUTTONS = 4
@@ -184,46 +203,6 @@ def render_account_selector():
                 if str(selected_acc_login) != str(active_login):
                     st.session_state.selected_account = selected_acc
                     st.rerun()
-    # ==========================================
-    # SİLME ONAY PENCERESİ
-    # ==========================================
-    if st.session_state.get("delete_account"):
-        st.markdown("---")
-        del_acc = st.session_state.delete_account
-        del_name = del_acc.get("account_name", "Bilinmeyen")
-        st.warning(
-            f"⚠️ **{del_name}** adlı hesabı tamamen silmek istediğinize emin misiniz?",
-            icon="🗑️",
-        )
-
-        col_y, col_n = st.columns([1, 10])
-        if col_y.button("Evet, Sil", type="primary"):
-            new_accounts = [
-                a for a in accounts if str(a.get("login")) != str(del_acc.get("login"))
-            ]
-            try:
-                with open(ACCOUNTS_FILE, "w", encoding="utf-8") as f:
-                    json.dump(
-                        {"accounts": new_accounts}, f, indent=4, ensure_ascii=False
-                    )
-
-                if (
-                    st.session_state.selected_account
-                    and st.session_state.selected_account.get("login")
-                    == del_acc.get("login")
-                ):
-                    st.session_state.selected_account = (
-                        new_accounts[0] if new_accounts else None
-                    )
-
-                st.session_state.delete_account = None
-                st.rerun()
-            except Exception as e:
-                st.error(f"Silme sırasında hata: {e}")
-
-        if col_n.button("İptal"):
-            st.session_state.delete_account = None
-            st.rerun()
 
     # ==========================================
     # 3. YENİ HESAP EKLEME / DÜZENLEME FORMU

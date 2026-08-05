@@ -3,43 +3,21 @@ import streamlit as st
 from src.constants.tooltips import SETTINGS_TOOLTIPS
 
 
-def render_controls(
-    is_running: bool, account_id: str = "default", current_model: str = "Model 1"
-):
+def render_controls(is_running: bool, account_id: str = "default"):
     """
-    Dinamik Tek Butonlu Kontrol Paneli, Anında Açılan Tooltip ve Motor Seçimi (%100 Multi-Account Uyumlu)
+    Dinamik Tek Butonlu Kontrol Paneli ve Anında Açılan Tooltip (%100 Multi-Account Uyumlu)
     """
     st.markdown("### 🎮 Robot Kontrol Paneli")
 
-    col1, col2, col3 = st.columns([2.5, 0.8, 2.5], vertical_alignment="center")
+    col_icon, col_btn = st.columns([0.15, 0.85], vertical_alignment="center")
 
-    with col1:
-        models = ["Model 1", "Model 2", "Model 3"]
-
-        # Finde heraus, an welcher Position (Index) das aktuelle Modell steht
-        try:
-            default_index = models.index(current_model)
-        except ValueError:
-            default_index = 0
-
-        selected_model = st.selectbox(
-            "⚙️ Motor Seçimi",
-            options=models,
-            index=default_index,  # NEU: Wir erzwingen die Auswahl per Index!
-            disabled=False,
-            label_visibility="collapsed",
-            key=f"selectbox_motor_{account_id}",
-        )
-
-    with col2:
-        # Tooltip metinleri artık dışarıdan gelen selected_model üzerinden besleniyor.
+    with col_icon:
+        # Tooltip metinleri artık doğrudan Model 2'ye sabitlendi.
         if is_running:
-            status_text = SETTINGS_TOOLTIPS["ROBOT_ACTIVE"].format(model=selected_model)
+            status_text = SETTINGS_TOOLTIPS["ROBOT_ACTIVE"].format(model="Model 2")
             icon = "🟢"
         else:
-            status_text = SETTINGS_TOOLTIPS["ROBOT_PASSIVE"].format(
-                model=selected_model
-            )
+            status_text = SETTINGS_TOOLTIPS["ROBOT_PASSIVE"].format(model="Model 2")
             icon = "🔴"
 
         st.markdown(
@@ -89,12 +67,12 @@ def render_controls(
             unsafe_allow_html=True,
         )
 
-    with col3:
-        # --- BUTON GÜNCELLEMESİ BURADA ---
+    with col_btn:
         button_label = (
             "🛑 Ana Motoru Durdur" if is_running else "🔌 Ana Motoru Çalıştır"
         )
-        button_type = "secondary" if is_running else "primary"
+        # Motor çalışıyorsa yeşil (primary), duruyorsa gri (secondary) olsun
+        button_type = "primary" if is_running else "secondary"
         button_help = (
             "Arka plan motorunu tamamen kapatır. Açık pozisyonlara dokunulmaz."
             if is_running
@@ -110,4 +88,4 @@ def render_controls(
         )
 
     action = "TOGGLE" if toggle_btn else None
-    return action, selected_model
+    return action

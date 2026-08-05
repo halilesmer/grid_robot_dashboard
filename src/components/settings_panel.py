@@ -5,120 +5,18 @@ import json
 import os
 from src.constants.tooltips import SETTINGS_TOOLTIPS
 
-# Yeni model 3 bileşenimizi içeri alıyoruz:
-from src.components.model3_settings import render_model_3_settings
+# Modal (Dialog) pencerelerimizi içeri alıyoruz:
+from src.components.dialogs import confirm_clear_dialog, confirm_delete_zone_dialog
 
 
-def render_settings_panel(current_settings, model_name="Model 1", account_id="default"):
+def render_settings_panel(current_settings, model_name="Model 2", account_id="default"):
     """
-    JSON'dan beslenen Grid ve Risk Ayarları Kompakt Form Bileşeni
+    JSON'dan beslenen Dinamik Bölge (Zone) Ayarları (Model 2)
     """
-    st.markdown(f"##### ⚙️ {model_name} Parametreleri")
+    st.markdown(f"##### ⚙️ Sistem Parametreleri")
 
-    if model_name == "Model 1":
-        return render_model_1_settings(current_settings, account_id)
-    elif model_name == "Model 2":
-        return render_model_2_settings(current_settings, account_id)
-    elif model_name == "Model 3":
-        return render_model_3_settings(current_settings)
-
-    return None
-
-
-def render_model_1_settings(current_settings, account_id):
-    with st.form(f"settings_form_m1_{account_id}"):
-        col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
-
-        with col1:
-            grid_step = st.number_input(
-                "Grid Adımı (GRID_STEP)",
-                value=float(current_settings.get("GRID_STEP", 0.05)),
-                step=0.01,
-                format="%.2f",
-                help=SETTINGS_TOOLTIPS["GRID_STEP"],
-            )
-            take_profit = st.number_input(
-                "Kâr Al (TAKE_PROFIT)",
-                value=float(current_settings.get("TAKE_PROFIT", 0.05)),
-                step=0.01,
-                format="%.2f",
-                help=SETTINGS_TOOLTIPS["TAKE_PROFIT"],
-            )
-
-        with col2:
-            levels_below = st.number_input(
-                "Alt Seviye (LEVELS_BELOW)",
-                value=int(current_settings.get("LEVELS_BELOW", 10)),
-                step=1,
-                help=SETTINGS_TOOLTIPS["LEVELS_BELOW"],
-            )
-            levels_above = st.number_input(
-                "Üst Seviye (LEVELS_ABOVE)",
-                value=int(current_settings.get("LEVELS_ABOVE", 10)),
-                step=1,
-                help=SETTINGS_TOOLTIPS["LEVELS_ABOVE"],
-            )
-
-        with col3:
-            default_lot = st.number_input(
-                "Varsayılan Lot (DEFAULT_LOT)",
-                value=float(current_settings.get("DEFAULT_LOT", 0.01)),
-                step=0.01,
-                format="%.2f",
-                help=SETTINGS_TOOLTIPS["DEFAULT_LOT"],
-            )
-            max_positions = st.number_input(
-                "Maks. Pozisyon (MAX_POSITIONS)",
-                value=int(current_settings.get("MAX_OPEN_POSITIONS", 20)),
-                step=1,
-                help=SETTINGS_TOOLTIPS["MAX_OPEN_POSITIONS"],
-            )
-
-        with col4:
-            min_price = st.number_input(
-                "Taban Fiyat (MIN_PRICE)",
-                value=float(current_settings.get("MIN_PRICE_LIMIT", 60.0)),
-                step=1.0,
-                help=SETTINGS_TOOLTIPS["MIN_PRICE_LIMIT"],
-            )
-            max_price = st.number_input(
-                "Tavan Fiyat (MAX_PRICE)",
-                value=float(current_settings.get("MAX_PRICE_LIMIT", 100.0)),
-                step=1.0,
-                help=SETTINGS_TOOLTIPS["MAX_PRICE_LIMIT"],
-            )
-
-        col_b1, col_b2 = st.columns([2, 1])
-        with col_b1:
-            loop_interval = st.number_input(
-                "Kontrol Sıklığı Saniye (LOOP_INTERVAL)",
-                value=float(current_settings.get("LOOP_INTERVAL_SECONDS", 1.0)),
-                step=0.1,
-                format="%.1f",
-                help=SETTINGS_TOOLTIPS["LOOP_INTERVAL_SECONDS"],
-            )
-
-        with col_b2:
-            st.markdown("<div style='margin-top: 24px;'></div>", unsafe_allow_html=True)
-            submitted = st.form_submit_button(
-                "💾 Ayarları Güncelle", help="Ayarları anında sisteme kaydeder."
-            )
-
-        if submitted:
-            return {
-                "GRID_STEP": grid_step,
-                "TAKE_PROFIT": take_profit,
-                "LEVELS_BELOW": levels_below,
-                "LEVELS_ABOVE": levels_above,
-                "DEFAULT_LOT": default_lot,
-                "MAX_OPEN_POSITIONS": max_positions,
-                "MAX_PRICE_LIMIT": max_price,
-                "MIN_PRICE_LIMIT": min_price,
-                "LOOP_INTERVAL_SECONDS": loop_interval,
-            }
-
-    return None
-
+    # Artık sistemde sadece Model 2 olduğu için doğrudan onu çağırıyoruz
+    return render_model_2_settings(current_settings, account_id)
 
 def _default_zone():
     return {
@@ -263,15 +161,19 @@ def render_model_2_settings(current_settings, account_id):
                     args=(account_id, zone_id, idx, "PAUSE"),
                 )
             with bc3:
-                st.button(
+                if st.button(
                     clear_label,
                     key=f"clear_{zone_id}_{account_id}",
                     use_container_width=True,
                     type="primary" if current_state == "CLEAR" else "secondary",
                     help="Acil Durum: Bekleyen emirleri siler ve AÇIK POZİSYONLARI ayara göre kapatır.",
-                    on_click=_handle_zone_action,
-                    args=(account_id, zone_id, idx, "CLEAR"),
-                )
+                ):
+                    # Lambda ile anlık değişkenleri (zone_id, idx) dondurarak modal'a gönderiyoruz
+                    confirm_clear_dialog(
+                        lambda acc=account_id, z_id=zone_id, i=idx: _handle_zone_action(
+                            acc, z_id, i, "CLEAR"
+                        )
+                    )
 
             zc1, zc2, zc3, zc4 = st.columns(4)
             with zc1:
@@ -426,11 +328,22 @@ def render_model_2_settings(current_settings, account_id):
                     help="İşaretliyken, fiyat bölgeden çıkarsa belirlenen kurala göre robot temizlik yapar.",
                 )
             with opt_c2:
-                delete_btn = st.checkbox(
-                    "🗑️ Bu bölgeyi sil",
+                if st.button(
+                    "🗑️ Bölgeyi Sil",
                     key=f"del_{zone_id}_{account_id}",
                     help="Bu bölgeyi kalıcı olarak kaldır.",
-                )
+                ):
+                    # Silme işlemini yapacak fonksiyonu Modal'a gönderiyoruz
+                    def remove_zone(target_id=zone_id):
+                        st.session_state[zones_session_key] = [
+                            z
+                            for z in st.session_state[zones_session_key]
+                            if z.get("id") != target_id
+                        ]
+
+                    confirm_delete_zone_dialog(f"Bölge {idx + 1}", remove_zone)
+
+                delete_btn = False  # Checkbox mantığını bozmamak ve kodun alt kısmını korumak için
 
             z_clear_scope = "Sadece Emirler"
             z_exit_cond = "Anlık Fiyat"
