@@ -90,51 +90,15 @@ def render_account_selector():
 
     is_running = st.session_state.get("robot_running", False)
 
-    # --- MODERN ARAÇ ÇUBUĞU (TOOLBAR) ---
-    h_col1, h_col2, h_col3, h_col4 = st.columns([0.55, 0.15, 0.15, 0.15])
-    with h_col1:
-        st.markdown("### 🏢 MT5 Hesap Seçimi")
-    with h_col2:
-        if st.button(
-            "✏️ Düzenle", use_container_width=True, disabled=not accounts or is_running
-        ):
-            st.session_state.edit_account = active_account
-            st.session_state.show_add_form = True
-            st.rerun()
-    with h_col3:
-        if st.button(
-            "🗑️ Sil", use_container_width=True, disabled=not accounts or is_running
-        ):
-            # Silme işlemini yapacak fonksiyonu tanımlayıp Modal'a gönderiyoruz
-            def delete_current_account():
-                new_accounts = [
-                    a
-                    for a in accounts
-                    if str(a.get("login")) != str(active_account.get("login"))
-                ]
-                try:
-                    with open(ACCOUNTS_FILE, "w", encoding="utf-8") as f:
-                        json.dump(
-                            {"accounts": new_accounts}, f, indent=4, ensure_ascii=False
-                        )
-
-                    st.session_state.selected_account = (
-                        new_accounts[0] if new_accounts else None
-                    )
-                except Exception as e:
-                    st.error(f"Silme sırasında hata: {e}")
-
-            confirm_delete_account_dialog(active_name, delete_current_account)
-    with h_col4:
-        if st.button("➕ Yeni", use_container_width=True, type="primary"):
-            st.session_state.show_add_form = not st.session_state.show_add_form
-            st.session_state.edit_account = None
-            st.rerun()
-
-    # 1. Buton Renk Stili (Aktif Hesap ve Motor Butonu İçin)
+    # 1. Buton Renk Stili ve Üst Boşluk (Padding) Temizliği
     st.markdown(
         """
     <style>
+    /* 🌟 Streamlit'in varsayılan devasa üst boşluğunu kaldırarak butonları yukarı çeker */
+    .block-container {
+        padding-top: 2rem !important; 
+    }
+    
     /* Seçili (Primary) butonları şık bir yeşil tonuna çevir */
     button[kind="primary"] {
         background-color: #198754 !important;
@@ -155,54 +119,102 @@ def render_account_selector():
     num_accounts = len(accounts)
     has_extra = 1 if num_accounts > MAX_BUTTONS else 0
 
-    total_cols = min(num_accounts, MAX_BUTTONS) + has_extra
-    if total_cols > 0:
-        cols = st.columns(total_cols)
+    # Hesaplar + (Varsa "Diğer" Dropdown) + En Sağa 1 Adet Üç Nokta Popover Sütunu
+    col_ratios = [1] * (min(num_accounts, MAX_BUTTONS) + has_extra) + [0.15]
+    cols = st.columns(col_ratios)
 
-        for i, acc in enumerate(accounts[:MAX_BUTTONS]):
-            acc_type = acc.get("env_type", acc.get("type", "DEMO"))
-            acc_name = acc.get("account_name", acc.get("name", "Bilinmeyen Hesap"))
-            acc_login = acc.get("login", acc.get("id", "Bilinmeyen ID"))
+    for i, acc in enumerate(accounts[:MAX_BUTTONS]):
+        acc_type = acc.get("env_type", acc.get("type", "DEMO"))
+        acc_name = acc.get("account_name", acc.get("name", "Bilinmeyen Hesap"))
+        acc_login = acc.get("login", acc.get("id", "Bilinmeyen ID"))
 
-            btn_icon = "🔴" if acc_type == "LIVE" else "🧪"
-            btn_label = f"{btn_icon} {acc_login} - {acc_name}"
-            is_active = str(acc.get("login", acc.get("id"))) == str(active_login)
+        btn_icon = "🔴" if acc_type == "LIVE" else "🧪"
+        btn_label = f"{btn_icon} {acc_login} - {acc_name}"
+        is_active = str(acc.get("login", acc.get("id"))) == str(active_login)
 
-            # Sadece tek parça, tertemiz ana buton
-            if cols[i].button(
-                btn_label,
-                key=f"btn_{i}_{acc_login}",
-                type="primary" if is_active else "secondary",
-                use_container_width=True,
-            ):
-                st.session_state.selected_account = acc
+        if cols[i].button(
+            btn_label,
+            key=f"btn_{i}_{acc_login}",
+            type="primary" if is_active else "secondary",
+            use_container_width=True,
+        ):
+            st.session_state.selected_account = acc
+            st.rerun()
+
+    # Eğer 4'ten fazla hesap varsa, geri kalanı açılır menüye koy
+    if num_accounts > MAX_BUTTONS:
+        extra_accounts = accounts[MAX_BUTTONS:]
+        extra_options = {}
+        for a in extra_accounts:
+            a_type = a.get("env_type", a.get("type", "DEMO"))
+            a_name = a.get("account_name", a.get("name", "Bilinmeyen Hesap"))
+            a_login = a.get("login", a.get("id", "Bilinmeyen ID"))
+
+            extra_options[
+                f"{'🔴' if a_type=='LIVE' else '🧪'} {a_login} - {a_name}"
+            ] = a
+
+        selected_extra_name = cols[MAX_BUTTONS].selectbox(
+            "Diğer:",
+            options=["Diğer Hesaplar..."] + list(extra_options.keys()),
+            label_visibility="collapsed",
+        )
+
+        if selected_extra_name != "Diğer Hesaplar...":
+            selected_acc = extra_options[selected_extra_name]
+            selected_acc_login = selected_acc.get("login", selected_acc.get("id"))
+            if str(selected_acc_login) != str(active_login):
+                st.session_state.selected_account = selected_acc
                 st.rerun()
 
-        # Eğer 4'ten fazla hesap varsa, geri kalanı açılır menüye koy
-        if num_accounts > MAX_BUTTONS:
-            extra_accounts = accounts[MAX_BUTTONS:]
-            extra_options = {}
-            for a in extra_accounts:
-                a_type = a.get("env_type", a.get("type", "DEMO"))
-                a_name = a.get("account_name", a.get("name", "Bilinmeyen Hesap"))
-                a_login = a.get("login", a.get("id", "Bilinmeyen ID"))
+    # --- EN SAĞDAKİ ÜÇ NOKTA (POPOVER) MENÜSÜ ---
+    with cols[-1].popover("⋮", use_container_width=True):
+        if st.button(
+            "✏️ Seçili Hesabı Düzenle",
+            use_container_width=True,
+            disabled=not accounts or is_running,
+            key="popover_edit_btn",
+        ):
+            st.session_state.edit_account = active_account
+            st.session_state.show_add_form = True
+            st.rerun()
 
-                extra_options[
-                    f"{'🔴' if a_type=='LIVE' else '🧪'} {a_login} - {a_name}"
-                ] = a
+        if st.button(
+            "🗑️ Seçili Hesabı Sil",
+            use_container_width=True,
+            disabled=not accounts or is_running,
+            key="popover_delete_btn",
+        ):
 
-            selected_extra_name = cols[MAX_BUTTONS].selectbox(
-                "Diğer:",
-                options=["Diğer Hesaplar..."] + list(extra_options.keys()),
-                label_visibility="collapsed",
-            )
+            def delete_current_account():
+                new_accounts = [
+                    a
+                    for a in accounts
+                    if str(a.get("login")) != str(active_account.get("login"))
+                ]
+                try:
+                    with open(ACCOUNTS_FILE, "w", encoding="utf-8") as f:
+                        json.dump(
+                            {"accounts": new_accounts}, f, indent=4, ensure_ascii=False
+                        )
 
-            if selected_extra_name != "Diğer Hesaplar...":
-                selected_acc = extra_options[selected_extra_name]
-                selected_acc_login = selected_acc.get("login", selected_acc.get("id"))
-                if str(selected_acc_login) != str(active_login):
-                    st.session_state.selected_account = selected_acc
-                    st.rerun()
+                    st.session_state.selected_account = (
+                        new_accounts[0] if new_accounts else None
+                    )
+                except Exception as e:
+                    st.error(f"Silme sırasında hata: {e}")
+
+            confirm_delete_account_dialog(active_name, delete_current_account)
+
+        if st.button(
+            "➕ Yeni Hesap Ekle",
+            use_container_width=True,
+            type="primary",
+            key="popover_add_btn",
+        ):
+            st.session_state.show_add_form = not st.session_state.show_add_form
+            st.session_state.edit_account = None
+            st.rerun()
 
     # ==========================================
     # 3. YENİ HESAP EKLEME / DÜZENLEME FORMU

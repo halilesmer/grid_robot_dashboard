@@ -13,10 +13,9 @@ def render_settings_panel(current_settings, model_name="Model 2", account_id="de
     """
     JSON'dan beslenen Dinamik Bölge (Zone) Ayarları (Model 2)
     """
-    st.markdown(f"##### ⚙️ Sistem Parametreleri")
-
-    # Artık sistemde sadece Model 2 olduğu için doğrudan onu çağırıyoruz
+    # Başlık ve yerleşim işlemleri doğrudan Model 2'nin içinde yönetiliyor
     return render_model_2_settings(current_settings, account_id)
+
 
 def _default_zone():
     return {
@@ -102,19 +101,22 @@ def render_model_2_settings(current_settings, account_id):
             except Exception:
                 pass
 
-    st.markdown("###### ⚖️ Temel İşlem Ayarları")
-    loop_interval = st.number_input(
-        "Kontrol Sıklığı (Sn)",
-        value=float(current_settings.get("LOOP_INTERVAL_SECONDS", 1.0)),
-        step=0.1,
-        key=f"m2_loop_{account_id}",
-    )
+    # Ana Başlık ve Input'u yan yana almak için sütunlara ayırıyoruz
+    h_col1, h_col2 = st.columns([0.85, 0.15], vertical_alignment="center")
+    with h_col1:
+        st.markdown("##### ⚙️ Sistem Parametreleri")
+    with h_col2:
+        loop_interval = st.number_input(
+            "Kontrol Sıklığı (Sn)",
+            value=float(current_settings.get("LOOP_INTERVAL_SECONDS", 1.0)),
+            step=0.1,
+            key=f"m2_loop_{account_id}",
+        )
 
     st.markdown("---")
     st.markdown("###### 🎯 Dinamik Bölgeler (Zones)")
 
     updated_zones = []
-    delete_any = False
 
     # Bölgeleri Ekrana Çiz
     for idx, zone in enumerate(st.session_state[zones_session_key]):
@@ -343,8 +345,6 @@ def render_model_2_settings(current_settings, account_id):
 
                     confirm_delete_zone_dialog(f"Bölge {idx + 1}", remove_zone)
 
-                delete_btn = False  # Checkbox mantığını bozmamak ve kodun alt kısmını korumak için
-
             z_clear_scope = "Sadece Emirler"
             z_exit_cond = "Anlık Fiyat"
             z_exit_tf = "M15"
@@ -393,31 +393,29 @@ def render_model_2_settings(current_settings, account_id):
                         )
                     else:
                         z_exit_tf = zone.get("exit_timeframe", "M15")
-        if not delete_btn:
-            updated_zones.append(
-                {
-                    "id": zone_id,
-                    "symbol": z_symbol,
-                    "order_type": z_order_type,
-                    "min_price": z_min,
-                    "max_price": z_max,
-                    "grid_step": z_grid,
-                    "lot_size": z_lot,
-                    "take_profit": z_tp,
-                    "stop_loss": z_sl,
-                    "is_breakout": z_breakout,  # 🌟 YENİ EKLENDİ
-                    "pullback_distance": z_pullback,  # 🌟 YENİ EKLENDİ
-                    "levels_below": z_levels_below,
-                    "levels_above": z_levels_above,
-                    "max_positions": z_max_pos,
-                    "clear_on_exit": z_clear,
-                    "clear_scope": z_clear_scope,
-                    "exit_condition": z_exit_cond,
-                    "exit_timeframe": z_exit_tf,
-                }
-            )
-        else:
-            delete_any = True
+        # Bölgeyi güncel listeye ekle (Silme işlemi Modal içinden tetikleniyor)
+        updated_zones.append(
+            {
+                "id": zone_id,
+                "symbol": z_symbol,
+                "order_type": z_order_type,
+                "min_price": z_min,
+                "max_price": z_max,
+                "grid_step": z_grid,
+                "lot_size": z_lot,
+                "take_profit": z_tp,
+                "stop_loss": z_sl,
+                "is_breakout": z_breakout,  # 🌟 YENİ EKLENDİ
+                "pullback_distance": z_pullback,  # 🌟 YENİ EKLENDİ
+                "levels_below": z_levels_below,
+                "levels_above": z_levels_above,
+                "max_positions": z_max_pos,
+                "clear_on_exit": z_clear,
+                "clear_scope": z_clear_scope,
+                "exit_condition": z_exit_cond,
+                "exit_timeframe": z_exit_tf,
+            }
+        )
 
     # Hafıza kaybını önlemek için her renderda listeyi eşitle!
     st.session_state[zones_session_key] = updated_zones
@@ -429,9 +427,6 @@ def render_model_2_settings(current_settings, account_id):
     os.makedirs("logs", exist_ok=True)
     with open(f"logs/ui_states_{account_id}.json", "w", encoding="utf-8") as f:
         json.dump(backend_states, f)
-
-    if delete_any:
-        st.rerun()
 
     # ── Alt Aksiyon Butonları ─────────────────────────────────────────────────
     col_b1, col_b2, col_b3 = st.columns([1, 1, 1])
