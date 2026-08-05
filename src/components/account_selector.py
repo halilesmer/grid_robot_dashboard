@@ -5,6 +5,22 @@ import os
 
 ACCOUNTS_FILE = "configs/accounts.json"
 
+@st.cache_data(ttl=300)
+def get_installed_mt5_terminals():
+    """C:/Program Files içindeki MT5 terminal64.exe yollarını hızlıca tarar."""
+    terminals = []
+    base_path = "C:/Program Files"
+    if os.path.exists(base_path):
+        try:
+            for folder in os.listdir(base_path):
+                full_dir = os.path.join(base_path, folder)
+                if os.path.isdir(full_dir):
+                    exe_path = os.path.join(full_dir, "terminal64.exe")
+                    if os.path.exists(exe_path):
+                        terminals.append(exe_path.replace("\\", "/"))
+        except Exception:
+            pass
+    return terminals
 
 def load_accounts():
     """configs/accounts.json dosyasından hesap listesini okur ve formatı güvenceye alır."""
@@ -28,9 +44,11 @@ def render_account_selector():
     accounts = load_accounts()
 
     if not accounts:
-        st.warning("Hesap bulunamadı! configs/accounts.json eksik.")
+        st.warning(
+            "Hiç hesap bulunamadı! Lütfen '➕ Yeni' butonuna tıklayarak ilk hesabınızı ekleyin."
+        )
         st.session_state.selected_account = None
-        return None
+        # return None komutu silindi ki kod aşağıya inip formu çizebilsin!
 
     # ==========================================
     # ÇİFT LOGİN (DUPLICATE) KONTROLÜ
@@ -45,97 +63,356 @@ def render_account_selector():
             "Lütfen dosyayı kontrol edip mükerrer (çift) kayıtları silin veya ID'leri düzeltin!"
         )
 
-    if (
-        "selected_account" not in st.session_state
-        or st.session_state.selected_account is None
-    ):
-        st.session_state.selected_account = accounts[0]
+    if accounts:
+        if (
+            "selected_account" not in st.session_state
+            or st.session_state.selected_account is None
+        ):
+            st.session_state.selected_account = accounts[0]
 
-    active_account = st.session_state.selected_account
-    # GÜVENLİK DÜZELTMESİ: KeyError riskine karşı .get() kullanıldı
-    active_login = active_account.get("login", active_account.get("id", "Bilinmeyen"))
+        active_account = st.session_state.selected_account
+        active_login = active_account.get(
+            "login", active_account.get("id", "Bilinmeyen")
+        )
+        active_name = active_account.get(
+            "account_name", active_account.get("name", "Bilinmeyen Hesap")
+        )
+        active_type = active_account.get("env_type", active_account.get("type", "DEMO"))
+    else:
+        active_account = {}
+        active_login = "Bilinmeyen"
+        active_name = "Hesap Yok"
+        active_type = "DEMO"
 
-    # Güvenli Fallback (Yedek) İsim Seçimi
-    active_name = active_account.get(
-        "account_name", active_account.get("name", "Bilinmeyen Hesap")
-    )
-    active_type = active_account.get("env_type", active_account.get("type", "DEMO"))
+    if "show_add_form" not in st.session_state:
+        st.session_state.show_add_form = False
 
     is_running = st.session_state.get("robot_running", False)
 
-    st.markdown("### 🏢 MT5 Hesap Seçimi")
-
-    # 1. Görsel Güvenlik Geri Bildirimi
-    if is_running:
-        if active_type == "LIVE":
-            st.markdown(
-                f'<div class="status-container"><div class="pulsing-red"></div> <span>🚨 DİKKAT: CANLI HESAPTA İŞLEM YAPILIYOR [ {active_name} ]</span></div>',
-                unsafe_allow_html=True,
-            )
-        else:
-            st.markdown(
-                f'<div class="status-container"><div class="pulsing-green"></div> <span>🟢 TEST ORTAMI AKTİF [ {active_name} ]</span></div>',
-                unsafe_allow_html=True,
-            )
-    else:
-        if active_type == "LIVE":
-            st.error(f"🔴 SEÇİLİ HESAP: {active_name} (ID: {active_login})")
-        else:
-            st.success(f"🟢 Seçili Hesap: {active_name} (ID: {active_login})")
-
-    # 2. Hibrit Buton Menüsü
-    MAX_BUTTONS = 4
-    num_accounts = len(accounts)
-    num_cols = min(num_accounts, MAX_BUTTONS) + (1 if num_accounts > MAX_BUTTONS else 0)
-    cols = st.columns(num_cols)
-
-    for i, acc in enumerate(accounts[:MAX_BUTTONS]):
-        acc_type = acc.get("env_type", acc.get("type", "DEMO"))
-
-        # HESAP ADI VE ID'SİNİ GÜVENLİ ŞEKİLDE ÇEKİYORUZ
-        acc_name = acc.get("account_name", acc.get("name", "Bilinmeyen Hesap"))
-        acc_login = acc.get("login", acc.get("id", "Bilinmeyen ID"))
-
-        btn_icon = "🔴" if acc_type == "LIVE" else "🧪"
-
-        # Buton üzerinde ID ve İsim yan yana yazacak
-        btn_label = f"{btn_icon} {acc_login} - {acc_name}"
-
-        is_active = str(acc.get("login", acc.get("id"))) == str(active_login)
-
-        if cols[i].button(
-            btn_label,
-            key=f"btn_{i}_{acc_login}",
-            type="primary" if is_active else "secondary",
+    # --- MODERN ARAÇ ÇUBUĞU (TOOLBAR) ---
+    h_col1, h_col2, h_col3, h_col4 = st.columns([0.55, 0.15, 0.15, 0.15])
+    with h_col1:
+        st.markdown("### 🏢 MT5 Hesap Seçimi")
+    with h_col2:
+        if st.button(
+            "✏️ Düzenle", use_container_width=True, disabled=not accounts or is_running
         ):
-            st.session_state.selected_account = acc
+            st.session_state.edit_account = active_account
+            st.session_state.show_add_form = True
+            st.rerun()
+    with h_col3:
+        if st.button(
+            "🗑️ Sil", use_container_width=True, disabled=not accounts or is_running
+        ):
+            st.session_state.delete_account = active_account
+            st.rerun()
+    with h_col4:
+        if st.button("➕ Yeni", use_container_width=True, type="primary"):
+            st.session_state.show_add_form = not st.session_state.show_add_form
+            st.session_state.edit_account = None
             st.rerun()
 
-    # Eğer 4'ten fazla hesap varsa, geri kalanı açılır menüye koy
-    if num_accounts > MAX_BUTTONS:
-        extra_accounts = accounts[MAX_BUTTONS:]
-        extra_options = {}
-        for a in extra_accounts:
-            a_type = a.get("env_type", a.get("type", "DEMO"))
-            a_name = a.get("account_name", a.get("name", "Bilinmeyen Hesap"))
-            a_login = a.get("login", a.get("id", "Bilinmeyen ID"))
+    # 1. Görsel Güvenlik Geri Bildirimi (Sadece hesap varsa renderla)
+    if accounts:
+        if is_running:
+            if active_type == "LIVE":
+                st.markdown(
+                    f'<div class="status-container"><div class="pulsing-red"></div> <span>🚨 DİKKAT: CANLI HESAPTA İŞLEM YAPILIYOR [ {active_name} ]</span></div>',
+                    unsafe_allow_html=True,
+                )
+            else:
+                st.markdown(
+                    f'<div class="status-container"><div class="pulsing-green"></div> <span>🟢 TEST ORTAMI AKTİF [ {active_name} ]</span></div>',
+                    unsafe_allow_html=True,
+                )
+        else:
+            if active_type == "LIVE":
+                st.error(f"🔴 SEÇİLİ HESAP: {active_name} (ID: {active_login})")
+            else:
+                st.success(f"🟢 Seçili Hesap: {active_name} (ID: {active_login})")
 
-            # Açılır menüdeki liste elemanlarına da ID ve İsim eklendi
-            extra_options[
-                f"{'🔴' if a_type=='LIVE' else '🧪'} {a_login} - {a_name}"
-            ] = a
+    # 2. Temiz ve Şık Buton Menüsü
+    MAX_BUTTONS = 4
+    num_accounts = len(accounts)
+    has_extra = 1 if num_accounts > MAX_BUTTONS else 0
 
-        selected_extra_name = cols[MAX_BUTTONS].selectbox(
-            "Diğer:",
-            options=["Diğer Hesaplar..."] + list(extra_options.keys()),
-            label_visibility="collapsed",
+    total_cols = min(num_accounts, MAX_BUTTONS) + has_extra
+    if total_cols > 0:
+        cols = st.columns(total_cols)
+
+        for i, acc in enumerate(accounts[:MAX_BUTTONS]):
+            acc_type = acc.get("env_type", acc.get("type", "DEMO"))
+            acc_name = acc.get("account_name", acc.get("name", "Bilinmeyen Hesap"))
+            acc_login = acc.get("login", acc.get("id", "Bilinmeyen ID"))
+
+            btn_icon = "🔴" if acc_type == "LIVE" else "🧪"
+            btn_label = f"{btn_icon} {acc_login} - {acc_name}"
+            is_active = str(acc.get("login", acc.get("id"))) == str(active_login)
+
+            # Sadece tek parça, tertemiz ana buton
+            if cols[i].button(
+                btn_label,
+                key=f"btn_{i}_{acc_login}",
+                type="primary" if is_active else "secondary",
+                use_container_width=True,
+            ):
+                st.session_state.selected_account = acc
+                st.rerun()
+
+        # Eğer 4'ten fazla hesap varsa, geri kalanı açılır menüye koy
+        if num_accounts > MAX_BUTTONS:
+            extra_accounts = accounts[MAX_BUTTONS:]
+            extra_options = {}
+            for a in extra_accounts:
+                a_type = a.get("env_type", a.get("type", "DEMO"))
+                a_name = a.get("account_name", a.get("name", "Bilinmeyen Hesap"))
+                a_login = a.get("login", a.get("id", "Bilinmeyen ID"))
+
+                extra_options[
+                    f"{'🔴' if a_type=='LIVE' else '🧪'} {a_login} - {a_name}"
+                ] = a
+
+            selected_extra_name = cols[MAX_BUTTONS].selectbox(
+                "Diğer:",
+                options=["Diğer Hesaplar..."] + list(extra_options.keys()),
+                label_visibility="collapsed",
+            )
+
+            if selected_extra_name != "Diğer Hesaplar...":
+                selected_acc = extra_options[selected_extra_name]
+                selected_acc_login = selected_acc.get("login", selected_acc.get("id"))
+                if str(selected_acc_login) != str(active_login):
+                    st.session_state.selected_account = selected_acc
+                    st.rerun()
+    # ==========================================
+    # SİLME ONAY PENCERESİ
+    # ==========================================
+    if st.session_state.get("delete_account"):
+        st.markdown("---")
+        del_acc = st.session_state.delete_account
+        del_name = del_acc.get("account_name", "Bilinmeyen")
+        st.warning(
+            f"⚠️ **{del_name}** adlı hesabı tamamen silmek istediğinize emin misiniz?",
+            icon="🗑️",
         )
 
-        if selected_extra_name != "Diğer Hesaplar...":
-            selected_acc = extra_options[selected_extra_name]
-            selected_acc_login = selected_acc.get("login", selected_acc.get("id"))
-            if str(selected_acc_login) != str(active_login):
-                st.session_state.selected_account = selected_acc
+        col_y, col_n = st.columns([1, 10])
+        if col_y.button("Evet, Sil", type="primary"):
+            new_accounts = [
+                a for a in accounts if str(a.get("login")) != str(del_acc.get("login"))
+            ]
+            try:
+                with open(ACCOUNTS_FILE, "w", encoding="utf-8") as f:
+                    json.dump(
+                        {"accounts": new_accounts}, f, indent=4, ensure_ascii=False
+                    )
+
+                if (
+                    st.session_state.selected_account
+                    and st.session_state.selected_account.get("login")
+                    == del_acc.get("login")
+                ):
+                    st.session_state.selected_account = (
+                        new_accounts[0] if new_accounts else None
+                    )
+
+                st.session_state.delete_account = None
                 st.rerun()
+            except Exception as e:
+                st.error(f"Silme sırasında hata: {e}")
+
+        if col_n.button("İptal"):
+            st.session_state.delete_account = None
+            st.rerun()
+
+    # ==========================================
+    # 3. YENİ HESAP EKLEME / DÜZENLEME FORMU
+    # ==========================================
+    if st.session_state.show_add_form:
+        st.markdown("---")
+
+        edit_acc = st.session_state.get("edit_account") or {}
+        is_edit = bool(edit_acc)
+        old_login = str(edit_acc.get("login", ""))
+
+        # Kullanımdaki terminalleri tespit et (Düzenlenen kendi hesabımız hariç)
+        used_terminals = {
+            os.path.normpath(a.get("mt5_path", "")).lower(): a.get(
+                "account_name", "Bilinmeyen"
+            )
+            for a in accounts
+            if a.get("mt5_path") and str(a.get("login")) != old_login
+        }
+
+        found_terminals = get_installed_mt5_terminals()
+        terminal_options = ["Farklı Bir Yol (Manuel Gireceğim)"]
+        old_mt5_path = edit_acc.get("mt5_path", "")
+
+        for t_path in found_terminals:
+            norm_path = os.path.normpath(t_path).lower()
+            if norm_path in used_terminals:
+                terminal_options.append(
+                    f"🔴 Dolu ({used_terminals[norm_path]}) - {t_path}"
+                )
+            else:
+                terminal_options.append(f"🟢 Boşta - {t_path}")
+
+        if (
+            is_edit
+            and old_mt5_path
+            and not any(old_mt5_path in opt for opt in terminal_options)
+        ):
+            terminal_options.append(f"🟢 Mevcut Adres - {old_mt5_path}")
+
+        with st.container():
+            st.markdown(
+                f"#### {'✏️ Hesabı Düzenle' if is_edit else '➕ Yeni MT5 Hesabı Ekle'}"
+            )
+            with st.form("add_new_account_form", clear_on_submit=False):
+                col1, col2 = st.columns(2)
+
+                with col1:
+                    new_acc_name = st.text_input(
+                        "Hesap Adı *",
+                        value=edit_acc.get("account_name", ""),
+                        placeholder="Örn: Canlı Hesap - 1",
+                    )
+                    new_login = st.text_input(
+                        "Hesap No (Login) *",
+                        value=old_login if is_edit else "",
+                        placeholder="Örn: 12345678",
+                        help="Girdiğiniz bu numara aynı zamanda sistemde Hesap ID'si olarak kullanılacaktır.",
+                    )
+
+                    env_opts = ["DEMO", "LIVE"]
+                    def_env_idx = (
+                        env_opts.index(edit_acc.get("env_type", "DEMO"))
+                        if is_edit and edit_acc.get("env_type") in env_opts
+                        else 0
+                    )
+                    new_env = st.selectbox(
+                        "Çevre (Ortam) *", env_opts, index=def_env_idx
+                    )
+
+                with col2:
+                    new_password = st.text_input(
+                        "Şifre *",
+                        value=edit_acc.get("password", ""),
+                        type="password",
+                        placeholder="MT5 Şifresi",
+                    )
+                    new_server = st.text_input(
+                        "Sunucu *",
+                        value=edit_acc.get("server", ""),
+                        placeholder="Örn: Eightcap-Demo",
+                    )
+
+                    def_term_idx = 0
+                    if is_edit and old_mt5_path:
+                        for idx, opt in enumerate(terminal_options):
+                            if old_mt5_path in opt:
+                                def_term_idx = idx
+                                break
+
+                    selected_terminal = st.selectbox(
+                        "Bilgisayardaki MT5 Klasörleri (Hızlı Seçim)",
+                        terminal_options,
+                        index=def_term_idx,
+                    )
+
+                    # Hızlı seçimden gelen veriyi metin kutusuna varsayılan olarak ata
+                    if selected_terminal == "Farklı Bir Yol (Manuel Gireceğim)":
+                        auto_path = old_mt5_path if is_edit else ""
+                    else:
+                        auto_path = selected_terminal.split(" - ")[-1].strip()
+
+                    new_mt5_path = st.text_input(
+                        "MT5 Yolu *",
+                        value=auto_path,
+                        placeholder="C:/Program Files/MetaTrader 5/terminal64.exe",
+                    )
+
+                new_notes = st.text_area(
+                    "📝 Hesap Notu (İsteğe Bağlı)",
+                    value=edit_acc.get("notes", ""),
+                    max_chars=1000,
+                    placeholder="Bu hesapla ilgili stratejiniz, kısıtlamalarınız veya özel notlar... (Maks. 1000 karakter)",
+                    height=100,
+                )
+
+                submit_btn = st.form_submit_button(
+                    "💾 Değişiklikleri Kaydet" if is_edit else "💾 Hesabı Ekle"
+                )
+
+                if submit_btn:
+                    if (
+                        not new_login
+                        or not new_acc_name
+                        or not new_password
+                        or not new_server
+                        or not new_mt5_path
+                    ):
+                        st.error(
+                            "🚨 Lütfen yıldızlı tüm zorunlu alanları eksiksiz doldurun!"
+                        )
+                    else:
+                        other_logins = [x for x in login_ids if x != old_login]
+                        if str(new_login) in other_logins:
+                            st.error(
+                                f"🚫 Hata: '{new_login}' numaralı hesap zaten sisteme kayıtlı!"
+                            )
+                        else:
+                            norm_new_path = os.path.normpath(new_mt5_path).lower()
+                            if norm_new_path in used_terminals:
+                                st.error(
+                                    f"🚨 HATA: Bu MT5 terminali halihazırda '{used_terminals[norm_new_path]}' hesabı tarafından kullanılıyor!"
+                                )
+                            else:
+                                try:
+                                    login_val = int(new_login)
+                                except ValueError:
+                                    login_val = new_login
+
+                                new_account_data = {
+                                    "id": str(new_login),
+                                    "account_name": new_acc_name,
+                                    "env_type": new_env,
+                                    "login": login_val,
+                                    "password": new_password,
+                                    "server": new_server,
+                                    "mt5_path": new_mt5_path.replace("\\", "/"),
+                                    "notes": new_notes,
+                                }
+
+                                if is_edit:
+                                    for idx, a in enumerate(accounts):
+                                        if str(a.get("login")) == old_login:
+                                            accounts[idx] = new_account_data
+                                            break
+                                else:
+                                    accounts.append(new_account_data)
+
+                                try:
+                                    with open(
+                                        ACCOUNTS_FILE, "w", encoding="utf-8"
+                                    ) as f:
+                                        json.dump(
+                                            {"accounts": accounts},
+                                            f,
+                                            indent=4,
+                                            ensure_ascii=False,
+                                        )
+
+                                    st.session_state.selected_account = new_account_data
+                                    st.session_state.show_add_form = False
+                                    st.session_state.edit_account = None
+                                    st.success(
+                                        f"✅ {new_acc_name} başarıyla kaydedildi!"
+                                    )
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(
+                                        f"Kayıt sırasında teknik bir hata oluştu: {e}"
+                                    )
 
     return st.session_state.selected_account
