@@ -6,6 +6,9 @@ import os
 from src.utils.trade_utils import safe_send_order, close_position
 from src.utils.config import get_settings_file
 
+# 🌟 YENİ: Merkezi yol yöneticisi
+from src.utils.paths import get_err_log_path, get_ui_state_path
+
 # ==========================================
 # TEMEL DEĞİŞKENLER VE AYARLAR
 # ==========================================
@@ -100,10 +103,7 @@ def log_message(msg, level="INFO"):
     # 🌟 YENİ: Hesaba özel (Account ID bazlı) loglama
     account_id = os.environ.get("ACTIVE_ACCOUNT_ID", "default")
     if LOG_TO_FILE:
-        os.makedirs("logs", exist_ok=True)
-        log_file_path = (
-            f"logs/bot_{account_id}_error.log"  # Log dosyasının adı hesaba göre değişir
-        )
+        log_file_path = get_err_log_path(account_id)
         try:
             with open(log_file_path, "a", encoding="utf-8") as f:
                 f.write(formatted + "\n")
@@ -485,7 +485,7 @@ def process_zone_commands():
     account_id = os.environ.get("ACTIVE_ACCOUNT_ID", "default")
 
     # Yalnızca Kalıcı UI Hafızasını Oku (Arayüz Köprüsüne Sadık Kalarak)
-    ui_states_file = f"logs/ui_states_{account_id}.json"
+    ui_states_file = get_ui_state_path(account_id)
     if os.path.exists(ui_states_file):
         try:
             with open(ui_states_file, "r", encoding="utf-8") as f:
@@ -661,7 +661,7 @@ def manage_dynamic_grid():
 
                 # 🌟 YENİ: Arayüze "Bölgeden Çıkıldı" bilgisini ilet
                 account_id = os.environ.get("ACTIVE_ACCOUNT_ID", "default")
-                states_file = f"logs/ui_states_{account_id}.json"
+                states_file = get_ui_state_path(account_id)
                 try:
                     if os.path.exists(states_file):
                         with open(states_file, "r", encoding="utf-8") as f:

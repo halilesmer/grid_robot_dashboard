@@ -31,6 +31,9 @@ sys.path.append(str(project_root))
 
 from src.utils.mt5_connection import connect_to_mt5
 
+# 🌟 YENİ: Merkezi yol yöneticisini içeri aktarıyoruz
+from src.utils.paths import get_metrics_path, get_sim_price_path
+
 
 def export_metrics_loop(bot_engine, account_id):
     """
@@ -38,9 +41,8 @@ def export_metrics_loop(bot_engine, account_id):
     ve Dashboard'un görebilmesi için bir JSON dosyasına yazar.
     Aynı zamanda Mac Test Modunda arayüzden gelen sahte fiyatı okur.
     """
-    metrics_file = os.path.join(project_root, "logs", f"live_metrics_{account_id}.json")
-    sim_file = os.path.join(project_root, "logs", f"simulated_price_{account_id}.json")
-    os.makedirs(os.path.dirname(metrics_file), exist_ok=True)
+    metrics_file = get_metrics_path(account_id)
+    sim_file = get_sim_price_path(account_id)
 
     while bot_engine.IS_RUNNING:
         # 1. Metrikleri dışarı aktar (Arayüz görsün diye)

@@ -8,6 +8,23 @@ from src.constants.tooltips import SETTINGS_TOOLTIPS
 # Modal (Dialog) pencerelerimizi içeri alıyoruz:
 from src.components.dialogs import confirm_clear_dialog, confirm_delete_zone_dialog
 
+# 🌟 YENİ: Merkezi yol (path) yöneticisini içeri aktarıyoruz
+from src.utils.paths import get_cmd_path, get_ui_state_path
+
+
+@st.dialog("⚠️ Kaydedilmemiş Ayarlar")
+def confirm_start_with_changes_dialog(account_id, zone_id, idx):
+    st.write("Bu bölgede değiştirdiğiniz ancak henüz kaydetmediğiniz ayarlar var.")
+    st.write("**Değiştirdiğiniz yeni ayarlar ile mi başlasın?**")
+
+    c1, c2 = st.columns(2)
+    if c1.button("✅ Evet (Kaydet ve Başlat)", use_container_width=True):
+        st.session_state[f"save_req_{account_id}"] = True
+        _handle_zone_action(account_id, zone_id, idx, "START")
+        st.rerun()
+    if c2.button("❌ Hayır (İptal)", use_container_width=True):
+        st.rerun()
+
 
 def render_settings_panel(current_settings, model_name="Model 2", account_id="default"):
     """
@@ -42,7 +59,7 @@ def _default_zone():
 
 def _send_zone_command(account_id: str, zone_idx: int, state: str):
     """Atomik yazma ile commands JSON dosyasına komut gönderir."""
-    commands_file = f"logs/commands_{account_id}.json"
+    commands_file = get_cmd_path(account_id)
     current = {}
     if os.path.exists(commands_file):
         try:
@@ -51,7 +68,7 @@ def _send_zone_command(account_id: str, zone_idx: int, state: str):
         except Exception:
             pass
     current[str(zone_idx)] = {"state": state}
-    os.makedirs("logs", exist_ok=True)
+
     tmp = commands_file + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(current, f)
@@ -95,7 +112,7 @@ def render_model_2_settings(current_settings, account_id):
         st.session_state[ui_state_key] = {}
 
     # 🌟 YENİ: Her renderda dosyayı kontrol et (Arka planda robot "AUTO_CLEAR" yaptıysa yakala)
-    states_file = f"logs/ui_states_{account_id}.json"
+    states_file = get_ui_state_path(account_id)
     if os.path.exists(states_file):
         try:
             with open(states_file, "r", encoding="utf-8") as f:
@@ -177,15 +194,7 @@ def render_model_2_settings(current_settings, account_id):
                 )
 
             with bc1:
-                st.button(
-                    start_label,
-                    key=f"start_{zone_id}_{account_id}",
-                    use_container_width=True,
-                    type="primary" if current_state == "START" else "secondary",
-                    help="Bu bölgedeki ağ örme işlemini başlatır ve güncel fiyatı takip eder.",
-                    on_click=_handle_zone_action,
-                    args=(account_id, zone_id, idx, "START"),
-                )
+                start_btn_placeholder = st.empty()
             with bc2:
                 st.button(
                     pause_label,
@@ -483,6 +492,20 @@ def render_model_2_settings(current_settings, account_id):
         ):
             st.session_state[f"save_req_{account_id}"] = True
 
+        # 🌟 YENİ: Başlat butonunu placeholder içine basıyoruz (Değişiklik kontrolü ile)
+        if start_btn_placeholder.button(
+            start_label,
+            key=f"start_{zone_id}_{account_id}",
+            use_container_width=True,
+            type="primary" if current_state == "START" else "secondary",
+            help="Bu bölgedeki ağ örme işlemini başlatır ve güncel fiyatı takip eder.",
+        ):
+            if is_modified:
+                confirm_start_with_changes_dialog(account_id, zone_id, idx)
+            else:
+                _handle_zone_action(account_id, zone_id, idx, "START")
+                st.rerun()
+
         # Başlığı şimdi placeholder içine basıyoruz (Uyarı eklentisi kaldırıldı)
         title_placeholder.markdown(
             f"**🗺️ Bölge {idx + 1}** — "
@@ -522,8 +545,9 @@ def render_model_2_settings(current_settings, account_id):
     backend_states = {}
     for i, z in enumerate(updated_zones):
         backend_states[str(i)] = st.session_state[ui_state_key].get(z["id"], "CLEAR")
-    os.makedirs("logs", exist_ok=True)
-    with open(f"logs/ui_states_{account_id}.json", "w", encoding="utf-8") as f:
+
+    ui_file = get_ui_state_path(account_id)
+    with open(ui_file, "w", encoding="utf-8") as f:
         json.dump(backend_states, f)
 
     # ── Güncelleme Tetikleyicisi (Bölge başlığından gelen sinyali yakalar) ───

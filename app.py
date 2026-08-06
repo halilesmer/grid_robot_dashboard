@@ -42,11 +42,15 @@ from src.components.log_viewer import render_log_viewer
 from src.styles.custom_css import apply_custom_css
 from src.utils.config import load_settings, save_settings
 
+# 🌟 YENİ: Merkezi yol yöneticisi
+from src.utils.paths import get_metrics_path, get_sim_price_path
+
 import src.core.model_2 as model_2
+
 
 def get_live_metrics_from_file(account_id):
     """Liest die aktuellsten Metriken des Subprozesses aus der JSON-Datei."""
-    metrics_file = os.path.join("logs", f"live_metrics_{account_id}.json")
+    metrics_file = get_metrics_path(account_id)
     if os.path.exists(metrics_file):
         try:
             with open(metrics_file, "r", encoding="utf-8") as f:
@@ -60,6 +64,7 @@ def get_live_metrics_from_file(account_id):
         "current_price": 0.0,
         "algo_trading_error": False,
     }
+
 
 # ==========================================
 # 1. STREAMLIT CONFIG & CSS
@@ -235,7 +240,7 @@ if platform.system() != "Windows":
     bot_engine.SIMULATED_PRICE = mock_price  # Arayüzün kendi grafiği için
 
     # YENİ: Alt sürece (backend) fiyatı iletmek için köprü kuruyoruz
-    sim_file_path = os.path.join("logs", f"simulated_price_{account_id}.json")
+    sim_file_path = get_sim_price_path(account_id)
     try:
         with open(sim_file_path, "w", encoding="utf-8") as f:
             json.dump({"price": mock_price}, f)

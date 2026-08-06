@@ -15,6 +15,9 @@ sys.path.append(str(project_root))
 from src.utils.mt5_connection import connect_to_mt5
 from src.utils.trade_utils import cancel_all_pending_orders
 
+# 🌟 YENİ: Merkezi yol yöneticisini içeri aktarıyoruz
+from src.utils.paths import get_err_log_path
+
 # ==========================================
 # MAC KORUMASI (Crash Önleyici Zırh)
 # ==========================================
@@ -48,10 +51,8 @@ def start_bot_process(account_id: str, model_name: str) -> bool:
 
     log_file = None
     try:
-        # Her hesaba özel log dosyası oluştur
-        log_dir = "logs"
-        os.makedirs(log_dir, exist_ok=True)
-        log_file_path = os.path.join(log_dir, f"bot_{account_id}_error.log")
+        # Her hesaba özel log dosyası oluştur (Klasör kontrolü paths.py içinde yapılır)
+        log_file_path = get_err_log_path(account_id)
 
         # Log dosyasını 'append' (ekleme) modunda aç
         log_file = open(log_file_path, "a", encoding="utf-8")
@@ -135,8 +136,8 @@ def stop_bot_process(account_id: str) -> bool:
             # Temizlik için geçici olarak MT5'e bağlanıp emirleri iptal et
             if active_account and connect_to_mt5(active_account):
                 if mt5 is not None:
-                    # BÜYÜK DÜZELTME: Sadece robota ait (Magic: 123456) emirler silinecek!
-                    cancel_all_pending_orders(mt5, magic=123456)
+                    # DÜZELTME: Belirli bir magic number kısıtlaması kaldırıldı, hesaptaki tüm bekleyen emirler temizlenecek!
+                    cancel_all_pending_orders(mt5)
                     mt5.shutdown()
     except Exception as e:
         st.warning(f"MT5 Bekleyen emir temizliği sırasında hata oluştu: {e}")

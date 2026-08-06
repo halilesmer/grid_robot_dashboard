@@ -4,6 +4,8 @@ import os
 import glob
 from collections import deque
 
+# 🌟 YENİ: Merkezi yol yöneticisi
+from src.utils.paths import get_err_log_path
 
 MAX_LINES = 20  # Ekranda gösterilecek son satır sayısı
 MAX_FILE_SIZE = 2 * 1024 * 1024  # 2 MB Limit
@@ -12,7 +14,7 @@ MAX_FILE_SIZE = 2 * 1024 * 1024  # 2 MB Limit
 def get_recent_logs(account_id: str):
     """Robotun (Subprocess) o hesaba özel ürettiği logları okur."""
     # YENİ: Artık tek bir global dosya yerine, bu hesaba özel dosyayı okuyoruz!
-    log_file = os.path.join("logs", f"bot_{account_id}_error.log")
+    log_file = get_err_log_path(account_id)
 
     if not os.path.exists(log_file):
         return "Henüz bu hesap için robot log kaydı bulunmuyor..."
