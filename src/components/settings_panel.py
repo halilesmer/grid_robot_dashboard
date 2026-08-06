@@ -111,7 +111,7 @@ def render_model_2_settings(current_settings, account_id):
     if ui_state_key not in st.session_state:
         st.session_state[ui_state_key] = {}
 
-    # 🌟 YENİ: Her renderda dosyayı kontrol et (Arka planda robot "AUTO_CLEAR" yaptıysa yakala)
+    # 🌟 GÜNCELLENDİ: Diskteki en son durumu oku (İlk açılışta veya yenilemede durumu koru)
     states_file = get_ui_state_path(account_id)
     if os.path.exists(states_file):
         try:
@@ -119,14 +119,13 @@ def render_model_2_settings(current_settings, account_id):
                 saved_states = json.load(f)
                 for i, z in enumerate(st.session_state[zones_session_key]):
                     zone_id = z["id"]
-                    # Eğer session_state boşsa (ilk açılış) veya bot arka planda AUTO_CLEAR yaptıysa
-                    if (
-                        zone_id not in st.session_state[ui_state_key]
-                        or saved_states.get(str(i)) == "AUTO_CLEAR"
-                    ):
+                    # Eğer bölge durum hafızasında yoksa veya Bot arka planda durum değiştirdiyse diskten yükle
+                    if zone_id not in st.session_state[ui_state_key]:
                         st.session_state[ui_state_key][zone_id] = saved_states.get(
                             str(i), "CLEAR"
                         )
+                    elif saved_states.get(str(i)) == "AUTO_CLEAR":
+                        st.session_state[ui_state_key][zone_id] = "AUTO_CLEAR"
         except Exception:
             pass
 
