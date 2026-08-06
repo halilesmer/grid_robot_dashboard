@@ -153,11 +153,22 @@ def render_model_2_settings(current_settings, account_id):
 
         # 🛠️ Streamlit'in kendi çerçevesini kullanıyoruz
         with st.container(border=True):
-            hdr_col, bc1, bc2, bc3 = st.columns([3.5, 1, 1, 1])
+            hdr_col, bc_upd, bc_div, bc1, bc2, bc3, bc4 = st.columns(
+                [2.1, 1, 0.1, 1, 1, 1, 0.5]
+            )
 
             with hdr_col:
                 # Başlığı daha sonra (değişkenler okunduktan sonra) güncellemek için boş bir alan ayırıyoruz
                 title_placeholder = st.empty()
+
+            with bc_upd:
+                upd_btn_placeholder = st.empty()
+
+            with bc_div:
+                st.markdown(
+                    "<div style='text-align: center; font-size: 24px; color: #888; margin-top: 2px;'>|</div>",
+                    unsafe_allow_html=True,
+                )
 
             # 🌟 YENİ: Otomatik Temizlik Uyarı Mesajı
             if current_state == "AUTO_CLEAR":
@@ -199,6 +210,31 @@ def render_model_2_settings(current_settings, account_id):
                             acc, z_id, i, "CLEAR"
                         )
                     )
+
+            with bc4:
+                # 🌟 YENİ: 3 Noktalı Açılır Menü (Dropdown)
+                with st.popover("⋮", use_container_width=True):
+                    if st.button(
+                        "➕ Yeni Bölge Ekle",
+                        key=f"add_{zone_id}_{account_id}",
+                        use_container_width=True,
+                    ):
+                        st.session_state[zones_session_key].append(_default_zone())
+                        st.rerun()
+                    if st.button(
+                        "🗑️ Bölgeyi Sil",
+                        key=f"del_{zone_id}_{account_id}",
+                        use_container_width=True,
+                    ):
+
+                        def remove_zone(target_id=zone_id):
+                            st.session_state[zones_session_key] = [
+                                z
+                                for z in st.session_state[zones_session_key]
+                                if z.get("id") != target_id
+                            ]
+
+                        confirm_delete_zone_dialog(f"Bölge {idx + 1}", remove_zone)
 
             zc1, zc2, zc3, zc4 = st.columns(4)
             with zc1:
@@ -347,29 +383,12 @@ def render_model_2_settings(current_settings, account_id):
                 )
 
             # Alt satır 3: Çıkışta Temizle ve Seçenekleri
-            opt_c1, opt_c2 = st.columns([3, 1])
-            with opt_c1:
-                z_clear = st.checkbox(
-                    "🧹 Bölgeden Çıkıldığında Temizlik Yap",
-                    key=f"clear_on_exit_{zone_id}_{account_id}",
-                    value=bool(zone.get("clear_on_exit", True)),
-                    help="İşaretliyken, fiyat bölgeden çıkarsa belirlenen kurala göre robot temizlik yapar.",
-                )
-            with opt_c2:
-                if st.button(
-                    "🗑️ Bölgeyi Sil",
-                    key=f"del_{zone_id}_{account_id}",
-                    help="Bu bölgeyi kalıcı olarak kaldır.",
-                ):
-                    # Silme işlemini yapacak fonksiyonu Modal'a gönderiyoruz
-                    def remove_zone(target_id=zone_id):
-                        st.session_state[zones_session_key] = [
-                            z
-                            for z in st.session_state[zones_session_key]
-                            if z.get("id") != target_id
-                        ]
-
-                    confirm_delete_zone_dialog(f"Bölge {idx + 1}", remove_zone)
+            z_clear = st.checkbox(
+                "🧹 Bölgeden Çıkıldığında Temizlik Yap",
+                key=f"clear_on_exit_{zone_id}_{account_id}",
+                value=bool(zone.get("clear_on_exit", True)),
+                help="İşaretliyken, fiyat bölgeden çıkarsa belirlenen kurala göre robot temizlik yapar.",
+            )
 
             z_clear_scope = "Sadece Emirler"
             z_exit_cond = "Anlık Fiyat"
@@ -454,18 +473,21 @@ def render_model_2_settings(current_settings, account_id):
             ):
                 is_modified = True
 
-        # Uyarı ikonunu belirle
-        mod_warning = (
-            " &nbsp;<span style='color:#e65100; font-size:0.9em; font-weight:bold;'>⚠️ (Kaydedilmedi)</span>"
-            if is_modified
-            else ""
-        )
+        # Butonu şimdi placeholder içine basıyoruz (Uyarıyı butonun içine aldık)
+        upd_label = "💾 Güncelle ⚠️" if is_modified else "💾 Güncelle"
+        if upd_btn_placeholder.button(
+            upd_label,
+            key=f"upd_{zone_id}_{account_id}",
+            use_container_width=True,
+            type="primary",
+        ):
+            st.session_state[f"save_req_{account_id}"] = True
 
-        # Başlığı şimdi placeholder içine basıyoruz
+        # Başlığı şimdi placeholder içine basıyoruz (Uyarı eklentisi kaldırıldı)
         title_placeholder.markdown(
             f"**🗺️ Bölge {idx + 1}** — "
             f"*{str(z_symbol).upper().strip()} ({z_order_type})* | "
-            f"${z_min:.2f} → ${z_max:.2f}{mod_warning}",
+            f"${z_min:.2f} → ${z_max:.2f}",
             unsafe_allow_html=True,
         )
 
@@ -504,24 +526,17 @@ def render_model_2_settings(current_settings, account_id):
     with open(f"logs/ui_states_{account_id}.json", "w", encoding="utf-8") as f:
         json.dump(backend_states, f)
 
-    # ── Alt Aksiyon Butonları ─────────────────────────────────────────────────
-    col_b1, col_b2, col_b3 = st.columns([1, 1, 1])
-    with col_b1:
-        if st.button("➕ Yeni Bölge Ekle", use_container_width=True):
-            st.session_state[zones_session_key].append(_default_zone())
-            st.rerun()
-    with col_b2:
-        if st.button("💾 Ayarları Güncelle", use_container_width=True, type="primary"):
-            global_order_type = (
-                updated_zones[0]["order_type"] if updated_zones else "BUY"
-            )
-            global_symbol = updated_zones[0]["symbol"] if updated_zones else "USOUSD"
+    # ── Güncelleme Tetikleyicisi (Bölge başlığından gelen sinyali yakalar) ───
+    if st.session_state.get(f"save_req_{account_id}", False):
+        st.session_state[f"save_req_{account_id}"] = False
+        global_order_type = updated_zones[0]["order_type"] if updated_zones else "BUY"
+        global_symbol = updated_zones[0]["symbol"] if updated_zones else "USOUSD"
 
-            return {
-                "ORDER_TYPE": global_order_type,
-                "SYMBOL": global_symbol,
-                "LOOP_INTERVAL_SECONDS": loop_interval,
-                "ZONES": updated_zones,
-            }
+        return {
+            "ORDER_TYPE": global_order_type,
+            "SYMBOL": global_symbol,
+            "LOOP_INTERVAL_SECONDS": loop_interval,
+            "ZONES": updated_zones,
+        }
 
     return None
