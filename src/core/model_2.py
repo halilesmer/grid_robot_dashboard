@@ -97,6 +97,19 @@ def log_message(msg, level="INFO"):
     formatted = f"[{timestamp}] [{level}] {msg}"
     print(formatted)
 
+    # 🌟 YENİ: Hesaba özel (Account ID bazlı) loglama
+    account_id = os.environ.get("ACTIVE_ACCOUNT_ID", "default")
+    if LOG_TO_FILE:
+        os.makedirs("logs", exist_ok=True)
+        log_file_path = (
+            f"logs/bot_{account_id}_error.log"  # Log dosyasının adı hesaba göre değişir
+        )
+        try:
+            with open(log_file_path, "a", encoding="utf-8") as f:
+                f.write(formatted + "\n")
+        except Exception:
+            pass
+
 
 # ===============================================================================
 # 🍏🪟 MAC / WINDOWS UYUMLULUK KÖPRÜSÜ
@@ -390,7 +403,7 @@ def get_active_zone(tick_price):
         cond = zone.get("exit_condition", "Anlık Fiyat")
 
         if cond == "Anlık Fiyat":
-            if z_min <= tick_price <= z_max:
+            if round(z_min, 4) <= round(tick_price, 4) <= round(z_max, 4):
                 return zone, i
         else:
             # Bölgenin kuralı "Mum Kapanışı" ise, giriş için de mum kapanışını kontrol et
@@ -417,7 +430,7 @@ def get_active_zone(tick_price):
                 else:
                     close_price = tick_price
 
-            if z_min <= close_price <= z_max:
+            if round(z_min, 4) <= round(close_price, 4) <= round(z_max, 4):
                 return zone, i
 
     return None, None
@@ -542,8 +555,8 @@ def manage_dynamic_grid():
             if remaining_lot >= vol_min:
                 has_pending = any(
                     o.magic == pos.magic
-                    and abs(o.price_open - pos.price_open)
-                    < (SYMBOL_INFO.point * 2 if SYMBOL_INFO else 0.02)
+                    and abs(round(o.price_open, 4) - round(pos.price_open, 4))
+                    <= round((SYMBOL_INFO.point * 2 if SYMBOL_INFO else 0.02), 4)
                     for o in robot_orders
                 )
 
@@ -593,7 +606,9 @@ def manage_dynamic_grid():
         z_max = float(ACTIVE_ZONE.get("max_price", 0))
 
         if exit_cond == "Anlık Fiyat":
-            if current_avg_price < z_min or current_avg_price > z_max:
+            if round(current_avg_price, 4) < round(z_min, 4) or round(
+                current_avg_price, 4
+            ) > round(z_max, 4):
                 is_exited = True
         else:
             tf_str = ACTIVE_ZONE.get("exit_timeframe", "M15")
@@ -619,7 +634,9 @@ def manage_dynamic_grid():
                 else:
                     close_price = current_avg_price
 
-            if close_price < z_min or close_price > z_max:
+            if round(close_price, 4) < round(z_min, 4) or round(close_price, 4) > round(
+                z_max, 4
+            ):
                 is_exited = True
 
         if is_exited:
@@ -641,6 +658,19 @@ def manage_dynamic_grid():
 
                 robot_orders = get_all_robot_orders()
                 robot_positions = get_all_robot_positions()
+
+                # 🌟 YENİ: Arayüze "Bölgeden Çıkıldı" bilgisini ilet
+                account_id = os.environ.get("ACTIVE_ACCOUNT_ID", "default")
+                states_file = f"logs/ui_states_{account_id}.json"
+                try:
+                    if os.path.exists(states_file):
+                        with open(states_file, "r", encoding="utf-8") as f:
+                            bg_states = json.load(f)
+                        bg_states[str(ACTIVE_ZONE_IDX)] = "AUTO_CLEAR"
+                        with open(states_file, "w", encoding="utf-8") as f:
+                            json.dump(bg_states, f)
+                except Exception as e:
+                    pass
 
             ACTIVE_ZONE = None
             ACTIVE_ZONE_IDX = None
@@ -729,17 +759,19 @@ def manage_dynamic_grid():
         if not is_breakout:
             for i in range(1, levels_below + 1):
                 p = anchor_price - (i * grid_step)
-                if z_min <= p <= z_max:
+                if round(z_min, 4) <= round(p, 4) <= round(z_max, 4):
                     desired_buy_levels.append(normalize_price(p))
 
         # Üstteki emirler (Stop)
         for i in range(1, levels_above + 1):
             p = anchor_price + (i * grid_step)
             # Pullback Kontrolü: Güncel fiyat, p seviyesinden 'pullback_distance' kadar aşağıda mı?
-            if is_breakout and (p - current_avg_price) < pullback_distance:
+            if is_breakout and round(p - current_avg_price, 4) < round(
+                pullback_distance, 4
+            ):
                 continue  # Fiyat yeterince geri çekilmedi, bu seviyeyi şimdilik pas geç
 
-            if z_min <= p <= z_max:
+            if round(z_min, 4) <= round(p, 4) <= round(z_max, 4):
                 desired_buy_levels.append(normalize_price(p))
 
         # Toleranslı Kabul Bölgesi (Silinmeyecek Emirler)
@@ -758,17 +790,19 @@ def manage_dynamic_grid():
         if not is_breakout:
             for i in range(1, levels_above + 1):
                 p = anchor_price + (i * grid_step)
-                if z_min <= p <= z_max:
+                if round(z_min, 4) <= round(p, 4) <= round(z_max, 4):
                     desired_sell_levels.append(normalize_price(p))
 
         # Alttaki emirler (Stop)
         for i in range(1, levels_below + 1):
             p = anchor_price - (i * grid_step)
             # Pullback Kontrolü: Güncel fiyat, p seviyesinden 'pullback_distance' kadar yukarıda mı?
-            if is_breakout and (current_avg_price - p) < pullback_distance:
+            if is_breakout and round(current_avg_price - p, 4) < round(
+                pullback_distance, 4
+            ):
                 continue  # Fiyat yeterince yukarı sekti mi? Hayır, o zaman pas geç.
 
-            if z_min <= p <= z_max:
+            if round(z_min, 4) <= round(p, 4) <= round(z_max, 4):
                 desired_sell_levels.append(normalize_price(p))
 
         # Toleranslı Kabul Bölgesi (Silinmeyecek Emirler)
@@ -796,12 +830,12 @@ def manage_dynamic_grid():
 
         if order.type in [mt5.ORDER_TYPE_BUY_LIMIT, mt5.ORDER_TYPE_BUY_STOP]:
             is_valid = any(
-                abs(round(order_price, 4) - round(al, 4)) <= tolerance
+                abs(round(order_price, 4) - round(al, 4)) <= round(tolerance, 4)
                 for al in acceptable_buy_levels
             )
         elif order.type in [mt5.ORDER_TYPE_SELL_LIMIT, mt5.ORDER_TYPE_SELL_STOP]:
             is_valid = any(
-                abs(round(order_price, 4) - round(al, 4)) <= tolerance
+                abs(round(order_price, 4) - round(al, 4)) <= round(tolerance, 4)
                 for al in acceptable_sell_levels
             )
 
@@ -824,7 +858,7 @@ def manage_dynamic_grid():
     # BUY Eksikleri
     for level_price in desired_buy_levels:
         is_occupied = any(
-            abs(round(level_price, 4) - round(el, 4)) <= fill_tolerance
+            abs(round(level_price, 4) - round(el, 4)) <= round(fill_tolerance, 4)
             for el in exist_buy_levels
         )
         if not is_occupied:
@@ -843,7 +877,7 @@ def manage_dynamic_grid():
     # SELL Eksikleri
     for level_price in desired_sell_levels:
         is_occupied = any(
-            abs(round(level_price, 4) - round(el, 4)) <= fill_tolerance
+            abs(round(level_price, 4) - round(el, 4)) <= round(fill_tolerance, 4)
             for el in exist_sell_levels
         )
         if not is_occupied:

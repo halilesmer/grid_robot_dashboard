@@ -26,8 +26,25 @@ def get_recent_logs(account_id: str):
 
     try:
         with open(log_file, "r", encoding="utf-8", errors="replace") as f:
-            lines = deque(f, maxlen=MAX_LINES)
-            return "".join(lines)
+            # 🌟 YENİ: Önce filtrele, filtreden geçen son 20 satırı deque ile tut
+            filtered_lines = deque(maxlen=MAX_LINES)
+            keywords = [
+                "[ERROR]",
+                "Girildi",
+                "gönderiliyor",
+                "yerleştirildi",
+                "temizlendi",
+                "Sınır aşıldığı",
+            ]
+
+            for line in f:
+                if any(kw in line for kw in keywords):
+                    filtered_lines.append(line)
+
+            if not filtered_lines:
+                return "Filtrelenmiş kriterlere uygun (Hata veya İşleme Giriş) bir kayıt henüz yok."
+
+            return "".join(filtered_lines)
     except Exception as e:
         return f"[HATA] Loglar okunamadı: {e}"
 

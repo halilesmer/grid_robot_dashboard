@@ -90,22 +90,28 @@ def render_model_2_settings(current_settings, account_id):
             saved_zones = [_default_zone()]
         st.session_state[zones_session_key] = saved_zones
 
-    # 2. Arayüz Kalıcı Hafızasını Yükle (Eski index bazlı dosyayı güvenli ID yapısına çevir)
+    # 2. Arayüz Kalıcı Hafızasını ve Bot'tan Gelen Bildirimleri Yükle
     if ui_state_key not in st.session_state:
         st.session_state[ui_state_key] = {}
 
-        states_file = f"logs/ui_states_{account_id}.json"
-        if os.path.exists(states_file):
-            try:
-                with open(states_file, "r", encoding="utf-8") as f:
-                    saved_states = json.load(f)
-                    # Eski indexleri yeni ID'lerle eşleştir
-                    for i, z in enumerate(st.session_state[zones_session_key]):
-                        st.session_state[ui_state_key][z["id"]] = saved_states.get(
+    # 🌟 YENİ: Her renderda dosyayı kontrol et (Arka planda robot "AUTO_CLEAR" yaptıysa yakala)
+    states_file = f"logs/ui_states_{account_id}.json"
+    if os.path.exists(states_file):
+        try:
+            with open(states_file, "r", encoding="utf-8") as f:
+                saved_states = json.load(f)
+                for i, z in enumerate(st.session_state[zones_session_key]):
+                    zone_id = z["id"]
+                    # Eğer session_state boşsa (ilk açılış) veya bot arka planda AUTO_CLEAR yaptıysa
+                    if (
+                        zone_id not in st.session_state[ui_state_key]
+                        or saved_states.get(str(i)) == "AUTO_CLEAR"
+                    ):
+                        st.session_state[ui_state_key][zone_id] = saved_states.get(
                             str(i), "CLEAR"
                         )
-            except Exception:
-                pass
+        except Exception:
+            pass
 
     # Ana Başlık ve Input'u yan yana almak için sütunlara ayırıyoruz
     h_col1, h_col2 = st.columns([0.85, 0.15], vertical_alignment="center")
@@ -135,7 +141,11 @@ def render_model_2_settings(current_settings, account_id):
 
         start_label = "✅ Başladı" if current_state == "START" else "▶️ Başlat"
         pause_label = "🟡 Beklemede" if current_state == "PAUSE" else "⏸️ Beklet"
-        clear_label = "🗑️ Temizlendi" if current_state == "CLEAR" else "🗑️ Temizle"
+        clear_label = (
+            "🗑️ Temizlendi"
+            if current_state in ["CLEAR", "AUTO_CLEAR"]
+            else "🗑️ Temizle"
+        )
 
         # Orijinal dosyadan veriyi çek (Kıyaslama için)
         orig_zones = current_settings.get("ZONES", [])
@@ -148,6 +158,12 @@ def render_model_2_settings(current_settings, account_id):
             with hdr_col:
                 # Başlığı daha sonra (değişkenler okunduktan sonra) güncellemek için boş bir alan ayırıyoruz
                 title_placeholder = st.empty()
+
+            # 🌟 YENİ: Otomatik Temizlik Uyarı Mesajı
+            if current_state == "AUTO_CLEAR":
+                st.error(
+                    "⚠️ **Bilgi:** Fiyat belirlenen sınırların dışına çıktığı için bu bölge otomatik olarak temizlendi ve durduruldu."
+                )
 
             with bc1:
                 st.button(
