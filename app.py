@@ -34,9 +34,9 @@ from src.utils.bot_manager import is_bot_running, start_bot_process, stop_bot_pr
 from src.components.account_selector import render_account_selector
 from src.components.chart_viewer import render_chart
 from src.utils.mt5_connection import connect_to_mt5
-from src.components.header import render_header
+from src.components.header import render_main_title
 from src.components.settings_panel import render_settings_panel
-from src.components.metrics import render_metrics
+from src.components.metrics import render_global_metrics
 from src.components.controls import render_controls
 from src.components.log_viewer import render_log_viewer
 from src.styles.custom_css import apply_custom_css
@@ -71,6 +71,9 @@ def get_live_metrics_from_file(account_id):
 # ==========================================
 apply_custom_css()
 
+# 🌟 YENİ: Başlık En Üste Geldi
+render_main_title()
+
 # ==========================================
 # 2. ÖNCE HESABI SEÇ (TAM GENİŞLİKTE)
 # ==========================================
@@ -102,12 +105,6 @@ account_is_running = is_bot_running(account_id)
 # 4. AYARLARI VE METRİKLERİ YÜKLE
 # ==========================================
 current_settings = load_settings("Model 2")
-
-render_header(
-    symbol="USOUSD",
-    broker=active_account.get("server", "Bilinmeyen Broker"),
-    is_market_open=True,
-)
 
 # Canlı verileri JSON dosyasından çek (Çünkü robot artık Subprocess olarak çalışıyor)
 if account_is_running:
@@ -158,11 +155,10 @@ def live_metrics_fragment(acc_id):
             "current_price": 0.0,
         }
 
-    render_metrics(
-        profit=fresh_data["profit"],
-        open_positions=fresh_data["open_positions"],
-        pending_orders=fresh_data["pending_orders"],
-        current_price=fresh_data["current_price"],
+    # 🌟 Sadece global metrikler (Fiyat ve Kâr/Zarar) burada çiziliyor
+    render_global_metrics(
+        profit=fresh_data.get("profit", 0.0),
+        current_price=fresh_data.get("current_price", 0.0),
     )
 
 
@@ -216,7 +212,9 @@ if action == "TOGGLE":
 # ==========================================
 # AYARLAR VE MAC SİMÜLATÖRÜ
 # ==========================================
-updated_settings = render_settings_panel(current_settings, "Model 2", account_id)
+updated_settings = render_settings_panel(
+    current_settings, "Model 2", account_id, live_data, active_account
+)
 
 if updated_settings:
     save_settings(updated_settings, "Model 2")

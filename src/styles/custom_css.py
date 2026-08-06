@@ -13,10 +13,34 @@ def apply_custom_css():
             max-width: 1200px !important;
             margin-left: auto !important;
             margin-right: auto !important;
-            padding-top: 3.5rem !important;
+            padding-top: 0rem !important;
             padding-bottom: 1rem !important;
             padding-left: 1.5rem !important;
             padding-right: 1.5rem !important;
+        }
+
+        /* =========================================
+           STREAMLIT 3 NOKTA (HEADER) HİZALAMASI
+           ========================================= */
+        /* Streamlit'in varsayılan üst menüsünün arka planını siler ve başlıkla aynı hizaya oturtur */
+        header[data-testid="stHeader"] {
+            background-color: transparent !important;
+            box-shadow: none !important;
+            height: auto !important;
+            padding-top: 5px !important;
+        }
+        
+        /* Sağ üstteki butonları sayfa genişliğiyle sınırlar (Çok sağa yapışmasını engeller) */
+        .stApp > header {
+            max-width: 1200px !important;
+            margin: 0 auto !important;
+            right: 0 !important;
+            left: 0 !important;
+        }
+
+        /* 3 Noktalı Menü Hizalaması İçin Ara Boşlukları (Gap) Ayarlama */
+        .st-emotion-cache-tn0cau {
+            gap: 0.5rem !important;
         }
 
         /* Dikey eleman aralıklarını (gap) sıkılaştırma */

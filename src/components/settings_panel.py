@@ -10,7 +10,7 @@ from src.components.dialogs import confirm_clear_dialog, confirm_delete_zone_dia
 
 # 🌟 YENİ: Merkezi yol (path) yöneticisini içeri aktarıyoruz
 from src.utils.paths import get_cmd_path, get_ui_state_path
-
+from src.components.metrics import render_zone_metrics
 
 @st.dialog("⚠️ Kaydedilmemiş Ayarlar")
 def confirm_start_with_changes_dialog(account_id, zone_id, idx):
@@ -26,12 +26,8 @@ def confirm_start_with_changes_dialog(account_id, zone_id, idx):
         st.rerun()
 
 
-def render_settings_panel(current_settings, model_name="Model 2", account_id="default"):
-    """
-    JSON'dan beslenen Dinamik Bölge (Zone) Ayarları (Model 2)
-    """
-    # Başlık ve yerleşim işlemleri doğrudan Model 2'nin içinde yönetiliyor
-    return render_model_2_settings(current_settings, account_id)
+def render_settings_panel(current_settings, model_name="Model 2", account_id="default", live_data=None, active_account=None):
+    return render_model_2_settings(current_settings, account_id, live_data, active_account)
 
 
 def _default_zone():
@@ -92,7 +88,7 @@ def _force_upper_symbol(key: str):
         st.session_state[key] = str(st.session_state[key]).upper().strip()
 
 
-def render_model_2_settings(current_settings, account_id):
+def render_model_2_settings(current_settings, account_id, live_data, active_account):
     zones_session_key = f"model2_zones_{account_id}"
     ui_state_key = f"ui_zone_states_{account_id}"
 
@@ -129,10 +125,10 @@ def render_model_2_settings(current_settings, account_id):
         except Exception:
             pass
 
-    # Ana Başlık ve Input'u yan yana almak için sütunlara ayırıyoruz
-    h_col1, h_col2 = st.columns([0.85, 0.15], vertical_alignment="center")
+    # 🌟 GÜNCELLENDİ: Sistem Parametreleri başlığı kalktı.
+    h_col1, h_col2 = st.columns([0.85, 0.15], vertical_alignment="bottom")
     with h_col1:
-        st.markdown("##### ⚙️ Sistem Parametreleri")
+        st.markdown("###### 🎯 Dinamik Bölgeler (Zones)")
     with h_col2:
         loop_interval = st.number_input(
             "Kontrol Sıklığı (Sn)",
@@ -140,9 +136,6 @@ def render_model_2_settings(current_settings, account_id):
             step=0.1,
             key=f"m2_loop_{account_id}",
         )
-
-    st.markdown("---")
-    st.markdown("###### 🎯 Dinamik Bölgeler (Zones)")
 
     updated_zones = []
 
@@ -170,7 +163,7 @@ def render_model_2_settings(current_settings, account_id):
         # 🛠️ Streamlit'in kendi çerçevesini kullanıyoruz
         with st.container(border=True):
             hdr_col, bc_upd, bc_div, bc1, bc2, bc3, bc4 = st.columns(
-                [2.1, 1, 0.1, 1, 1, 1, 0.5]
+                [3.5, 1, 0.1, 1, 1, 1, 0.5]
             )
 
             with hdr_col:
@@ -243,6 +236,17 @@ def render_model_2_settings(current_settings, account_id):
                             ]
 
                         confirm_delete_zone_dialog(f"Bölge {idx + 1}", remove_zone)
+
+            # 🌟 YENİ: Metrikler bölge içine taşındı
+            st.markdown("<hr style='margin: 0.5em 0;'/>", unsafe_allow_html=True)
+            render_zone_metrics(
+                open_positions=live_data.get("open_positions", 0) if live_data else 0,
+                pending_orders=live_data.get("pending_orders", 0) if live_data else 0,
+            )
+            st.markdown(
+                "<hr style='margin: 0.5em 0; margin-bottom: 1em;'/>",
+                unsafe_allow_html=True,
+            )
 
             zc1, zc2, zc3, zc4 = st.columns(4)
             with zc1:
@@ -329,30 +333,29 @@ def render_model_2_settings(current_settings, account_id):
                     help="🛡️ Zarar kes mesafesi (0 ise kapalıdır).",
                 )
 
-            # 🌟 YENİ EKLENEN BLOK: Kırılım / Momentum Ayarları
-            st.markdown(
-                "<div style='margin-top: 10px; margin-bottom: 5px;'><small style='color: gray;'>🚀 Kırılım / Momentum (Breakout) Stratejisi</small></div>",
-                unsafe_allow_html=True,
-            )
-            brk_c1, brk_c2 = st.columns(2)
-            with brk_c1:
-                z_breakout = st.checkbox(
-                    "Sadece Trend Yönüne Ağ Ör (Kırılım Modu)",
-                    value=bool(zone.get("is_breakout", False)),
-                    key=f"brk_{zone_id}_{account_id}",
-                    help="Aktif edilirse robot Limit emir (düştükçe al) yerine SADECE Stop emir (kırılım/yükseldikçe al) kullanır. 'BOTH' seçilirse fiyatın üstüne Buy Stop, altına Sell Stop dizer.",
+            # 🌟 YENİ: Kırılım Ayarları Çerçeveli Kutuya Alındı
+            with st.container(border=True):
+                st.markdown(
+                    "<small style='color: gray; font-weight: bold;'>🚀 Kırılım / Momentum (Breakout) Modu</small>",
+                    unsafe_allow_html=True,
                 )
-            with brk_c2:
-                z_pullback = st.number_input(
-                    "Min. Geri Çekilme Mesafesi ($)",
-                    key=f"pb_{zone_id}_{account_id}",
-                    min_value=0.01,
-                    value=float(zone.get("pullback_distance", 0.50)),
-                    step=0.05,
-                    format="%.2f",
-                    disabled=not z_breakout,
-                    help="TP olan bir emrin yerine yenisinin kurulması için fiyatın o seviyeden en az ne kadar uzağa çekilmesi gerektiğini belirler. (Geçersiz Fiyat hatalarını önler)",
-                )
+                brk_c1, brk_c2 = st.columns(2)
+                with brk_c1:
+                    z_breakout = st.checkbox(
+                        "Sadece Trend Yönüne Ağ Ör",
+                        value=bool(zone.get("is_breakout", False)),
+                        key=f"brk_{zone_id}_{account_id}",
+                    )
+                with brk_c2:
+                    z_pullback = st.number_input(
+                        "Min. Geri Çekilme Mesafesi ($)",
+                        key=f"pb_{zone_id}_{account_id}",
+                        min_value=0.01,
+                        value=float(zone.get("pullback_distance", 0.50)),
+                        step=0.05,
+                        format="%.2f",
+                        disabled=not z_breakout,
+                    )
 
             # 🌟 Kayan Ağ (Sliding Grid) Emir Sayısı ve Güvenlik
             # Dinamik Disabled Mantığı: Kırılım açıksa ters yöndeki emir kutusunu soluklaştırır.
@@ -505,11 +508,20 @@ def render_model_2_settings(current_settings, account_id):
                 _handle_zone_action(account_id, zone_id, idx, "START")
                 st.rerun()
 
-        # Başlığı şimdi placeholder içine basıyoruz (Uyarı eklentisi kaldırıldı)
+        # 🌟 GÜNCELLENDİ: Bölge Başlığının sağına Broker/Açık/Sembol durumu eklendi
+        broker_name = (
+            active_account.get("server", "Bilinmeyen Broker")
+            if active_account
+            else "Demo"
+        )
+        status_text = "🟢 Açık"
+
         title_placeholder.markdown(
             f"**🗺️ Bölge {idx + 1}** — "
-            f"*{str(z_symbol).upper().strip()} ({z_order_type})* | "
-            f"${z_min:.2f} → ${z_max:.2f}",
+            f"*{str(z_symbol).upper().strip()} ({z_order_type})* "
+            f"<span style='float: right; font-size: 14px; font-weight: normal; color: #666; margin-top: 3px; margin-right: 15px;'>"
+            f"{str(z_symbol).upper().strip()} | {broker_name} | {status_text}"
+            f"</span>",
             unsafe_allow_html=True,
         )
 
