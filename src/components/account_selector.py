@@ -318,9 +318,24 @@ def render_account_selector():
                     height=100,
                 )
 
-                submit_btn = st.form_submit_button(
-                    "💾 Değişiklikleri Kaydet" if is_edit else "💾 Hesabı Ekle"
-                )
+                # Butonları yan yana koymak için 2 sütun oluşturuyoruz
+                btn_col1, btn_col2 = st.columns(2)
+
+                with btn_col1:
+                    submit_btn = st.form_submit_button(
+                        "💾 Değişiklikleri Kaydet" if is_edit else "💾 Hesabı Ekle",
+                        use_container_width=True,
+                    )
+                with btn_col2:
+                    cancel_btn = st.form_submit_button(
+                        "❌ İptal", use_container_width=True
+                    )
+
+                # İptal butonuna basılırsa formu kapat ve arayüzü yenile
+                if cancel_btn:
+                    st.session_state.show_add_form = False
+                    st.session_state.edit_account = None
+                    st.rerun()
 
                 if submit_btn:
                     if (

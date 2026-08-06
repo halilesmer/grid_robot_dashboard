@@ -20,4 +20,5 @@ logs/*.txt
 
 # İşletim Sistemi
 .DS_Store
+**/.DS_Store
 __MACOSX/
