@@ -482,13 +482,13 @@ def render_model_2_settings(current_settings, account_id):
             ):
                 is_modified = True
 
-        # Butonu şimdi placeholder içine basıyoruz (Uyarıyı butonun içine aldık)
+        # Butonu şimdi placeholder içine basıyoruz (Sadece değişiklik varken renkli olur)
         upd_label = "💾 Güncelle ⚠️" if is_modified else "💾 Güncelle"
         if upd_btn_placeholder.button(
             upd_label,
             key=f"upd_{zone_id}_{account_id}",
             use_container_width=True,
-            type="primary",
+            type="primary" if is_modified else "secondary",
         ):
             st.session_state[f"save_req_{account_id}"] = True
 

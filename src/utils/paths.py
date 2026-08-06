@@ -31,3 +31,8 @@ def get_metrics_path(account_id: str) -> str:
 
 def get_sim_price_path(account_id: str) -> str:
     return os.path.join(_ensure_logs_dir(), f"sim_{account_id}.json")
+
+
+# 🌟 YENİ: Motorun PID (Süreç ID) bilgisi için kalıcı dosya yolu
+def get_pid_path(account_id: str) -> str:
+    return os.path.join(_ensure_logs_dir(), f"pid_{account_id}.txt")

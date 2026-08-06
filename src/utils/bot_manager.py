@@ -15,8 +15,10 @@ sys.path.append(str(project_root))
 from src.utils.mt5_connection import connect_to_mt5
 from src.utils.trade_utils import cancel_all_pending_orders
 
+import psutil  # 🌟 YENİ: İşletim sistemi süreçlerini okumak için
+
 # 🌟 YENİ: Merkezi yol yöneticisini içeri aktarıyoruz
-from src.utils.paths import get_err_log_path
+from src.utils.paths import get_err_log_path, get_pid_path
 
 # ==========================================
 # MAC KORUMASI (Crash Önleyici Zırh)
@@ -26,22 +28,29 @@ try:
 except ImportError:
     mt5 = None  # Mac ortamında çökmemesi için mt5 modülünü boş (None) atıyoruz
 
-# GLOBALE VARIABLE (Sicher vor Streamlit-Abstürzen!)
-_ACTIVE_BOTS = {}
-
 
 def is_bot_running(account_id: str) -> bool:
-    """Belirli bir hesabın robotunun arka planda sağlıklı çalışıp çalışmadığını kontrol eder (Crash Detection)."""
-    if account_id in _ACTIVE_BOTS:
-        process = _ACTIVE_BOTS[account_id]
-        # poll() None dönüyorsa süreç hala hayattadır.
-        if process.poll() is None:
-            return True
-        else:
-            # Robot kendi kendine durmuş veya MT5 çökmüş. Temizliğini yap!
-            del _ACTIVE_BOTS[account_id]
-            return False
-    return False
+    """Robotun gerçekten (İşletim Sistemi seviyesinde) çalışıp çalışmadığını kontrol eder."""
+    pid_file = get_pid_path(account_id)
+    if not os.path.exists(pid_file):
+        return False
+
+    try:
+        with open(pid_file, "r") as f:
+            pid = int(f.read().strip())
+
+        # psutil ile o PID'ye sahip sürecin OS üzerinde yaşayıp yaşamadığını kontrol et
+        if psutil.pid_exists(pid):
+            # Süreç var ama zombi mi?
+            p = psutil.Process(pid)
+            if p.status() != psutil.STATUS_ZOMBIE:
+                return True
+
+        # Eğer buraya geldiyse süreç ölmüştür, çöp (PID) dosyasını temizle
+        os.remove(pid_file)
+        return False
+    except Exception:
+        return False
 
 
 def start_bot_process(account_id: str, model_name: str) -> bool:
@@ -65,8 +74,11 @@ def start_bot_process(account_id: str, model_name: str) -> bool:
             text=True,
         )
 
-        # Mükemmel izolasyon: Süreci SADECE global değişkene yazıyoruz
-        _ACTIVE_BOTS[account_id] = process
+        # 🌟 YENİ: Sürecin ID'sini (PID) kalıcı olarak diske yaz! (RAM sıfırlansa da ölmez)
+        pid_file = get_pid_path(account_id)
+        with open(pid_file, "w") as f:
+            f.write(str(process.pid))
+
         return True
 
     except Exception as e:
@@ -87,34 +99,36 @@ def start_bot_process(account_id: str, model_name: str) -> bool:
 def stop_bot_process(account_id: str) -> bool:
     """Çalışan robotu KESİN olarak durdurur ve MT5'teki BEKLEYEN emirleri siler."""
 
-    # 1. AŞAMA (DÜZELTME): Python Zombi Sürecini Yok Et (Önce fişi çekiyoruz!)
-    if account_id in _ACTIVE_BOTS:
-        process = _ACTIVE_BOTS[account_id]
+    pid_file = get_pid_path(account_id)
+    if os.path.exists(pid_file):
         try:
-            if os.name == "nt":
-                # Windows işletim sistemi ise Taskkill ile tüm alt döngüleri acımasızca sonlandır
-                subprocess.call(
-                    ["taskkill", "/F", "/T", "/PID", str(process.pid)],
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                )
-            else:
-                # Mac/Linux sistemleri için
-                process.terminate()
-                try:
-                    process.wait(timeout=3)
-                except subprocess.TimeoutExpired:
-                    process.kill()
+            with open(pid_file, "r") as f:
+                pid = int(f.read().strip())
 
-            # Subprocess'in gerçekten kapanması için işletim sistemine 1 saniye nefes payı ver
-            time.sleep(1.0)
+            if psutil.pid_exists(pid):
+                process = psutil.Process(pid)
+                if os.name == "nt":
+                    # Windows işletim sistemi ise Taskkill ile tüm alt döngüleri acımasızca sonlandır
+                    subprocess.call(
+                        ["taskkill", "/F", "/T", "/PID", str(pid)],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                    )
+                else:
+                    # Mac/Linux sistemleri için
+                    process.terminate()
+                    try:
+                        process.wait(timeout=3)
+                    except psutil.TimeoutExpired:
+                        process.kill()
 
+                # Subprocess'in gerçekten kapanması için işletim sistemine 1 saniye nefes payı ver
+                time.sleep(1.0)
+
+            # İşlem bittiğinde kalıcı dosyayı (PID) sil
+            os.remove(pid_file)
         except Exception as e:
             st.error(f"⚠️ Robot durdurulurken pürüz çıktı: {str(e)}")
-        finally:
-            # İşlem bittiğinde global listeden sil
-            if account_id in _ACTIVE_BOTS:
-                del _ACTIVE_BOTS[account_id]
 
     # 2. AŞAMA (DÜZELTME): MT5 Temizliği (Robot öldükten sonra arkasını biz temizliyoruz)
     try:
