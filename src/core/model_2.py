@@ -86,7 +86,8 @@ def load_dynamic_settings():
 
             # Dinamik sembol vizyonu için global sembolü de güncelliyoruz
             if ZONES and "symbol" in ZONES[0]:
-                SYMBOL = ZONES[0]["symbol"]
+                # 🌟 MT5 Case Sensitivity Koruması: Sembolü BÜYÜK HARFE zorla
+                SYMBOL = str(ZONES[0]["symbol"]).upper().strip()
     except Exception:
         pass
 

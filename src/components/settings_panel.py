@@ -69,6 +69,12 @@ def _handle_zone_action(account_id: str, zone_id: str, idx: int, state: str):
         st.session_state[ui_state_key][zone_id] = state
 
 
+def _force_upper_symbol(key: str):
+    """Sembol inputuna yazılan değeri anında büyük harfe çevirir."""
+    if key in st.session_state:
+        st.session_state[key] = str(st.session_state[key]).upper().strip()
+
+
 def render_model_2_settings(current_settings, account_id):
     zones_session_key = f"model2_zones_{account_id}"
     ui_state_key = f"ui_zone_states_{account_id}"
@@ -131,16 +137,17 @@ def render_model_2_settings(current_settings, account_id):
         pause_label = "🟡 Beklemede" if current_state == "PAUSE" else "⏸️ Beklet"
         clear_label = "🗑️ Temizlendi" if current_state == "CLEAR" else "🗑️ Temizle"
 
+        # Orijinal dosyadan veriyi çek (Kıyaslama için)
+        orig_zones = current_settings.get("ZONES", [])
+        orig_zone = next((z for z in orig_zones if z.get("id") == zone_id), None)
+
         # 🛠️ Streamlit'in kendi çerçevesini kullanıyoruz
         with st.container(border=True):
             hdr_col, bc1, bc2, bc3 = st.columns([3.5, 1, 1, 1])
 
             with hdr_col:
-                st.markdown(
-                    f"**🗺️ Bölge {idx + 1}** — "
-                    f"*{zone.get('symbol', 'USOUSD')} ({zone.get('order_type', 'BUY')})* | "
-                    f"${zone.get('min_price', '?')} → ${zone.get('max_price', '?')}"
-                )
+                # Başlığı daha sonra (değişkenler okunduktan sonra) güncellemek için boş bir alan ayırıyoruz
+                title_placeholder = st.empty()
 
             with bc1:
                 st.button(
@@ -179,10 +186,13 @@ def render_model_2_settings(current_settings, account_id):
 
             zc1, zc2, zc3, zc4 = st.columns(4)
             with zc1:
+                sym_key = f"sym_{zone_id}_{account_id}"
                 z_symbol = st.text_input(
                     "Sembol",
-                    key=f"sym_{zone_id}_{account_id}",
-                    value=zone.get("symbol", "USOUSD"),
+                    key=sym_key,
+                    value=str(zone.get("symbol", "USOUSD")).upper(),
+                    on_change=_force_upper_symbol,
+                    args=(sym_key,),
                     help="Bu bölgenin çalışacağı parite.",
                 )
             with zc2:
@@ -393,11 +403,61 @@ def render_model_2_settings(current_settings, account_id):
                         )
                     else:
                         z_exit_tf = zone.get("exit_timeframe", "M15")
+
+        # 🌟 YENİ: Anlık Değişiklik (Modifiye) Dedektörü
+        is_modified = False
+        if not orig_zone:
+            is_modified = True  # Yeni eklenmiş, henüz kaydedilmemiş bölge
+        else:
+            if (
+                str(z_symbol).upper().strip()
+                != str(orig_zone.get("symbol", "")).upper().strip()
+                or str(z_order_type) != str(orig_zone.get("order_type", ""))
+                or round(float(z_min), 4)
+                != round(float(orig_zone.get("min_price", 0.0)), 4)
+                or round(float(z_max), 4)
+                != round(float(orig_zone.get("max_price", 0.0)), 4)
+                or round(float(z_grid), 4)
+                != round(float(orig_zone.get("grid_step", 0.0)), 4)
+                or round(float(z_lot), 4)
+                != round(float(orig_zone.get("lot_size", 0.0)), 4)
+                or round(float(z_tp), 4)
+                != round(float(orig_zone.get("take_profit", 0.0)), 4)
+                or round(float(z_sl), 4)
+                != round(float(orig_zone.get("stop_loss", 0.0)), 4)
+                or bool(z_breakout) != bool(orig_zone.get("is_breakout", False))
+                or round(float(z_pullback), 4)
+                != round(float(orig_zone.get("pullback_distance", 0.0)), 4)
+                or int(z_levels_below) != int(orig_zone.get("levels_below", 5))
+                or int(z_levels_above) != int(orig_zone.get("levels_above", 5))
+                or int(z_max_pos) != int(orig_zone.get("max_positions", 10))
+                or bool(z_clear) != bool(orig_zone.get("clear_on_exit", True))
+                or str(z_clear_scope) != str(orig_zone.get("clear_scope", ""))
+                or str(z_exit_cond) != str(orig_zone.get("exit_condition", ""))
+                or str(z_exit_tf) != str(orig_zone.get("exit_timeframe", ""))
+            ):
+                is_modified = True
+
+        # Uyarı ikonunu belirle
+        mod_warning = (
+            " &nbsp;<span style='color:#e65100; font-size:0.9em; font-weight:bold;'>⚠️ (Kaydedilmedi)</span>"
+            if is_modified
+            else ""
+        )
+
+        # Başlığı şimdi placeholder içine basıyoruz
+        title_placeholder.markdown(
+            f"**🗺️ Bölge {idx + 1}** — "
+            f"*{str(z_symbol).upper().strip()} ({z_order_type})* | "
+            f"${z_min:.2f} → ${z_max:.2f}{mod_warning}",
+            unsafe_allow_html=True,
+        )
+
         # Bölgeyi güncel listeye ekle (Silme işlemi Modal içinden tetikleniyor)
         updated_zones.append(
             {
                 "id": zone_id,
-                "symbol": z_symbol,
+                "symbol": str(z_symbol).upper().strip() if z_symbol else "USOUSD",
                 "order_type": z_order_type,
                 "min_price": z_min,
                 "max_price": z_max,

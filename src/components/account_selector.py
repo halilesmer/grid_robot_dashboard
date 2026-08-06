@@ -91,26 +91,13 @@ def render_account_selector():
     is_running = st.session_state.get("robot_running", False)
 
     # 1. Buton Renk Stili ve Üst Boşluk (Padding) Temizliği
+    # Siyah kutu hatasını (Markdown Code Block artifact) önlemek için boşluksuz yazıyoruz
     st.markdown(
-        """
-    <style>
-    /* 🌟 Streamlit'in varsayılan devasa üst boşluğunu kaldırarak butonları yukarı çeker */
-    .block-container {
-        padding-top: 2rem !important; 
-    }
-    
-    /* Seçili (Primary) butonları şık bir yeşil tonuna çevir */
-    button[kind="primary"] {
-        background-color: #198754 !important;
-        border-color: #198754 !important;
-        color: white !important;
-    }
-    button[kind="primary"]:hover {
-        background-color: #157347 !important;
-        border-color: #146c43 !important;
-    }
-    </style>
-    """,
+        "<style>"
+        ".block-container { padding-top: 2rem !important; } "
+        "button[kind='primary'] { background-color: #198754 !important; border-color: #198754 !important; color: white !important; } "
+        "button[kind='primary']:hover { background-color: #157347 !important; border-color: #146c43 !important; }"
+        "</style>",
         unsafe_allow_html=True,
     )
 
