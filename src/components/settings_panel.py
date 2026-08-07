@@ -3,14 +3,12 @@ import streamlit as st
 import uuid
 import json
 import os
-from src.constants.tooltips import SETTINGS_TOOLTIPS
 
 # Modal (Dialog) pencerelerimizi içeri alıyoruz:
 from src.components.dialogs import confirm_clear_dialog, confirm_delete_zone_dialog
 
 # 🌟 YENİ: Merkezi yol (path) yöneticisini içeri aktarıyoruz
 from src.utils.paths import get_cmd_path, get_ui_state_path
-from src.components.metrics import render_zone_metrics
 
 @st.dialog("⚠️ Kaydedilmemiş Ayarlar")
 def confirm_start_with_changes_dialog(account_id, zone_id, idx):
@@ -125,7 +123,7 @@ def render_model_2_settings(current_settings, account_id, live_data, active_acco
         except Exception:
             pass
 
-    # 🌟 GÜNCELLENDİ: Sistem Parametreleri başlığı kalktı.
+    # 🌟 GÜNCELLENDİ: Başlık tekrar sadeleştirildi. Metrikler bölge içine (buton yanına) alındı.
     h_col1, h_col2 = st.columns([0.85, 0.15], vertical_alignment="bottom")
     with h_col1:
         st.markdown("###### 🎯 Dinamik Bölgeler (Zones)")
@@ -162,20 +160,45 @@ def render_model_2_settings(current_settings, account_id, live_data, active_acco
 
         # 🛠️ Streamlit'in kendi çerçevesini kullanıyoruz
         with st.container(border=True):
-            hdr_col, bc_upd, bc_div, bc1, bc2, bc3, bc4 = st.columns(
-                [3.5, 1, 0.1, 1, 1, 1, 0.5]
+            # 🌟 YENİ: Sütun genişlikleri kısıldı (Butonlar daraldı) ve Araya Metrik Sütunu Eklendi
+            hdr_col, bc_metrics, bc_div0, bc_upd, bc_div1, bc1, bc2, bc3, bc4 = (
+                st.columns(
+                    [2.9, 1.2, 0.1, 0.8, 0.1, 0.8, 0.8, 0.8, 0.4],
+                    vertical_alignment="center",
+                )
             )
 
             with hdr_col:
                 # Başlığı daha sonra (değişkenler okunduktan sonra) güncellemek için boş bir alan ayırıyoruz
                 title_placeholder = st.empty()
 
+            with bc_metrics:
+                open_pos = live_data.get("open_positions", 0) if live_data else 0
+                pend_ord = live_data.get("pending_orders", 0) if live_data else 0
+
+                # Flexbox ile buton yüksekliğine (38px) ortalandı
+                st.markdown(
+                    f"<div style='display: flex; justify-content: flex-end; align-items: center; height: 38px; font-size: 0.9rem;'>"
+                    f"<span title='Açık Pozisyon Sayısı' style='cursor: help; border-bottom: 1px dotted gray; margin-right: 12px;'>Açık P: <b>{open_pos}</b></span>"
+                    f"<span title='Bekleyen Emir Sayısı' style='cursor: help; border-bottom: 1px dotted gray;'>Bekl. E: <b>{pend_ord}</b></span>"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
+
+            with bc_div0:
+                # Flexbox ile ortalandı ve buton hizasına getirildi
+                st.markdown(
+                    "<div style='display: flex; justify-content: center; align-items: center; height: 38px; font-size: 24px; color: #888; padding-bottom: 4px;'>|</div>",
+                    unsafe_allow_html=True,
+                )
+
             with bc_upd:
                 upd_btn_placeholder = st.empty()
 
-            with bc_div:
+            with bc_div1:
+                # Flexbox ile ortalandı ve buton hizasına getirildi
                 st.markdown(
-                    "<div style='text-align: center; font-size: 24px; color: #888; margin-top: 2px;'>|</div>",
+                    "<div style='display: flex; justify-content: center; align-items: center; height: 38px; font-size: 24px; color: #888; padding-bottom: 4px;'>|</div>",
                     unsafe_allow_html=True,
                 )
 
@@ -237,16 +260,7 @@ def render_model_2_settings(current_settings, account_id, live_data, active_acco
 
                         confirm_delete_zone_dialog(f"Bölge {idx + 1}", remove_zone)
 
-            # 🌟 YENİ: Metrikler bölge içine taşındı
-            st.markdown("<hr style='margin: 0.5em 0;'/>", unsafe_allow_html=True)
-            render_zone_metrics(
-                open_positions=live_data.get("open_positions", 0) if live_data else 0,
-                pending_orders=live_data.get("pending_orders", 0) if live_data else 0,
-            )
-            st.markdown(
-                "<hr style='margin: 0.5em 0; margin-bottom: 1em;'/>",
-                unsafe_allow_html=True,
-            )
+            st.markdown("<hr style='margin: 0.5em 0 1em 0;'/>", unsafe_allow_html=True)
 
             zc1, zc2, zc3, zc4 = st.columns(4)
             with zc1:
@@ -333,10 +347,10 @@ def render_model_2_settings(current_settings, account_id, live_data, active_acco
                     help="🛡️ Zarar kes mesafesi (0 ise kapalıdır).",
                 )
 
-            # 🌟 YENİ: Kırılım Ayarları Çerçeveli Kutuya Alındı
+            # 🌟 YENİ: Kırılım Ayarları ve Emir Seviyeleri Tek Bir Çerçeveli Kutuya Alındı
             with st.container(border=True):
                 st.markdown(
-                    "<small style='color: gray; font-weight: bold;'>🚀 Kırılım / Momentum (Breakout) Modu</small>",
+                    "<small style='color: gray; font-weight: bold;'>🚀 Kırılım (Breakout) & Ağ Seviyeleri</small>",
                     unsafe_allow_html=True,
                 )
                 brk_c1, brk_c2 = st.columns(2)
@@ -357,98 +371,107 @@ def render_model_2_settings(current_settings, account_id, live_data, active_acco
                         disabled=not z_breakout,
                     )
 
-            # 🌟 Kayan Ağ (Sliding Grid) Emir Sayısı ve Güvenlik
-            # Dinamik Disabled Mantığı: Kırılım açıksa ters yöndeki emir kutusunu soluklaştırır.
-            disable_below = z_breakout and z_order_type == "BUY"
-            disable_above = z_breakout and z_order_type == "SELL"
-
-            zc9, zc10, zc11 = st.columns(3)
-            with zc9:
-                z_levels_below = st.number_input(
-                    "Alt Seviye (LEVELS_BELOW)",
-                    key=f"lb_{zone_id}_{account_id}",
-                    min_value=1,
-                    value=int(zone.get("levels_below", 5)),
-                    step=1,
-                    disabled=disable_below,
-                    help="Fiyatın ALTINDA ağda aktif tutulacak bekleyen emir sayısı. (Kırılım modunda BUY için devre dışı kalır)",
-                )
-            with zc10:
-                z_levels_above = st.number_input(
-                    "Üst Seviye (LEVELS_ABOVE)",
-                    key=f"la_{zone_id}_{account_id}",
-                    min_value=1,
-                    value=int(zone.get("levels_above", 5)),
-                    step=1,
-                    disabled=disable_above,
-                    help="Fiyatın ÜSTÜNDE ağda aktif tutulacak bekleyen emir sayısı. (Kırılım modunda SELL için devre dışı kalır)",
-                )
-            with zc11:
-                z_max_pos = st.number_input(
-                    "Maks. Pozisyon",
-                    key=f"mp_{zone_id}_{account_id}",
-                    min_value=0,
-                    value=int(zone.get("max_positions", 10)),
-                    step=1,
-                    help="Bu bölgede aynı anda açık olabilecek maksimum işlem sayısı. Sınırı kaldırmak için 0 girin (Sistem güvenliği için arka planda maks 500 olarak çalışır).",
-                )
-
-            # Alt satır 3: Çıkışta Temizle ve Seçenekleri
-            z_clear = st.checkbox(
-                "🧹 Bölgeden Çıkıldığında Temizlik Yap",
-                key=f"clear_on_exit_{zone_id}_{account_id}",
-                value=bool(zone.get("clear_on_exit", True)),
-                help="İşaretliyken, fiyat bölgeden çıkarsa belirlenen kurala göre robot temizlik yapar.",
-            )
-
-            z_clear_scope = "Sadece Emirler"
-            z_exit_cond = "Anlık Fiyat"
-            z_exit_tf = "M15"
-
-            if z_clear:
                 st.markdown(
-                    "<small style='color: gray;'>Temizlik Detayları</small>",
+                    "<hr style='margin: 0.25em 0 0.75em 0;'/>", unsafe_allow_html=True
+                )
+
+                # 🌟 Kayan Ağ (Sliding Grid) Emir Sayısı ve Güvenlik
+                # Dinamik Disabled Mantığı: Kırılım açıksa ters yöndeki emir kutusunu soluklaştırır.
+                disable_below = z_breakout and z_order_type == "BUY"
+                disable_above = z_breakout and z_order_type == "SELL"
+
+                zc9, zc10, zc11 = st.columns(3)
+                with zc9:
+                    z_levels_below = st.number_input(
+                        "Alt Seviye (LEVELS_BELOW)",
+                        key=f"lb_{zone_id}_{account_id}",
+                        min_value=1,
+                        value=int(zone.get("levels_below", 5)),
+                        step=1,
+                        disabled=disable_below,
+                        help="Fiyatın ALTINDA ağda aktif tutulacak bekleyen emir sayısı. (Kırılım modunda BUY için devre dışı kalır)",
+                    )
+                with zc10:
+                    z_levels_above = st.number_input(
+                        "Üst Seviye (LEVELS_ABOVE)",
+                        key=f"la_{zone_id}_{account_id}",
+                        min_value=1,
+                        value=int(zone.get("levels_above", 5)),
+                        step=1,
+                        disabled=disable_above,
+                        help="Fiyatın ÜSTÜNDE ağda aktif tutulacak bekleyen emir sayısı. (Kırılım modunda SELL için devre dışı kalır)",
+                    )
+                with zc11:
+                    z_max_pos = st.number_input(
+                        "Maks. Pozisyon",
+                        key=f"mp_{zone_id}_{account_id}",
+                        min_value=0,
+                        value=int(zone.get("max_positions", 10)),
+                        step=1,
+                        help="Bu bölgede aynı anda açık olabilecek maksimum işlem sayısı. Sınırı kaldırmak için 0 girin (Sistem güvenliği için arka planda maks 500 olarak çalışır).",
+                    )
+
+            # 🌟 YENİ: Çıkış ve Temizlik Ayarları Çerçeveli Kutuya Alındı
+            with st.container(border=True):
+                st.markdown(
+                    "<small style='color: gray; font-weight: bold;'>🧹 Bölge Çıkışı ve Temizlik Ayarları</small>",
                     unsafe_allow_html=True,
                 )
-                cc1, cc2, cc3 = st.columns(3)
-                with cc1:
-                    z_clear_scope = st.selectbox(
-                        "Neler Temizlensin?",
-                        options=["Sadece Emirler", "Emirler + Açık Pozisyonlar"],
-                        index=(
-                            0
-                            if zone.get("clear_scope", "Sadece Emirler")
-                            == "Sadece Emirler"
-                            else 1
-                        ),
-                        key=f"scope_{zone_id}_{account_id}",
-                        help="Bölge dışına çıkıldığında açıkta olan işlemler kapatılsın mı?",
+                z_clear = st.checkbox(
+                    "Bölgeden Çıkıldığında Temizlik Yap",
+                    key=f"clear_on_exit_{zone_id}_{account_id}",
+                    value=bool(zone.get("clear_on_exit", True)),
+                    help="İşaretliyken, fiyat bölgeden çıkarsa belirlenen kurala göre robot temizlik yapar.",
+                )
+
+                z_clear_scope = "Sadece Emirler"
+                z_exit_cond = "Anlık Fiyat"
+                z_exit_tf = "M15"
+
+                if z_clear:
+                    st.markdown(
+                        "<hr style='margin: 0.25em 0 0.75em 0;'/>",
+                        unsafe_allow_html=True,
                     )
-                with cc2:
-                    z_exit_cond = st.selectbox(
-                        "Çıkış Tetikleyicisi",
-                        options=["Anlık Fiyat", "Mum Kapanışı"],
-                        index=(
-                            0
-                            if zone.get("exit_condition", "Anlık Fiyat")
-                            == "Anlık Fiyat"
-                            else 1
-                        ),
-                        key=f"cond_{zone_id}_{account_id}",
-                        help="İğne atmalarda işlem yapılmasın diyorsan Mum Kapanışını seçmelisin.",
-                    )
-                with cc3:
-                    if z_exit_cond == "Mum Kapanışı":
-                        tf_opts = ["M1", "M5", "M15", "M30", "H1", "H4", "D1"]
-                        cur_tf = zone.get("exit_timeframe", "M15")
-                        z_exit_tf = st.selectbox(
-                            "Zaman Dilimi",
-                            options=tf_opts,
-                            index=tf_opts.index(cur_tf) if cur_tf in tf_opts else 2,
-                            key=f"tf_{zone_id}_{account_id}",
+                    cc1, cc2, cc3 = st.columns(3)
+                    with cc1:
+                        z_clear_scope = st.selectbox(
+                            "Neler Temizlensin?",
+                            options=["Sadece Emirler", "Emirler + Açık Pozisyonlar"],
+                            index=(
+                                0
+                                if zone.get("clear_scope", "Sadece Emirler")
+                                == "Sadece Emirler"
+                                else 1
+                            ),
+                            key=f"scope_{zone_id}_{account_id}",
+                            help="Bölge dışına çıkıldığında açıkta olan işlemler kapatılsın mı?",
                         )
-                    else:
-                        z_exit_tf = zone.get("exit_timeframe", "M15")
+                    with cc2:
+                        z_exit_cond = st.selectbox(
+                            "Çıkış Tetikleyicisi",
+                            options=["Anlık Fiyat", "Mum Kapanışı"],
+                            index=(
+                                0
+                                if zone.get("exit_condition", "Anlık Fiyat")
+                                == "Anlık Fiyat"
+                                else 1
+                            ),
+                            key=f"cond_{zone_id}_{account_id}",
+                            help="İğne atmalarda işlem yapılmasın diyorsan Mum Kapanışını seçmelisin.",
+                        )
+                    with cc3:
+                        if z_exit_cond == "Mum Kapanışı":
+                            tf_opts = ["M1", "M5", "M15", "M30", "H1", "H4", "D1"]
+                            cur_tf = zone.get("exit_timeframe", "M15")
+                            z_exit_tf = st.selectbox(
+                                "Zaman Dilimi",
+                                options=tf_opts,
+                                index=tf_opts.index(cur_tf) if cur_tf in tf_opts else 2,
+                                key=f"tf_{zone_id}_{account_id}",
+                            )
+                        else:
+                            z_exit_tf = zone.get("exit_timeframe", "M15")
 
         # 🌟 YENİ: Anlık Değişiklik (Modifiye) Dedektörü
         is_modified = False
@@ -508,17 +531,19 @@ def render_model_2_settings(current_settings, account_id, live_data, active_acco
                 _handle_zone_action(account_id, zone_id, idx, "START")
                 st.rerun()
 
-        # 🌟 GÜNCELLENDİ: Bölge Başlığının sağına Broker/Açık/Sembol durumu eklendi
+        # 🌟 GÜNCELLENDİ: Bölge Başlığının sağına Anlık Fiyat ve Broker durumu eklendi
         broker_name = (
             active_account.get("server", "Bilinmeyen Broker")
             if active_account
             else "Demo"
         )
         status_text = "🟢 Açık"
+        current_price = live_data.get("current_price", 0.0) if live_data else 0.0
 
         title_placeholder.markdown(
             f"**🗺️ Bölge {idx + 1}** — "
             f"*{str(z_symbol).upper().strip()} ({z_order_type})* "
+            f"&nbsp;&nbsp;<span style='color: #4CAF50; font-weight: bold;'>[ Anlık Fiyat: ${current_price:.2f} ]</span>"
             f"<span style='float: right; font-size: 14px; font-weight: normal; color: #666; margin-top: 3px; margin-right: 15px;'>"
             f"{str(z_symbol).upper().strip()} | {broker_name} | {status_text}"
             f"</span>",
