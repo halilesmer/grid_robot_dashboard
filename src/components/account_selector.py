@@ -6,6 +6,7 @@ from src.components.dialogs import confirm_delete_account_dialog
 
 ACCOUNTS_FILE = "configs/accounts.json"
 
+
 @st.cache_data(ttl=300)
 def get_installed_mt5_terminals():
     """C:/Program Files içindeki MT5 terminal64.exe yollarını hızlıca tarar."""
@@ -22,6 +23,7 @@ def get_installed_mt5_terminals():
         except Exception:
             pass
     return terminals
+
 
 def load_accounts():
     """configs/accounts.json dosyasından hesap listesini okur ve formatı güvenceye alır."""
@@ -42,6 +44,16 @@ def load_accounts():
 
 def render_account_selector():
     """Ana ekran için hibrit (Button + Selectbox) hesap seçim menüsünü oluşturur."""
+
+    # 🌟 Popover'ı (Açılır Menü) Kapatma Hilesi
+    if st.session_state.get("close_popover"):
+        st.session_state.close_popover = False
+        import streamlit.components.v1 as components
+
+        components.html(
+            "<script>window.parent.document.body.click();</script>", height=0, width=0
+        )
+
     accounts = load_accounts()
 
     if not accounts:
@@ -49,7 +61,6 @@ def render_account_selector():
             "Hiç hesap bulunamadı! Lütfen '➕ Yeni' butonuna tıklayarak ilk hesabınızı ekleyin."
         )
         st.session_state.selected_account = None
-        # return None komutu silindi ki kod aşağıya inip formu çizebilsin!
 
     # ==========================================
     # ÇİFT LOGİN (DUPLICATE) KONTROLÜ
@@ -90,8 +101,7 @@ def render_account_selector():
 
     is_running = st.session_state.get("robot_running", False)
 
-    # 1. Buton Renk Stili ve Üst Boşluk (Padding) Temizliği
-    # Siyah kutu hatasını (Markdown Code Block artifact) önlemek için boşluksuz yazıyoruz
+    # 1. Buton Renk Stili ve Üst Boşluk Temizliği
     st.markdown(
         "<style>"
         ".block-container { padding-top: 2rem !important; } "
@@ -106,7 +116,6 @@ def render_account_selector():
     num_accounts = len(accounts)
     has_extra = 1 if num_accounts > MAX_BUTTONS else 0
 
-    # Hesaplar + (Varsa "Diğer" Dropdown) + En Sağa 1 Adet Üç Nokta Popover Sütunu
     col_ratios = [1] * (min(num_accounts, MAX_BUTTONS) + has_extra) + [0.15]
     cols = st.columns(col_ratios)
 
@@ -156,6 +165,7 @@ def render_account_selector():
 
     # --- EN SAĞDAKİ ÜÇ NOKTA (POPOVER) MENÜSÜ ---
     with cols[-1].popover("⋮", use_container_width=True):
+
         if st.button(
             "✏️ Seçili Hesabı Düzenle",
             use_container_width=True,
@@ -164,6 +174,7 @@ def render_account_selector():
         ):
             st.session_state.edit_account = active_account
             st.session_state.show_add_form = True
+            st.session_state.close_popover = True  # Menüyü kapat
             st.rerun()
 
         if st.button(
@@ -201,8 +212,8 @@ def render_account_selector():
         ):
             st.session_state.show_add_form = not st.session_state.show_add_form
             st.session_state.edit_account = None
+            st.session_state.close_popover = True  # Menüyü kapat
             st.rerun()
-
     # ==========================================
     # 3. YENİ HESAP EKLEME / DÜZENLEME FORMU
     # ==========================================
@@ -213,7 +224,6 @@ def render_account_selector():
         is_edit = bool(edit_acc)
         old_login = str(edit_acc.get("login", ""))
 
-        # Kullanımdaki terminalleri tespit et (Düzenlenen kendi hesabımız hariç)
         used_terminals = {
             os.path.normpath(a.get("mt5_path", "")).lower(): a.get(
                 "account_name", "Bilinmeyen"
@@ -298,7 +308,6 @@ def render_account_selector():
                         index=def_term_idx,
                     )
 
-                    # Hızlı seçimden gelen veriyi metin kutusuna varsayılan olarak ata
                     if selected_terminal == "Farklı Bir Yol (Manuel Gireceğim)":
                         auto_path = old_mt5_path if is_edit else ""
                     else:
@@ -318,7 +327,6 @@ def render_account_selector():
                     height=100,
                 )
 
-                # Butonları yan yana koymak için 2 sütun oluşturuyoruz
                 btn_col1, btn_col2 = st.columns(2)
 
                 with btn_col1:
@@ -331,7 +339,6 @@ def render_account_selector():
                         "❌ İptal", use_container_width=True
                     )
 
-                # İptal butonuna basılırsa formu kapat ve arayüzü yenile
                 if cancel_btn:
                     st.session_state.show_add_form = False
                     st.session_state.edit_account = None
@@ -399,6 +406,7 @@ def render_account_selector():
                                     st.session_state.selected_account = new_account_data
                                     st.session_state.show_add_form = False
                                     st.session_state.edit_account = None
+                                    st.session_state.close_popover = True
                                     st.success(
                                         f"✅ {new_acc_name} başarıyla kaydedildi!"
                                     )

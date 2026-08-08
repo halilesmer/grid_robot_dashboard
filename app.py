@@ -36,8 +36,6 @@ from src.components.chart_viewer import render_chart
 from src.utils.mt5_connection import connect_to_mt5
 from src.components.header import render_main_title
 from src.components.settings_panel import render_settings_panel
-from src.components.metrics import render_global_metrics
-from src.components.controls import render_controls
 from src.components.log_viewer import render_log_viewer
 from src.styles.custom_css import apply_custom_css
 from src.utils.config import load_settings, save_settings
@@ -135,45 +133,11 @@ if live_data.get("algo_trading_error", False):
         st.rerun()
 
 
-# ==========================================
-# ALT KOKPİT PANELİ
-# ==========================================
-col_metrics, col_controls = st.columns([2.5, 1.5])
-
-
-# 🌟 YENİ: Sadece metrikleri 2 saniyede bir canlı güncelleyen parça!
-@st.fragment(run_every=2)
-def live_metrics_fragment(acc_id):
-    # En güncel veriyi JSON dosyasından ANLIK olarak oku
-    if is_bot_running(acc_id):
-        fresh_data = get_live_metrics_from_file(acc_id)
-    else:
-        fresh_data = {
-            "profit": 0.0,
-            "open_positions": 0,
-            "pending_orders": 0,
-            "current_price": 0.0,
-        }
-
-    # 🌟 Sadece global metrikler (Fiyat ve Kâr/Zarar) burada çiziliyor
-    render_global_metrics(
-        profit=fresh_data.get("profit", 0.0),
-        current_price=fresh_data.get("current_price", 0.0),
-    )
-
-
-with col_metrics:
-    # Parçayı (Fragment) sütunun içine yerleştiriyoruz
-    live_metrics_fragment(account_id)
-
-with col_controls:
-    # Arayüzdeki kontrol butonlarını çağır
-    control_result = render_controls(
-        is_running=account_is_running, account_id=account_id
-    )
-    # Eğer eski controls.py hala iki değer (tuple) dönüyorsa hata vermemesi için güvenli yakalama
-    action = control_result[0] if isinstance(control_result, tuple) else control_result
-
+# 🌟 Ana Motor tetikleyicisi artık settings_panel üzerinden yönetiliyor
+action = None
+if st.session_state.get(f"motor_toggle_{account_id}"):
+    action = "TOGGLE"
+    st.session_state[f"motor_toggle_{account_id}"] = False
 
 # ==========================================
 # BAŞLAT / DURDUR MANTIĞI (SUBPROCESS İLE)
@@ -213,7 +177,12 @@ if action == "TOGGLE":
 # AYARLAR VE MAC SİMÜLATÖRÜ
 # ==========================================
 updated_settings = render_settings_panel(
-    current_settings, "Model 2", account_id, live_data, active_account
+    current_settings,
+    "Model 2",
+    account_id,
+    live_data,
+    active_account,
+    account_is_running,
 )
 
 if updated_settings:

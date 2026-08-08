@@ -1,6 +1,7 @@
 # styles/custom_css.py
 import streamlit as st
 
+
 def apply_custom_css():
     """
     Streamlit arayüzünü son derece kompakt, derli toplu ve modern yapan CSS
@@ -97,6 +98,20 @@ def apply_custom_css():
         div[data-testid="stTooltipIcon"] svg {
             width: 15px !important;
             height: 15px !important;
+        }
+
+        /* =========================================
+           HESAP SEÇİCİ (ACCOUNT SELECTOR) BUTONLARI
+           ========================================= */
+        /* Sayfanın en üstündeki hesap butonlarını hedefler ve Streamlit'in %100 genişlik dayatmasını ezer. */
+        div.block-container > div:nth-child(1) div[data-testid="stButton"] button,
+        div.block-container > div:nth-child(2) div[data-testid="stButton"] button {
+            width: 100% !important;
+            max-width: 200px !important;
+            margin-left: auto !important;
+            margin-right: auto !important;
+            display: flex !important;
+            justify-content: center !important;
         }
 
         /* =========================================

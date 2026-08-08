@@ -24,8 +24,17 @@ def confirm_start_with_changes_dialog(account_id, zone_id, idx):
         st.rerun()
 
 
-def render_settings_panel(current_settings, model_name="Model 2", account_id="default", live_data=None, active_account=None):
-    return render_model_2_settings(current_settings, account_id, live_data, active_account)
+def render_settings_panel(
+    current_settings,
+    model_name="Model 2",
+    account_id="default",
+    live_data=None,
+    active_account=None,
+    is_running=False,
+):
+    return render_model_2_settings(
+        current_settings, account_id, live_data, active_account, is_running
+    )
 
 
 def _default_zone():
@@ -70,7 +79,9 @@ def _force_upper_symbol(key: str):
         st.session_state[key] = str(st.session_state[key]).upper().strip()
 
 
-def render_model_2_settings(current_settings, account_id, live_data, active_account):
+def render_model_2_settings(
+    current_settings, account_id, live_data, active_account, is_running=False
+):
     zones_session_key = f"model2_zones_{account_id}"
     ui_state_key = f"ui_zone_states_{account_id}"
 
@@ -107,16 +118,35 @@ def render_model_2_settings(current_settings, account_id, live_data, active_acco
         except Exception:
             pass
 
-    # 🌟 GÜNCELLENDİ: Başlık tekrar sadeleştirildi. Metrikler bölge içine (buton yanına) alındı.
-    h_col1, h_col2 = st.columns([0.85, 0.15], vertical_alignment="bottom")
+    # 🌟 GÜNCELLENDİ: Ana Motor ve Kontrol Sıklığı yan yana
+    h_col1, h_col2, h_col3, h_col4, h_col5 = st.columns(
+        [0.45, 0.20, 0.02, 0.20, 0.13], vertical_alignment="center"
+    )
     with h_col1:
         st.markdown("###### 🎯 Dinamik Bölgeler (Zones)")
     with h_col2:
+        btn_label = "🛑 Ana Motoru Durdur" if is_running else "🚀 Ana Motoru Çalıştır"
+        btn_type = "secondary" if is_running else "primary"
+        if st.button(btn_label, type=btn_type, use_container_width=True):
+            st.session_state[f"motor_toggle_{account_id}"] = True
+            st.rerun()
+    with h_col3:
+        st.markdown(
+            "<div style='text-align: center; font-size: 20px; color: #555;'>|</div>",
+            unsafe_allow_html=True,
+        )
+    with h_col4:
+        st.markdown(
+            "<div style='text-align: right; font-size: 14px; font-weight: bold;'>Kontrol Sıklığı (Sn):</div>",
+            unsafe_allow_html=True,
+        )
+    with h_col5:
         loop_interval = st.number_input(
-            "Kontrol Sıklığı (Sn)",
+            "Kontrol Sıklığı",
             value=float(current_settings.get("LOOP_INTERVAL_SECONDS", 1.0)),
             step=0.1,
             key=f"m2_loop_{account_id}",
+            label_visibility="collapsed",
         )
 
     updated_zones = []
@@ -144,37 +174,15 @@ def render_model_2_settings(current_settings, account_id, live_data, active_acco
 
         # 🛠️ Streamlit'in kendi çerçevesini kullanıyoruz
         with st.container(border=True):
-            # 🌟 YENİ: Sütun genişlikleri kısıldı (Butonlar daraldı) ve Araya Metrik Sütunu Eklendi
-            hdr_col, bc_metrics, bc_div0, bc_upd, bc_div1, bc1, bc2, bc3, bc4 = (
-                st.columns(
-                    [2.9, 1.2, 0.1, 0.8, 0.1, 0.8, 0.8, 0.8, 0.4],
-                    vertical_alignment="center",
-                )
+            # 🌟 GÜNCELLENDİ: Metrikler başlığın içine alındığı için sütunlar sadeleştirildi
+            hdr_col, bc_upd, bc_div1, bc1, bc2, bc3, bc4 = st.columns(
+                [4.2, 0.8, 0.1, 0.8, 0.8, 0.8, 0.4],
+                vertical_alignment="center",
             )
 
             with hdr_col:
                 # Başlığı daha sonra (değişkenler okunduktan sonra) güncellemek için boş bir alan ayırıyoruz
                 title_placeholder = st.empty()
-
-            with bc_metrics:
-                open_pos = live_data.get("open_positions", 0) if live_data else 0
-                pend_ord = live_data.get("pending_orders", 0) if live_data else 0
-
-                # Flexbox ile buton yüksekliğine (38px) ortalandı
-                st.markdown(
-                    f"<div style='display: flex; justify-content: flex-end; align-items: center; height: 38px; font-size: 0.9rem;'>"
-                    f"<span title='Açık Pozisyon Sayısı' style='cursor: help; border-bottom: 1px dotted gray; margin-right: 12px;'>Açık P: <b>{open_pos}</b></span>"
-                    f"<span title='Bekleyen Emir Sayısı' style='cursor: help; border-bottom: 1px dotted gray;'>Bekl. E: <b>{pend_ord}</b></span>"
-                    f"</div>",
-                    unsafe_allow_html=True,
-                )
-
-            with bc_div0:
-                # Flexbox ile ortalandı ve buton hizasına getirildi
-                st.markdown(
-                    "<div style='display: flex; justify-content: center; align-items: center; height: 38px; font-size: 24px; color: #888; padding-bottom: 4px;'>|</div>",
-                    unsafe_allow_html=True,
-                )
 
             with bc_upd:
                 upd_btn_placeholder = st.empty()
@@ -721,22 +729,30 @@ def render_model_2_settings(current_settings, account_id, live_data, active_acco
                 _handle_zone_action(account_id, zone_id, idx, "START")
                 st.rerun()
 
-        # 🌟 GÜNCELLENDİ: Bölge Başlığının sağına Anlık Fiyat ve Broker durumu eklendi
+        # 🌟 GÜNCELLENDİ: Tüm metrikler alt satıra sağa dayalı ve sırayla eklendi
         broker_name = (
             active_account.get("server", "Bilinmeyen Broker")
             if active_account
             else "Demo"
         )
-        status_text = "🟢 Açık"
+        status_text = "🟢 Açık" if is_running else "🔴 Kapalı"
         current_price = live_data.get("current_price", 0.0) if live_data else 0.0
+        profit_val = live_data.get("profit", 0.0) if live_data else 0.0
+        profit_color = "#4ade80" if profit_val >= 0 else "#f87171"
+
+        open_pos = live_data.get("open_positions", 0) if live_data else 0
+        pend_ord = live_data.get("pending_orders", 0) if live_data else 0
 
         title_placeholder.markdown(
             f"**🗺️ Bölge {idx + 1}** — "
             f"*{str(z_symbol).upper().strip()} ({z_order_type})* "
-            f"&nbsp;&nbsp;<span style='color: #4CAF50; font-weight: bold;'>[ Anlık Fiyat: ${current_price:.2f} ]</span>"
-            f"<span style='float: right; font-size: 14px; font-weight: normal; color: #666; margin-top: 3px; margin-right: 15px;'>"
-            f"{str(z_symbol).upper().strip()} | {broker_name} | {status_text}"
-            f"</span>",
+            f"&nbsp;&nbsp;<span style='color: #4CAF50; font-weight: bold;'>[ Anlık Fiyat: ${current_price:.2f} ]</span>\n\n"
+            f"<div style='text-align: left; font-size: 14px; font-weight: normal; color: #aaa; margin-top: 4px;'>"
+            f"{str(z_symbol).upper().strip()} | {broker_name} | {status_text} &nbsp;&nbsp;|&nbsp;&nbsp; "
+            f"Toplam Kâr/Zarar: <span style='color: {profit_color}; font-weight: bold;'>${profit_val:.2f}</span> &nbsp;&nbsp;|&nbsp;&nbsp; "
+            f"Açık P: <b style='color: white;'>{open_pos}</b> &nbsp;&nbsp;|&nbsp;&nbsp; "
+            f"Bekl. E: <b style='color: white;'>{pend_ord}</b>"
+            f"</div>",
             unsafe_allow_html=True,
         )
 
