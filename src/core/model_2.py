@@ -330,7 +330,7 @@ def get_all_manual_positions():
     ]
 
 
-def get_existing_levels_by_direction(grid_step):
+def get_existing_levels_by_direction(buy_grid_step, sell_grid_step):
     buy_levels = set()
     sell_levels = set()
 
@@ -339,10 +339,11 @@ def get_existing_levels_by_direction(grid_step):
     m_pos = get_all_manual_positions()
 
     def add_to_set(price, is_buy):
-        snapped = round(price / grid_step) * grid_step
         if is_buy:
+            snapped = round(price / buy_grid_step) * buy_grid_step
             buy_levels.add(normalize_price(snapped))
         else:
+            snapped = round(price / sell_grid_step) * sell_grid_step
             sell_levels.add(normalize_price(snapped))
 
     if orders:
@@ -546,9 +547,27 @@ def manage_dynamic_grid():
     for pos in robot_positions:
         pos_zone_idx = pos.magic - BASE_MAGIC_NUMBER - 1
         if 0 <= pos_zone_idx < len(ZONES):
-            target_lot = max(
-                0.01, min(5.0, float(ZONES[pos_zone_idx].get("lot_size", 0.01)))
-            )
+            z_data = ZONES[pos_zone_idx]
+            direction = "BUY" if pos.type == mt5.POSITION_TYPE_BUY else "SELL"
+
+            is_sync = bool(z_data.get("sync_buy_sell", True))
+            base_lot = float(z_data.get("lot_size", 0.01))
+
+            if direction == "BUY" or is_sync:
+                target_lot = max(0.01, min(5.0, base_lot))
+                tp_val = float(z_data.get("take_profit", 0.05))
+                sl_val = float(z_data.get("stop_loss", 0.0))
+            else:
+                target_lot = max(
+                    0.01, min(5.0, float(z_data.get("sell_lot_size", base_lot)))
+                )
+                tp_val = float(
+                    z_data.get("sell_take_profit", z_data.get("take_profit", 0.05))
+                )
+                sl_val = float(
+                    z_data.get("sell_stop_loss", z_data.get("stop_loss", 0.0))
+                )
+
             remaining_lot = round(target_lot - pos.volume, 8)
             vol_min = SYMBOL_INFO.volume_min if SYMBOL_INFO else 0.01
 
@@ -564,13 +583,9 @@ def manage_dynamic_grid():
                     not has_pending
                     and active_zones_state.get(pos_zone_idx, "START") == "START"
                 ):
-                    direction = "BUY" if pos.type == mt5.POSITION_TYPE_BUY else "SELL"
                     log_message(
                         f"🔄 Kısmi Dolum: Bölge {pos_zone_idx+1} | Kalan {remaining_lot} lot ({direction}) emir gönderiliyor."
                     )
-
-                    tp_val = float(ZONES[pos_zone_idx].get("take_profit", 0.05))
-                    sl_val = float(ZONES[pos_zone_idx].get("stop_loss", 0.0))
 
                     if direction == "BUY":
                         tp_price = normalize_price(pos.price_open + tp_val)
@@ -702,6 +717,28 @@ def manage_dynamic_grid():
     tp_val = float(ACTIVE_ZONE.get("take_profit", 0.05))
     sl_val = float(ACTIVE_ZONE.get("stop_loss", 0.0))
 
+    # 🌟 YENİ: Eşitleme (Sync) ve Asimetrik Ayarlar
+    is_sync = bool(ACTIVE_ZONE.get("sync_buy_sell", True))
+
+    if is_sync:
+        sell_grid_step = grid_step
+        sell_lot_val = lot_val
+        sell_tp_val = tp_val
+        sell_sl_val = sl_val
+        sell_pullback_distance = float(ACTIVE_ZONE.get("pullback_distance", 0.50))
+    else:
+        sell_grid_step = max(0.01, float(ACTIVE_ZONE.get("sell_grid_step", grid_step)))
+        sell_lot_val = max(
+            0.01, min(5.0, float(ACTIVE_ZONE.get("sell_lot_size", lot_val)))
+        )
+        sell_tp_val = float(ACTIVE_ZONE.get("sell_take_profit", tp_val))
+        sell_sl_val = float(ACTIVE_ZONE.get("sell_stop_loss", sl_val))
+        sell_pullback_distance = float(
+            ACTIVE_ZONE.get(
+                "sell_pullback_distance", ACTIVE_ZONE.get("pullback_distance", 0.50)
+            )
+        )
+
     # Yeni Arayüz Parametreleri
     levels_below = int(ACTIVE_ZONE.get("levels_below", 5))
     levels_above = int(ACTIVE_ZONE.get("levels_above", 5))
@@ -738,8 +775,9 @@ def manage_dynamic_grid():
             )
         return True
 
-    # Merkez Fiyatı (Anchor) Bul: Güncel fiyata en yakın "Grid Katı"
-    anchor_price = round(current_avg_price / grid_step) * grid_step
+    # Merkez Fiyatı (Anchor) Bul: Güncel fiyata en yakın "Grid Katı" - BUY ve SELL için AYRI
+    buy_anchor_price = round(current_avg_price / grid_step) * grid_step
+    sell_anchor_price = round(current_avg_price / sell_grid_step) * sell_grid_step
 
     desired_buy_levels = []
     desired_sell_levels = []
@@ -758,13 +796,13 @@ def manage_dynamic_grid():
         # Alttaki emirler (Limit) - (Kırılım modu açıksa Limit emir DİZİLMEZ)
         if not is_breakout:
             for i in range(1, levels_below + 1):
-                p = anchor_price - (i * grid_step)
+                p = buy_anchor_price - (i * grid_step)
                 if round(z_min, 4) <= round(p, 4) <= round(z_max, 4):
                     desired_buy_levels.append(normalize_price(p))
 
         # Üstteki emirler (Stop)
         for i in range(1, levels_above + 1):
-            p = anchor_price + (i * grid_step)
+            p = buy_anchor_price + (i * grid_step)
             # Pullback Kontrolü: Güncel fiyat, p seviyesinden 'pullback_distance' kadar aşağıda mı?
             if is_breakout and round(p - current_avg_price, 4) < round(
                 pullback_distance, 4
@@ -782,23 +820,23 @@ def manage_dynamic_grid():
 
             # DÜZELTME: Merkeze (i=0) YENİ emir dizmiyoruz, ama fiyata en yakın ESKİ emri silmemek için kabul listesine alıyoruz!
             acceptable_buy_levels.append(
-                normalize_price(anchor_price + (i * grid_step))
+                normalize_price(buy_anchor_price + (i * grid_step))
             )
 
     if z_type in ["SELL", "BOTH"]:
         # Üstteki emirler (Limit) - (Kırılım modu açıksa Limit emir DİZİLMEZ)
         if not is_breakout:
             for i in range(1, levels_above + 1):
-                p = anchor_price + (i * grid_step)
+                p = sell_anchor_price + (i * sell_grid_step)
                 if round(z_min, 4) <= round(p, 4) <= round(z_max, 4):
                     desired_sell_levels.append(normalize_price(p))
 
         # Alttaki emirler (Stop)
         for i in range(1, levels_below + 1):
-            p = anchor_price - (i * grid_step)
-            # Pullback Kontrolü: Güncel fiyat, p seviyesinden 'pullback_distance' kadar yukarıda mı?
+            p = sell_anchor_price - (i * sell_grid_step)
+            # Pullback Kontrolü (SELL için): Güncel fiyat, p seviyesinden 'sell_pullback_distance' kadar yukarıda mı?
             if is_breakout and round(current_avg_price - p, 4) < round(
-                pullback_distance, 4
+                sell_pullback_distance, 4
             ):
                 continue  # Fiyat yeterince yukarı sekti mi? Hayır, o zaman pas geç.
 
@@ -813,11 +851,12 @@ def manage_dynamic_grid():
 
             # DÜZELTME: Merkeze (i=0) YENİ emir dizmiyoruz, ama fiyata en yakın ESKİ emri silmemek için kabul listesine alıyoruz!
             acceptable_sell_levels.append(
-                normalize_price(anchor_price + (i * grid_step))
+                normalize_price(sell_anchor_price + (i * sell_grid_step))
             )
 
-    # İKİ KERE YAZILMIŞ KOD TEMİZLENDİ: Tek ve esnek bir tolerans (Grid'in %40'ı)
-    tolerance = grid_step * 0.4
+    # BUY ve SELL yönleri için ayrı esnek tolerans (Grid'in %40'ı)
+    buy_tolerance = grid_step * 0.4
+    sell_tolerance = sell_grid_step * 0.4
 
     # UZAKLAŞAN/GEREKSİZ EMİRLERİ SİL (Pencere Kayması) - YENİ TAMPON BÖLGE İLE
     silinen_emir_sayisi = 0
@@ -830,12 +869,12 @@ def manage_dynamic_grid():
 
         if order.type in [mt5.ORDER_TYPE_BUY_LIMIT, mt5.ORDER_TYPE_BUY_STOP]:
             is_valid = any(
-                abs(round(order_price, 4) - round(al, 4)) <= round(tolerance, 4)
+                abs(round(order_price, 4) - round(al, 4)) <= round(buy_tolerance, 4)
                 for al in acceptable_buy_levels
             )
         elif order.type in [mt5.ORDER_TYPE_SELL_LIMIT, mt5.ORDER_TYPE_SELL_STOP]:
             is_valid = any(
-                abs(round(order_price, 4) - round(al, 4)) <= round(tolerance, 4)
+                abs(round(order_price, 4) - round(al, 4)) <= round(sell_tolerance, 4)
                 for al in acceptable_sell_levels
             )
 
@@ -849,16 +888,19 @@ def manage_dynamic_grid():
         )
 
     # EKSİK EMİRLERİ TAMAMLA (TP Olanların Yerini Doldurur)
-    exist_buy_levels, exist_sell_levels = get_existing_levels_by_direction(grid_step)
+    exist_buy_levels, exist_sell_levels = get_existing_levels_by_direction(
+        grid_step, sell_grid_step
+    )
     eklenen_emir_sayisi = 0
 
-    # 🌟 GÜVENLİ TOLERANS: Doldurma işleminde aynı emri 2. kez vermemek için daha katı kontrol
-    fill_tolerance = grid_step * 0.45
+    # 🌟 GÜVENLİ TOLERANS: Doldurma işleminde aynı emri 2. kez vermemek için daha katı kontrol (Asimetrik)
+    buy_fill_tolerance = grid_step * 0.45
+    sell_fill_tolerance = sell_grid_step * 0.45
 
     # BUY Eksikleri
     for level_price in desired_buy_levels:
         is_occupied = any(
-            abs(round(level_price, 4) - round(el, 4)) <= round(fill_tolerance, 4)
+            abs(round(level_price, 4) - round(el, 4)) <= round(buy_fill_tolerance, 4)
             for el in exist_buy_levels
         )
         if not is_occupied:
@@ -877,15 +919,17 @@ def manage_dynamic_grid():
     # SELL Eksikleri
     for level_price in desired_sell_levels:
         is_occupied = any(
-            abs(round(level_price, 4) - round(el, 4)) <= round(fill_tolerance, 4)
+            abs(round(level_price, 4) - round(el, 4)) <= round(sell_fill_tolerance, 4)
             for el in exist_sell_levels
         )
         if not is_occupied:
-            tp_price = normalize_price(level_price - tp_val)
-            sl_price = normalize_price(level_price + sl_val) if sl_val > 0 else None
+            tp_price = normalize_price(level_price - sell_tp_val)
+            sl_price = (
+                normalize_price(level_price + sell_sl_val) if sell_sl_val > 0 else None
+            )
             if send_pending_order(
                 level_price,
-                lot_val,
+                sell_lot_val,
                 tp_price,
                 sl_price,
                 zone_idx=ACTIVE_ZONE_IDX,
