@@ -682,8 +682,11 @@ def manage_dynamic_grid():
                         with open(states_file, "r", encoding="utf-8") as f:
                             bg_states = json.load(f)
                         bg_states[str(ACTIVE_ZONE_IDX)] = "AUTO_CLEAR"
-                        with open(states_file, "w", encoding="utf-8") as f:
+
+                        tmp_states_file = states_file + ".tmp"
+                        with open(tmp_states_file, "w", encoding="utf-8") as f:
                             json.dump(bg_states, f)
+                        os.replace(tmp_states_file, states_file)
                 except Exception as e:
                     pass
 
@@ -786,6 +789,13 @@ def manage_dynamic_grid():
     acceptable_buy_levels = []
     acceptable_sell_levels = []
     buffer_steps = 2  # Silme işlemi için 2 kademe fazladan esneklik (Hysteresis)
+    # 🌟 DÜZELTME: Kısmi Dolum emirlerinin silinmesini ve Sonsuz Döngüyü engelle!
+    for pos in robot_positions:
+        if pos.magic == target_magic:
+            if pos.type == mt5.POSITION_TYPE_BUY:
+                acceptable_buy_levels.append(normalize_price(pos.price_open))
+            elif pos.type == mt5.POSITION_TYPE_SELL:
+                acceptable_sell_levels.append(normalize_price(pos.price_open))
     # --------------------------------------------------
 
     # KAYAN PENCEREYİ OLUŞTUR (Sliding Window)
@@ -814,14 +824,12 @@ def manage_dynamic_grid():
 
         # Toleranslı Kabul Bölgesi (Silinmeyecek Emirler)
         for i in range(-levels_below - buffer_steps, levels_above + buffer_steps + 1):
-            # 🌟 YENİ: Kırılım moduna geçildiyse, fiyatın altındaki (Limit) emirleri kabul etme ve SİL!
-            if is_breakout and i < 0:
+            level_p = buy_anchor_price + (i * grid_step)
+            # 🌟 DÜZELTME: i=0 olsa dahi fiyat altındaysa Limit Emir sayılır, engelle!
+            if is_breakout and level_p < current_avg_price:
                 continue
 
-            # DÜZELTME: Merkeze (i=0) YENİ emir dizmiyoruz, ama fiyata en yakın ESKİ emri silmemek için kabul listesine alıyoruz!
-            acceptable_buy_levels.append(
-                normalize_price(buy_anchor_price + (i * grid_step))
-            )
+            acceptable_buy_levels.append(normalize_price(level_p))
 
     if z_type in ["SELL", "BOTH"]:
         # Üstteki emirler (Limit) - (Kırılım modu açıksa Limit emir DİZİLMEZ)
@@ -845,14 +853,12 @@ def manage_dynamic_grid():
 
         # Toleranslı Kabul Bölgesi (Silinmeyecek Emirler)
         for i in range(-levels_below - buffer_steps, levels_above + buffer_steps + 1):
-            # 🌟 YENİ: Kırılım moduna geçildiyse, fiyatın üstündeki (Limit) emirleri kabul etme ve SİL!
-            if is_breakout and i > 0:
+            level_p = sell_anchor_price + (i * sell_grid_step)
+            # 🌟 DÜZELTME: i=0 olsa dahi fiyat üstündeyse Limit Emir sayılır, engelle!
+            if is_breakout and level_p > current_avg_price:
                 continue
 
-            # DÜZELTME: Merkeze (i=0) YENİ emir dizmiyoruz, ama fiyata en yakın ESKİ emri silmemek için kabul listesine alıyoruz!
-            acceptable_sell_levels.append(
-                normalize_price(sell_anchor_price + (i * sell_grid_step))
-            )
+            acceptable_sell_levels.append(normalize_price(level_p))
 
     # BUY ve SELL yönleri için ayrı esnek tolerans (Grid'in %40'ı)
     buy_tolerance = grid_step * 0.4

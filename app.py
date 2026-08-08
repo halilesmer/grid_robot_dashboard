@@ -240,8 +240,10 @@ if platform.system() != "Windows":
     # YENİ: Alt sürece (backend) fiyatı iletmek için köprü kuruyoruz
     sim_file_path = get_sim_price_path(account_id)
     try:
-        with open(sim_file_path, "w", encoding="utf-8") as f:
+        tmp_sim = sim_file_path + ".tmp"
+        with open(tmp_sim, "w", encoding="utf-8") as f:
             json.dump({"price": mock_price}, f)
+        os.replace(tmp_sim, sim_file_path) # Atomik değişim
     except Exception:
         pass
 

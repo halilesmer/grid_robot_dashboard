@@ -49,8 +49,10 @@ def export_metrics_loop(bot_engine, account_id):
         if hasattr(bot_engine, "get_live_metrics"):
             try:
                 metrics = bot_engine.get_live_metrics()
-                with open(metrics_file, "w", encoding="utf-8") as f:
+                tmp_metrics_file = metrics_file + ".tmp"
+                with open(tmp_metrics_file, "w", encoding="utf-8") as f:
                     json.dump(metrics, f)
+                os.replace(tmp_metrics_file, metrics_file)
             except Exception as e:
                 pass  # Okuma hatası anlık olabilir, devam et.
 

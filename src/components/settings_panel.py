@@ -8,7 +8,7 @@ import os
 from src.components.dialogs import confirm_clear_dialog, confirm_delete_zone_dialog
 
 # 🌟 YENİ: Merkezi yol (path) yöneticisini içeri aktarıyoruz
-from src.utils.paths import get_cmd_path, get_ui_state_path
+from src.utils.paths import get_ui_state_path
 
 @st.dialog("⚠️ Kaydedilmemiş Ayarlar")
 def confirm_start_with_changes_dialog(account_id, zone_id, idx):
@@ -56,30 +56,9 @@ def _default_zone():
     }
 
 
-def _send_zone_command(account_id: str, zone_idx: int, state: str):
-    """Atomik yazma ile commands JSON dosyasına komut gönderir."""
-    commands_file = get_cmd_path(account_id)
-    current = {}
-    if os.path.exists(commands_file):
-        try:
-            with open(commands_file, "r", encoding="utf-8") as f:
-                current = json.load(f)
-        except Exception:
-            pass
-    current[str(zone_idx)] = {"state": state}
-
-    tmp = commands_file + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(current, f)
-    os.replace(tmp, commands_file)
-
-
 def _handle_zone_action(account_id: str, zone_id: str, idx: int, state: str):
     """Buton tıklamalarında UI'ı çökertmeden durumu güncelleyen Callback fonksiyonu."""
-    # 1. Bota komut gönder (Bot idx kullanır)
-    _send_zone_command(account_id, idx, state)
-
-    # 2. Anlık UI hafızasını GÜVENLİ (ID bazlı) güncelle
+    # Anlık UI hafızasını GÜVENLİ (ID bazlı) güncelle
     ui_state_key = f"ui_zone_states_{account_id}"
     if ui_state_key in st.session_state:
         st.session_state[ui_state_key][zone_id] = state
@@ -800,8 +779,10 @@ def render_model_2_settings(current_settings, account_id, live_data, active_acco
         backend_states[str(i)] = st.session_state[ui_state_key].get(z["id"], "CLEAR")
 
     ui_file = get_ui_state_path(account_id)
-    with open(ui_file, "w", encoding="utf-8") as f:
+    tmp_ui_file = ui_file + ".tmp"
+    with open(tmp_ui_file, "w", encoding="utf-8") as f:
         json.dump(backend_states, f)
+    os.replace(tmp_ui_file, ui_file)
 
     # ── Güncelleme Tetikleyicisi (Bölge başlığından gelen sinyali yakalar) ───
     if st.session_state.get(f"save_req_{account_id}", False):
