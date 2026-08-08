@@ -45,6 +45,7 @@ def _default_zone():
         "sell_stop_loss": 0.0,
         "is_breakout": False,  # 🌟 YENİ: Kırılım/Momentum Modu
         "pullback_distance": 0.50,  # 🌟 YENİ: Geri Çekilme Mesafesi
+        "sync_buy_sell": True,  # 🌟 YENİ: BUY ve SELL Ayarlarını Eşitle
         "levels_below": 5,
         "levels_above": 5,
         "max_positions": 10,
@@ -308,16 +309,57 @@ def render_model_2_settings(current_settings, account_id, live_data, active_acco
                     help="💵 Robotun çalışacağı EN YÜKSEK fiyat.",
                 )
 
+            # Tıklama anındaki gecikmeyi önlemek için Streamlit State'ini (Hafızasını) anlık okuyoruz
+            sync_key = f"sync_{zone_id}_{account_id}"
+            z_sync = st.session_state.get(
+                sync_key, bool(zone.get("sync_buy_sell", True))
+            )
+
+            st.markdown(
+                "<div style='margin-top: 10px; margin-bottom: 5px;'></div>",
+                unsafe_allow_html=True,
+            )
+
             if z_order_type == "BOTH":
+                # 🌟 YENİ: Kutu açık da olsa kapalı da olsa sütun oranı sabit (Kaymayı engeller)
+                h_buy_c1, h_buy_c2 = st.columns([0.3, 0.7], vertical_alignment="bottom")
+
+                with h_buy_c1:
+                    if not z_sync:
+                        st.markdown(
+                            "<small style='color: #4CAF50; font-weight: bold;'>🟢 BUY (Alış) Yönü Ağ Ayarları</small>",
+                            unsafe_allow_html=True,
+                        )
+                    else:
+                        # Başlık gizlendiğinde boşluk bırakarak Checkbox'ın yerini korur
+                        st.empty()
+
+                with h_buy_c2:
+                    # 🌟 YENİ: Çift ikon olmaması için emoji metinden çıkarıldı
+                    z_sync = st.checkbox(
+                        "BUY ve SELL için ortak uygula",
+                        value=bool(zone.get("sync_buy_sell", True)),
+                        key=sync_key,
+                    )
+            elif z_order_type == "BUY":
                 st.markdown(
-                    "<div style='margin-top: 10px;'><small style='color: #4CAF50; font-weight: bold;'>🟢 BUY (Alış) Yönü Ağ Ayarları</small></div>",
+                    "<small style='color: #4CAF50; font-weight: bold;'>🟢 BUY (Alış) Yönü Ağ Ayarları</small>",
+                    unsafe_allow_html=True,
+                )
+            elif z_order_type == "SELL":
+                st.markdown(
+                    "<small style='color: #F44336; font-weight: bold;'>🔴 SELL (Satış) Yönü Ağ Ayarları</small>",
                     unsafe_allow_html=True,
                 )
 
             zc5, zc6, zc7, zc8 = st.columns(4)
             with zc5:
                 z_grid = st.number_input(
-                    "Grid Adımı ($)" if z_order_type != "BOTH" else "BUY Grid ($)",
+                    (
+                        "Grid Adımı ($)"
+                        if (z_order_type != "BOTH" or z_sync)
+                        else "BUY Grid ($)"
+                    ),
                     key=f"grid_{zone_id}_{account_id}",
                     min_value=0.01,
                     value=max(0.01, float(zone.get("grid_step", 0.05))),
@@ -327,7 +369,11 @@ def render_model_2_settings(current_settings, account_id, live_data, active_acco
                 )
             with zc6:
                 z_lot = st.number_input(
-                    "Lot (📦)" if z_order_type != "BOTH" else "BUY Lot (📦)",
+                    (
+                        "Lot (📦)"
+                        if (z_order_type != "BOTH" or z_sync)
+                        else "BUY Lot (📦)"
+                    ),
                     key=f"lot_{zone_id}_{account_id}",
                     min_value=0.01,
                     max_value=5.0,
@@ -338,7 +384,11 @@ def render_model_2_settings(current_settings, account_id, live_data, active_acco
                 )
             with zc7:
                 z_tp = st.number_input(
-                    "Kâr Al ($)" if z_order_type != "BOTH" else "BUY Kâr Al ($)",
+                    (
+                        "Kâr Al ($)"
+                        if (z_order_type != "BOTH" or z_sync)
+                        else "BUY Kâr Al ($)"
+                    ),
                     key=f"tp_{zone_id}_{account_id}",
                     min_value=0.01,
                     value=max(0.01, float(zone.get("take_profit", 0.05))),
@@ -348,7 +398,11 @@ def render_model_2_settings(current_settings, account_id, live_data, active_acco
                 )
             with zc8:
                 z_sl = st.number_input(
-                    "Stop Loss ($)" if z_order_type != "BOTH" else "BUY Stop Loss ($)",
+                    (
+                        "Stop Loss ($)"
+                        if (z_order_type != "BOTH" or z_sync)
+                        else "BUY Stop Loss ($)"
+                    ),
                     key=f"sl_{zone_id}_{account_id}",
                     min_value=0.0,
                     value=max(0.0, float(zone.get("stop_loss", 0.0))),
@@ -357,14 +411,14 @@ def render_model_2_settings(current_settings, account_id, live_data, active_acco
                     help="🛡️ Zarar kes mesafesi (0 ise kapalıdır).",
                 )
 
-            # Arka planda güvenli kayıt için varsayılanları eşitliyoruz
+            # Arka planda güvenli kayıt için varsayılanları eşitliyoruz (Senkronize ise BUY değerleri SELL'e kopyalanır)
             z_sell_grid = z_grid
             z_sell_lot = z_lot
             z_sell_tp = z_tp
             z_sell_sl = z_sl
 
-            # Eğer BOTH seçildiyse SELL (Satış) ayarlarını da göster
-            if z_order_type == "BOTH":
+            # Eğer BOTH seçildiyse ve Eşitleme (Sync) KAPALIYSA SELL (Satış) ayarlarını göster
+            if z_order_type == "BOTH" and not z_sync:
                 st.markdown(
                     "<div style='margin-top: 5px;'><small style='color: #F44336; font-weight: bold;'>🔴 SELL (Satış) Yönü Ağ Ayarları</small></div>",
                     unsafe_allow_html=True,
@@ -441,7 +495,13 @@ def render_model_2_settings(current_settings, account_id, live_data, active_acco
                     "<small style='color: gray; font-weight: bold;'>🚀 Kırılım (Breakout) & Ağ Seviyeleri</small>",
                     unsafe_allow_html=True,
                 )
-                brk_c1, brk_c2 = st.columns(2)
+
+                if z_order_type == "BOTH" and not z_sync:
+                    brk_c1, brk_c2, brk_c3 = st.columns(3)
+                else:
+                    brk_c1, brk_c2 = st.columns(2)
+                    brk_c3 = None
+
                 with brk_c1:
                     z_breakout = st.checkbox(
                         "Sadece Trend Yönüne Ağ Ör",
@@ -450,7 +510,11 @@ def render_model_2_settings(current_settings, account_id, live_data, active_acco
                     )
                 with brk_c2:
                     z_pullback = st.number_input(
-                        "Min. Geri Çekilme Mesafesi ($)",
+                        (
+                            "Min. Geri Çekilme ($)"
+                            if (z_order_type != "BOTH" or z_sync)
+                            else "BUY Geri Çekilme ($)"
+                        ),
                         key=f"pb_{zone_id}_{account_id}",
                         min_value=0.01,
                         value=float(zone.get("pullback_distance", 0.50)),
@@ -458,6 +522,24 @@ def render_model_2_settings(current_settings, account_id, live_data, active_acco
                         format="%.2f",
                         disabled=not z_breakout,
                     )
+
+                z_sell_pullback = z_pullback
+                if z_order_type == "BOTH" and not z_sync and brk_c3:
+                    with brk_c3:
+                        z_sell_pullback = st.number_input(
+                            "SELL Geri Çekilme ($)",
+                            key=f"s_pb_{zone_id}_{account_id}",
+                            min_value=0.01,
+                            value=float(
+                                zone.get(
+                                    "sell_pullback_distance",
+                                    zone.get("pullback_distance", 0.50),
+                                )
+                            ),
+                            step=0.05,
+                            format="%.2f",
+                            disabled=not z_breakout,
+                        )
 
                 st.markdown(
                     "<hr style='margin: 0.25em 0 0.75em 0;'/>", unsafe_allow_html=True
@@ -615,6 +697,17 @@ def render_model_2_settings(current_settings, account_id, live_data, active_acco
                 or bool(z_breakout) != bool(orig_zone.get("is_breakout", False))
                 or round(float(z_pullback), 4)
                 != round(float(orig_zone.get("pullback_distance", 0.0)), 4)
+                or round(float(z_sell_pullback), 4)
+                != round(
+                    float(
+                        orig_zone.get(
+                            "sell_pullback_distance",
+                            orig_zone.get("pullback_distance", 0.0),
+                        )
+                    ),
+                    4,
+                )
+                or bool(z_sync) != bool(orig_zone.get("sync_buy_sell", True))
                 or int(z_levels_below) != int(orig_zone.get("levels_below", 5))
                 or int(z_levels_above) != int(orig_zone.get("levels_above", 5))
                 or int(z_max_pos) != int(orig_zone.get("max_positions", 10))
@@ -684,8 +777,10 @@ def render_model_2_settings(current_settings, account_id, live_data, active_acco
                 "sell_lot_size": z_sell_lot,
                 "sell_take_profit": z_sell_tp,
                 "sell_stop_loss": z_sell_sl,
-                "is_breakout": z_breakout,  # 🌟 YENİ EKLENDİ
-                "pullback_distance": z_pullback,  # 🌟 YENİ EKLENDİ
+                "is_breakout": z_breakout,
+                "pullback_distance": z_pullback,
+                "sell_pullback_distance": z_sell_pullback,
+                "sync_buy_sell": z_sync,
                 "levels_below": z_levels_below,
                 "levels_above": z_levels_above,
                 "max_positions": z_max_pos,
