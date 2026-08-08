@@ -8,6 +8,7 @@ def render_chart(current_price: float, current_settings: dict, model_name: str):
     """
     Çizgi grafik ve grid bölgelerini doğrudan JSON ayarlarından (current_settings) okuyarak çizer.
     TradingView Dark Theme stili ve HAFIZALI (iz bırakan) gerçek zaman serisi mantığı uygulanmıştır.
+    Model 2 için BUY (Yeşil) ve SELL (Kırmızı) asimetrik grid çizgileri entegre edilmiştir.
     """
     st.markdown("### 📈 Canlı Fiyat ve Grid Bölgeleri")
 
@@ -16,9 +17,7 @@ def render_chart(current_price: float, current_settings: dict, model_name: str):
     # ==========================================
     # 1. HAFIZALI GEÇMİŞ VERİ YÖNETİMİ (Gerçekçi Chart Hareketi)
     # ==========================================
-    # Eğer grafiğin hafızası henüz yoksa (ilk açılış)
     if "chart_price_history" not in st.session_state:
-        # Ekran boş görünmesin diye geriye dönük 100 mumluk bir sahte dalga oluşturuyoruz
         history_len = 100
         random.seed(42)
         prices = []
@@ -27,15 +26,11 @@ def render_chart(current_price: float, current_settings: dict, model_name: str):
             sim += random.uniform(-0.05, 0.05)
             prices.append(sim)
 
-        # Dalganın sonunu tam olarak şu anki fiyata pürüzsüz bağlamak için hizalıyoruz
         offset = current_price - prices[-1]
         st.session_state["chart_price_history"] = [p + offset for p in prices]
 
-    # YENİ FİYATI HAFIZAYA EKLE (İz bırakma mantığı burası)
-    # Slider'dan veya canlı veriden gelen fiyat geçmişin ucuna eklenir, eski noktalar YERİNDE KALIR.
     st.session_state["chart_price_history"].append(current_price)
 
-    # Bellek şişmesin diye sadece son 150 hareketi (mumu) ekranda tutuyoruz
     if len(st.session_state["chart_price_history"]) > 150:
         st.session_state["chart_price_history"].pop(0)
 
@@ -56,7 +51,7 @@ def render_chart(current_price: float, current_settings: dict, model_name: str):
         )
     )
 
-    # 3. ANLIK FİYAT YATAY ÇİZGİSİ (En sağdaki hedef etiketi)
+    # 3. ANLIK FİYAT YATAY ÇİZGİSİ
     fig.add_hline(
         y=current_price,
         line_dash="dash",
@@ -89,27 +84,78 @@ def render_chart(current_price: float, current_settings: dict, model_name: str):
             )
 
     # ==========================================
-    # MODEL 2 ÇİZİMLERİ (Dinamik Bölgeler / Zones)
+    # MODEL 2 ÇİZİMLERİ (Dinamik Bölgeler ve Asimetrik Gridler)
     # ==========================================
     elif model_name == "Model 2":
         zones = current_settings.get("ZONES", [])
         for idx, zone in enumerate(zones):
             min_p = float(zone.get("min_price", 0.0))
             max_p = float(zone.get("max_price", 0.0))
+            order_type = zone.get("order_type", "BUY")
+            is_sync = bool(zone.get("sync_buy_sell", True))
 
-            # Belirlenmiş bölgeyi (Zone) grafikte turuncu bir alan olarak boya
+            # 🟢 BUY Yönü Ayarları
+            buy_grid_step = float(zone.get("grid_step", 0.05))
+            levels_below = int(zone.get("levels_below", 5))
+            levels_above = int(zone.get("levels_above", 5))
+
+            # 🔴 SELL Yönü Ayarları (Asimetrik Kontrolü)
+            if is_sync:
+                sell_grid_step = buy_grid_step
+            else:
+                sell_grid_step = float(zone.get("sell_grid_step", buy_grid_step))
+
+            # 🗺️ Bölge Çerçevesi Çizimi
             if min_p > 0 and max_p > 0:
                 fig.add_hrect(
                     y0=min_p,
                     y1=max_p,
-                    fillcolor="rgba(251, 146, 60, 0.1)",
+                    fillcolor="rgba(251, 146, 60, 0.08)",
                     layer="below",
                     line_width=1,
-                    line_color="rgba(251, 146, 60, 0.5)",
-                    annotation_text=f"Bölge {idx+1}",
+                    line_color="rgba(251, 146, 60, 0.4)",
+                    annotation_text=f"Bölge {idx+1} ({order_type})",
                     annotation_position="top left",
                     annotation_font_color="rgba(251, 146, 60, 0.8)",
                 )
+
+                # Eğer anlık fiyat bölgenin içindeyse 📐 Asimetrik Grid Çizgilerini de çiz
+                if min_p <= current_price <= max_p:
+                    # BUY Grid Çizgileri (Yeşil Noktalı Çizgiler)
+                    if order_type in ["BUY", "BOTH"]:
+                        buy_anchor = (
+                            round(current_price / buy_grid_step) * buy_grid_step
+                        )
+                        for i in range(-levels_below, levels_above + 1):
+                            if i == 0:
+                                continue
+                            lvl = buy_anchor + (i * buy_grid_step)
+                            if min_p <= lvl <= max_p:
+                                fig.add_hline(
+                                    y=lvl,
+                                    line_dash="dot",
+                                    line_color="#4ade80",
+                                    opacity=0.35,
+                                    line_width=1,
+                                )
+
+                    # SELL Grid Çizgileri (Kırmızı Noktalı Çizgiler - Asimetrik Adımla)
+                    if order_type in ["SELL", "BOTH"]:
+                        sell_anchor = (
+                            round(current_price / sell_grid_step) * sell_grid_step
+                        )
+                        for i in range(-levels_below, levels_above + 1):
+                            if i == 0:
+                                continue
+                            lvl = sell_anchor + (i * sell_grid_step)
+                            if min_p <= lvl <= max_p:
+                                fig.add_hline(
+                                    y=lvl,
+                                    line_dash="dot",
+                                    line_color="#f87171",
+                                    opacity=0.35,
+                                    line_width=1,
+                                )
 
     # ==========================================
     # TRADINGVIEW STİLİ GRAFİK AYARLARI
