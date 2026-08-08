@@ -39,6 +39,10 @@ def _default_zone():
         "lot_size": 0.01,
         "take_profit": 0.05,
         "stop_loss": 0.0,
+        "sell_grid_step": 0.05,
+        "sell_lot_size": 0.01,
+        "sell_take_profit": 0.05,
+        "sell_stop_loss": 0.0,
         "is_breakout": False,  # 🌟 YENİ: Kırılım/Momentum Modu
         "pullback_distance": 0.50,  # 🌟 YENİ: Geri Çekilme Mesafesi
         "levels_below": 5,
@@ -304,10 +308,16 @@ def render_model_2_settings(current_settings, account_id, live_data, active_acco
                     help="💵 Robotun çalışacağı EN YÜKSEK fiyat.",
                 )
 
+            if z_order_type == "BOTH":
+                st.markdown(
+                    "<div style='margin-top: 10px;'><small style='color: #4CAF50; font-weight: bold;'>🟢 BUY (Alış) Yönü Ağ Ayarları</small></div>",
+                    unsafe_allow_html=True,
+                )
+
             zc5, zc6, zc7, zc8 = st.columns(4)
             with zc5:
                 z_grid = st.number_input(
-                    "Grid Adımı ($)",
+                    "Grid Adımı ($)" if z_order_type != "BOTH" else "BUY Grid ($)",
                     key=f"grid_{zone_id}_{account_id}",
                     min_value=0.01,
                     value=max(0.01, float(zone.get("grid_step", 0.05))),
@@ -317,7 +327,7 @@ def render_model_2_settings(current_settings, account_id, live_data, active_acco
                 )
             with zc6:
                 z_lot = st.number_input(
-                    "Lot (📦)",
+                    "Lot (📦)" if z_order_type != "BOTH" else "BUY Lot (📦)",
                     key=f"lot_{zone_id}_{account_id}",
                     min_value=0.01,
                     max_value=5.0,
@@ -328,7 +338,7 @@ def render_model_2_settings(current_settings, account_id, live_data, active_acco
                 )
             with zc7:
                 z_tp = st.number_input(
-                    "Kâr Al ($)",
+                    "Kâr Al ($)" if z_order_type != "BOTH" else "BUY Kâr Al ($)",
                     key=f"tp_{zone_id}_{account_id}",
                     min_value=0.01,
                     value=max(0.01, float(zone.get("take_profit", 0.05))),
@@ -338,7 +348,7 @@ def render_model_2_settings(current_settings, account_id, live_data, active_acco
                 )
             with zc8:
                 z_sl = st.number_input(
-                    "Stop Loss ($)",
+                    "Stop Loss ($)" if z_order_type != "BOTH" else "BUY Stop Loss ($)",
                     key=f"sl_{zone_id}_{account_id}",
                     min_value=0.0,
                     value=max(0.0, float(zone.get("stop_loss", 0.0))),
@@ -346,6 +356,84 @@ def render_model_2_settings(current_settings, account_id, live_data, active_acco
                     format="%.2f",
                     help="🛡️ Zarar kes mesafesi (0 ise kapalıdır).",
                 )
+
+            # Arka planda güvenli kayıt için varsayılanları eşitliyoruz
+            z_sell_grid = z_grid
+            z_sell_lot = z_lot
+            z_sell_tp = z_tp
+            z_sell_sl = z_sl
+
+            # Eğer BOTH seçildiyse SELL (Satış) ayarlarını da göster
+            if z_order_type == "BOTH":
+                st.markdown(
+                    "<div style='margin-top: 5px;'><small style='color: #F44336; font-weight: bold;'>🔴 SELL (Satış) Yönü Ağ Ayarları</small></div>",
+                    unsafe_allow_html=True,
+                )
+                zs1, zs2, zs3, zs4 = st.columns(4)
+                with zs1:
+                    z_sell_grid = st.number_input(
+                        "SELL Grid ($)",
+                        key=f"s_grid_{zone_id}_{account_id}",
+                        min_value=0.01,
+                        value=max(
+                            0.01,
+                            float(
+                                zone.get("sell_grid_step", zone.get("grid_step", 0.05))
+                            ),
+                        ),
+                        step=0.01,
+                        format="%.2f",
+                    )
+                with zs2:
+                    z_sell_lot = st.number_input(
+                        "SELL Lot (📦)",
+                        key=f"s_lot_{zone_id}_{account_id}",
+                        min_value=0.01,
+                        max_value=5.0,
+                        value=max(
+                            0.01,
+                            min(
+                                5.0,
+                                float(
+                                    zone.get(
+                                        "sell_lot_size", zone.get("lot_size", 0.01)
+                                    )
+                                ),
+                            ),
+                        ),
+                        step=0.01,
+                        format="%.2f",
+                    )
+                with zs3:
+                    z_sell_tp = st.number_input(
+                        "SELL Kâr Al ($)",
+                        key=f"s_tp_{zone_id}_{account_id}",
+                        min_value=0.01,
+                        value=max(
+                            0.01,
+                            float(
+                                zone.get(
+                                    "sell_take_profit", zone.get("take_profit", 0.05)
+                                )
+                            ),
+                        ),
+                        step=0.01,
+                        format="%.2f",
+                    )
+                with zs4:
+                    z_sell_sl = st.number_input(
+                        "SELL Stop Loss ($)",
+                        key=f"s_sl_{zone_id}_{account_id}",
+                        min_value=0.0,
+                        value=max(
+                            0.0,
+                            float(
+                                zone.get("sell_stop_loss", zone.get("stop_loss", 0.0))
+                            ),
+                        ),
+                        step=0.01,
+                        format="%.2f",
+                    )
 
             # 🌟 YENİ: Kırılım Ayarları ve Emir Seviyeleri Tek Bir Çerçeveli Kutuya Alındı
             with st.container(border=True):
@@ -494,6 +582,36 @@ def render_model_2_settings(current_settings, account_id, live_data, active_acco
                 != round(float(orig_zone.get("take_profit", 0.0)), 4)
                 or round(float(z_sl), 4)
                 != round(float(orig_zone.get("stop_loss", 0.0)), 4)
+                or round(float(z_sell_grid), 4)
+                != round(
+                    float(
+                        orig_zone.get("sell_grid_step", orig_zone.get("grid_step", 0.0))
+                    ),
+                    4,
+                )
+                or round(float(z_sell_lot), 4)
+                != round(
+                    float(
+                        orig_zone.get("sell_lot_size", orig_zone.get("lot_size", 0.0))
+                    ),
+                    4,
+                )
+                or round(float(z_sell_tp), 4)
+                != round(
+                    float(
+                        orig_zone.get(
+                            "sell_take_profit", orig_zone.get("take_profit", 0.0)
+                        )
+                    ),
+                    4,
+                )
+                or round(float(z_sell_sl), 4)
+                != round(
+                    float(
+                        orig_zone.get("sell_stop_loss", orig_zone.get("stop_loss", 0.0))
+                    ),
+                    4,
+                )
                 or bool(z_breakout) != bool(orig_zone.get("is_breakout", False))
                 or round(float(z_pullback), 4)
                 != round(float(orig_zone.get("pullback_distance", 0.0)), 4)
@@ -562,6 +680,10 @@ def render_model_2_settings(current_settings, account_id, live_data, active_acco
                 "lot_size": z_lot,
                 "take_profit": z_tp,
                 "stop_loss": z_sl,
+                "sell_grid_step": z_sell_grid,
+                "sell_lot_size": z_sell_lot,
+                "sell_take_profit": z_sell_tp,
+                "sell_stop_loss": z_sell_sl,
                 "is_breakout": z_breakout,  # 🌟 YENİ EKLENDİ
                 "pullback_distance": z_pullback,  # 🌟 YENİ EKLENDİ
                 "levels_below": z_levels_below,
