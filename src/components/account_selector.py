@@ -132,7 +132,7 @@ def render_account_selector():
             btn_label,
             key=f"btn_{i}_{acc_login}",
             type="primary" if is_active else "secondary",
-            use_container_width=True,
+            width="stretch",
         ):
             st.session_state.selected_account = acc
             st.rerun()
@@ -164,11 +164,11 @@ def render_account_selector():
                 st.rerun()
 
     # --- EN SAĞDAKİ ÜÇ NOKTA (POPOVER) MENÜSÜ ---
-    with cols[-1].popover("⋮", use_container_width=True):
+    with cols[-1].popover("⋮", width="stretch"):
 
         if st.button(
             "✏️ Seçili Hesabı Düzenle",
-            use_container_width=True,
+            width="stretch",
             disabled=not accounts or is_running,
             key="popover_edit_btn",
         ):
@@ -179,7 +179,7 @@ def render_account_selector():
 
         if st.button(
             "🗑️ Seçili Hesabı Sil",
-            use_container_width=True,
+            width="stretch",
             disabled=not accounts or is_running,
             key="popover_delete_btn",
         ):
@@ -206,7 +206,7 @@ def render_account_selector():
 
         if st.button(
             "➕ Yeni Hesap Ekle",
-            use_container_width=True,
+            width="stretch",
             type="primary",
             key="popover_add_btn",
         ):
@@ -332,11 +332,11 @@ def render_account_selector():
                 with btn_col1:
                     submit_btn = st.form_submit_button(
                         "💾 Değişiklikleri Kaydet" if is_edit else "💾 Hesabı Ekle",
-                        use_container_width=True,
+                        width="stretch",
                     )
                 with btn_col2:
                     cancel_btn = st.form_submit_button(
-                        "❌ İptal", use_container_width=True
+                        "❌ İptal", width="stretch"
                     )
 
                 if cancel_btn:

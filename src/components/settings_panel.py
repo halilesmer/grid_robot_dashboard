@@ -16,11 +16,11 @@ def confirm_start_with_changes_dialog(account_id, zone_id, idx):
     st.write("**Değiştirdiğiniz yeni ayarlar ile mi başlasın?**")
 
     c1, c2 = st.columns(2)
-    if c1.button("✅ Evet (Kaydet ve Başlat)", use_container_width=True):
+    if c1.button("✅ Evet (Kaydet ve Başlat)", width="stretch"):
         st.session_state[f"save_req_{account_id}"] = True
         _handle_zone_action(account_id, zone_id, idx, "START")
         st.rerun()
-    if c2.button("❌ Hayır (İptal)", use_container_width=True):
+    if c2.button("❌ Hayır (İptal)", width="stretch"):
         st.rerun()
 
 
@@ -127,7 +127,7 @@ def render_model_2_settings(
     with h_col2:
         btn_label = "🛑 Ana Motoru Durdur" if is_running else "🚀 Ana Motoru Çalıştır"
         btn_type = "secondary" if is_running else "primary"
-        if st.button(btn_label, type=btn_type, use_container_width=True):
+        if st.button(btn_label, type=btn_type, width="stretch"):
             st.session_state[f"motor_toggle_{account_id}"] = True
             st.rerun()
     with h_col3:
@@ -206,7 +206,7 @@ def render_model_2_settings(
                 st.button(
                     pause_label,
                     key=f"pause_{zone_id}_{account_id}",
-                    use_container_width=True,
+                    width="stretch",
                     type="primary" if current_state == "PAUSE" else "secondary",
                     help="Yeni emir göndermeyi durdurur ve bekleyen emirleri siler. Açık işlemlere dokunmaz.",
                     on_click=_handle_zone_action,
@@ -216,7 +216,7 @@ def render_model_2_settings(
                 if st.button(
                     clear_label,
                     key=f"clear_{zone_id}_{account_id}",
-                    use_container_width=True,
+                    width="stretch",
                     type="primary" if current_state == "CLEAR" else "secondary",
                     help="Acil Durum: Bekleyen emirleri siler ve AÇIK POZİSYONLARI ayara göre kapatır.",
                 ):
@@ -229,18 +229,18 @@ def render_model_2_settings(
 
             with bc4:
                 # 🌟 YENİ: 3 Noktalı Açılır Menü (Dropdown)
-                with st.popover("⋮", use_container_width=True):
+                with st.popover("⋮", width="stretch"):
                     if st.button(
                         "➕ Yeni Bölge Ekle",
                         key=f"add_{zone_id}_{account_id}",
-                        use_container_width=True,
+                        width="stretch",
                     ):
                         st.session_state[zones_session_key].append(_default_zone())
                         st.rerun()
                     if st.button(
                         "🗑️ Bölgeyi Sil",
                         key=f"del_{zone_id}_{account_id}",
-                        use_container_width=True,
+                        width="stretch",
                     ):
 
                         def remove_zone(target_id=zone_id):
@@ -592,17 +592,18 @@ def render_model_2_settings(
                     )
                     cc1, cc2, cc3 = st.columns(3)
                     with cc1:
+                        # Geriye dönük uyumluluk için eski değerleri eşle
+                        current_scope = zone.get("clear_scope", "Sadece Bekleyen Emirler")
+                        if current_scope == "Sadece Emirler": current_scope = "Sadece Bekleyen Emirler"
+                        if current_scope == "Emirler + Açık Pozisyonlar": current_scope = "Tüm İşlemler"
+
+                        scope_opts = ["Sadece Bekleyen Emirler", "Tüm İşlemler", "Ters Yönlü İşlemler"]
                         z_clear_scope = st.selectbox(
                             "Neler Temizlensin?",
-                            options=["Sadece Emirler", "Emirler + Açık Pozisyonlar"],
-                            index=(
-                                0
-                                if zone.get("clear_scope", "Sadece Emirler")
-                                == "Sadece Emirler"
-                                else 1
-                            ),
+                            options=scope_opts,
+                            index=scope_opts.index(current_scope) if current_scope in scope_opts else 0,
                             key=f"scope_{zone_id}_{account_id}",
-                            help="Bölge dışına çıkıldığında açıkta olan işlemler kapatılsın mı?",
+                            help="ℹ️ Bölge Temizlik Kuralı: Fiyat bu bölgeden çıktığında sadece bu bölgeye ait (Magic Number) işlemler etkilenir, diğer bölgelerdeki işlemleriniz korunur. 'Ters Yönlü İşlemler' seçilirse, yukarı kırılımda Sell işlemleri, aşağı kırılımda Buy işlemleri kapatılır.",
                         )
                     with cc2:
                         z_exit_cond = st.selectbox(
@@ -710,7 +711,7 @@ def render_model_2_settings(
         if upd_btn_placeholder.button(
             upd_label,
             key=f"upd_{zone_id}_{account_id}",
-            use_container_width=True,
+            width="stretch",
             type="primary" if is_modified else "secondary",
         ):
             st.session_state[f"save_req_{account_id}"] = True
@@ -719,7 +720,7 @@ def render_model_2_settings(
         if start_btn_placeholder.button(
             start_label,
             key=f"start_{zone_id}_{account_id}",
-            use_container_width=True,
+            width="stretch",
             type="primary" if current_state == "START" else "secondary",
             help="Bu bölgedeki ağ örme işlemini başlatır ve güncel fiyatı takip eder.",
         ):

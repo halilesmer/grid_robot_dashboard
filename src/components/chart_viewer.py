@@ -217,4 +217,4 @@ def render_chart(current_price: float, current_settings: dict, model_name: str):
         ),
     )
 
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")

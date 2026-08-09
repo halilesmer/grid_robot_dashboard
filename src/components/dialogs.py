@@ -13,11 +13,11 @@ def confirm_clear_dialog(on_confirm_func):
     )
 
     col_yes, col_no = st.columns([1, 1])
-    if col_yes.button("Evet, Temizle", type="primary", use_container_width=True):
+    if col_yes.button("Evet, Temizle", type="primary", width="stretch"):
         on_confirm_func()  # Asıl temizleme işlemini yapan fonksiyonu tetikle
         st.rerun()
 
-    if col_no.button("Hayır, İptal", use_container_width=True):
+    if col_no.button("Hayır, İptal", width="stretch"):
         st.rerun()
 
 
@@ -31,11 +31,11 @@ def confirm_delete_zone_dialog(zone_name, on_confirm_func):
     st.write(f"**{zone_name}** adlı bölgeyi silmek istediğinize emin misiniz?")
 
     col_yes, col_no = st.columns([1, 1])
-    if col_yes.button("Evet, Sil", type="primary", use_container_width=True):
+    if col_yes.button("Evet, Sil", type="primary", width="stretch"):
         on_confirm_func()  # Asıl silme işlemini yapan fonksiyonu tetikle
         st.rerun()
 
-    if col_no.button("Hayır, İptal", use_container_width=True):
+    if col_no.button("Hayır, İptal", width="stretch"):
         st.rerun()
 
 
@@ -50,9 +50,9 @@ def confirm_delete_account_dialog(account_name, on_confirm_func):
     )
 
     col_yes, col_no = st.columns([1, 1])
-    if col_yes.button("Evet, Sil", type="primary", use_container_width=True):
+    if col_yes.button("Evet, Sil", type="primary", width="stretch"):
         on_confirm_func()
         st.rerun()
 
-    if col_no.button("Hayır, İptal", use_container_width=True):
+    if col_no.button("Hayır, İptal", width="stretch"):
         st.rerun()

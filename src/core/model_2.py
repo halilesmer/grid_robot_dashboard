@@ -656,7 +656,11 @@ def manage_dynamic_grid():
 
         if is_exited:
             if ACTIVE_ZONE.get("clear_on_exit", True):
-                scope = ACTIVE_ZONE.get("clear_scope", "Sadece Emirler")
+                scope = ACTIVE_ZONE.get("clear_scope", "Sadece Bekleyen Emirler")
+                # Geriye dönük uyumluluk
+                if scope == "Sadece Emirler": scope = "Sadece Bekleyen Emirler"
+                elif scope == "Emirler + Açık Pozisyonlar": scope = "Tüm İşlemler"
+
                 log_message(
                     f"🧹 Bölge ({z_min}-{z_max}) dışına çıkıldı ({exit_cond}). Temizlik: {scope}"
                 )
@@ -666,10 +670,21 @@ def manage_dynamic_grid():
                     if order.magic == target_magic:
                         cancel_order(order)
 
-                if scope == "Emirler + Açık Pozisyonlar":
+                if scope == "Tüm İşlemler":
                     for pos in robot_positions:
                         if pos.magic == target_magic:
                             close_position(mt5, pos, SYMBOL, log_message)
+                elif scope == "Ters Yönlü İşlemler":
+                    exit_direction = "UP" if close_price > z_max else "DOWN"
+                    log_message(f"🔍 Çıkış Yönü: {exit_direction}. Sadece ters yönlü açık pozisyonlar kapatılacak.")
+                    for pos in robot_positions:
+                        if pos.magic == target_magic:
+                            if exit_direction == "UP" and pos.type == mt5.POSITION_TYPE_SELL:
+                                log_message(f"🧹 Ters Yönlü Temizlik (YUKARI Çıkış): SELL pozisyonu kapatılıyor (Bilet: {pos.ticket})")
+                                close_position(mt5, pos, SYMBOL, log_message)
+                            elif exit_direction == "DOWN" and pos.type == mt5.POSITION_TYPE_BUY:
+                                log_message(f"🧹 Ters Yönlü Temizlik (AŞAĞI Çıkış): BUY pozisyonu kapatılıyor (Bilet: {pos.ticket})")
+                                close_position(mt5, pos, SYMBOL, log_message)
 
                 robot_orders = get_all_robot_orders()
                 robot_positions = get_all_robot_positions()

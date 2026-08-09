@@ -82,7 +82,7 @@ def render_controls(is_running: bool, account_id: str = "default"):
         toggle_btn = st.button(
             button_label,
             type=button_type,
-            use_container_width=True,
+            width="stretch",
             help=button_help,
             key=f"toggle_btn_{account_id}",
         )
