@@ -39,7 +39,7 @@ def render_settings_panel(
 
 def _default_zone():
     return {
-        "id": str(uuid.uuid4()),  # Hafıza kaybını önleyen benzersiz kimlik
+        "id": str(uuid.uuid4()),
         "symbol": "USOUSD",
         "order_type": "BUY",
         "min_price": 70.0,
@@ -52,14 +52,16 @@ def _default_zone():
         "sell_lot_size": 0.01,
         "sell_take_profit": 0.05,
         "sell_stop_loss": 0.0,
-        "is_breakout": False,  # 🌟 YENİ: Kırılım/Momentum Modu
-        "pullback_distance": 0.50,  # 🌟 YENİ: Geri Çekilme Mesafesi
-        "sync_buy_sell": True,  # 🌟 YENİ: BUY ve SELL Ayarlarını Eşitle
+        "is_breakout": False,
+        "pullback_distance": 0.50,
+        "sync_buy_sell": True,
         "levels_below": 5,
         "levels_above": 5,
         "max_positions": 10,
         "clear_on_exit": True,
-        "clear_scope": "Sadece Emirler",
+        "clear_exit_side": "SELL (Aşağı)",       # 🌟 EKLENDİ
+        "clear_target_side": "Sadece BUY İşlemleri", # 🌟 EKLENDİ
+        "clear_scope": "Sadece Bekleyen Emirler",
         "exit_condition": "Anlık Fiyat",
         "exit_timeframe": "M15",
     }
@@ -568,7 +570,7 @@ def render_model_2_settings(
                         help="Bu bölgede aynı anda açık olabilecek maksimum işlem sayısı. Sınırı kaldırmak için 0 girin (Sistem güvenliği için arka planda maks 500 olarak çalışır).",
                     )
 
-            # 🌟 YENİ: Çıkış ve Temizlik Ayarları Çerçeveli Kutuya Alındı
+            # 🌟 GÜNCELLENDİ: Bölge Çıkış ve Asimetrik Temizlik Ayarları
             with st.container(border=True):
                 st.markdown(
                     "<small style='color: gray; font-weight: bold;'>🧹 Bölge Çıkışı ve Temizlik Ayarları</small>",
@@ -578,10 +580,12 @@ def render_model_2_settings(
                     "Bölgeden Çıkıldığında Temizlik Yap",
                     key=f"clear_on_exit_{zone_id}_{account_id}",
                     value=bool(zone.get("clear_on_exit", True)),
-                    help="İşaretliyken, fiyat bölgeden çıkarsa belirlenen kurala göre robot temizlik yapar.",
+                    help="İşaretliyken, fiyat bölgeden çıktığında sadece bu bölgeye ait (Magic ID) işlemler temizlenir. Diğer bölgeler etkilenmez.",
                 )
 
-                z_clear_scope = "Sadece Emirler"
+                z_clear_side = "Farketmez"
+                z_clear_scope = "Sadece Bekleyen Emirler"
+                z_clear_target = "Farketmez (Hepsi)"
                 z_exit_cond = "Anlık Fiyat"
                 z_exit_tf = "M15"
 
@@ -590,22 +594,89 @@ def render_model_2_settings(
                         "<hr style='margin: 0.25em 0 0.75em 0;'/>",
                         unsafe_allow_html=True,
                     )
-                    cc1, cc2, cc3 = st.columns(3)
-                    with cc1:
-                        # Geriye dönük uyumluluk için eski değerleri eşle
-                        current_scope = zone.get("clear_scope", "Sadece Bekleyen Emirler")
-                        if current_scope == "Sadece Emirler": current_scope = "Sadece Bekleyen Emirler"
-                        if current_scope == "Emirler + Açık Pozisyonlar": current_scope = "Tüm İşlemler"
 
-                        scope_opts = ["Sadece Bekleyen Emirler", "Tüm İşlemler", "Ters Yönlü İşlemler"]
+                    # 1. SATIR: Çıkış Yönü, Kapatılacak Yön, Temizlik Kapsamı
+                    cc1, cc2, cc3 = st.columns(3)
+                    
+                    side_key = f"clear_side_{zone_id}_{account_id}"
+                    target_key = f"target_side_{zone_id}_{account_id}"
+                    
+                    side_opts = ["Farketmez", "BUY (Yukarı)", "SELL (Aşağı)"]
+                    target_opts = ["Farketmez (Hepsi)", "Sadece BUY İşlemleri", "Sadece SELL İşlemleri"]
+                    
+                    # --- ESNEK VE KULLANICIYA ÖZGÜR DOMİNO MANTIĞI ---
+                    # Yön değiştiğinde tetiklenecek bayrak kontrolü
+                    last_ord_type_key = f"last_ord_type_{zone_id}_{account_id}"
+                    ord_changed = st.session_state.get(last_ord_type_key) != z_order_type
+                    st.session_state[last_ord_type_key] = z_order_type
+
+                    # İlk yükleme veya Ana İşlem Yönü değiştirildiğinde önerilen varsayılanları ata
+                    if side_key not in st.session_state or ord_changed:
+                        if z_order_type == "BUY":
+                            st.session_state[side_key] = "SELL (Aşağı)"
+                        elif z_order_type == "SELL":
+                            st.session_state[side_key] = "BUY (Yukarı)"
+                        else:
+                            st.session_state[side_key] = zone.get("clear_exit_side", "Farketmez")
+
+                    if target_key not in st.session_state or ord_changed:
+                        if z_order_type == "BUY":
+                            st.session_state[target_key] = "Sadece BUY İşlemleri"
+                        elif z_order_type == "SELL":
+                            st.session_state[target_key] = "Sadece SELL İşlemleri"
+                        else:
+                            st.session_state[target_key] = zone.get("clear_target_side", "Farketmez (Hepsi)")
+
+                    # Kullanıcı "Hangi Yönden Çıkış Yaparsa?" kutusunu kendisi değiştirdiğinde bağımsız tepki
+                    last_side_key = f"last_side_{zone_id}_{account_id}"
+                    side_changed = st.session_state.get(last_side_key) != st.session_state.get(side_key)
+                    st.session_state[last_side_key] = st.session_state.get(side_key)
+
+                    if side_changed and not ord_changed:
+                        if st.session_state[side_key] == "BUY (Yukarı)":
+                            st.session_state[target_key] = "Sadece SELL İşlemleri"
+                        elif st.session_state[side_key] == "SELL (Aşağı)":
+                            st.session_state[target_key] = "Sadece BUY İşlemleri"
+                        elif st.session_state[side_key] == "Farketmez":
+                            st.session_state[target_key] = "Farketmez (Hepsi)"
+
+                    with cc1:
+                        z_clear_side = st.selectbox(
+                            "Hangi yönden çıkış yaparsa?",
+                            options=side_opts,
+                            key=side_key,
+                            help="Fiyat bölgeden çıkarken hangi sınırı kırarsa temizliğin tetikleneceğini belirler."
+                        )
+
+                    with cc2:
+                        z_clear_target = st.selectbox(
+                            "Kapatılacak Yön",
+                            options=target_opts,
+                            key=target_key,
+                            help="ℹ️ Sadece bu bölgeye ait (Magic ID) işlemler etkilenir. Diğer bölgelerdeki işlemleriniz korunur."
+                        )
+
+                    with cc3:
+                        scope_opts = [
+                            "Sadece Bekleyen Emirler",
+                            "Tüm İşlemler (Emirler + Pozisyonlar)",
+                        ]
+                        cur_scope = zone.get("clear_scope", "Sadece Bekleyen Emirler")
+                        if cur_scope == "Sadece Emirler":
+                            cur_scope = "Sadece Bekleyen Emirler"
+                        if cur_scope not in scope_opts:
+                            cur_scope = "Sadece Bekleyen Emirler"
+
                         z_clear_scope = st.selectbox(
                             "Neler Temizlensin?",
                             options=scope_opts,
-                            index=scope_opts.index(current_scope) if current_scope in scope_opts else 0,
+                            index=scope_opts.index(cur_scope),
                             key=f"scope_{zone_id}_{account_id}",
-                            help="ℹ️ Bölge Temizlik Kuralı: Fiyat bu bölgeden çıktığında sadece bu bölgeye ait (Magic Number) işlemler etkilenir, diğer bölgelerdeki işlemleriniz korunur. 'Ters Yönlü İşlemler' seçilirse, yukarı kırılımda Sell işlemleri, aşağı kırılımda Buy işlemleri kapatılır.",
+                            help="Sadece bekleyen emirler mi iptal edilsin, yoksa açık pozisyonlar da kapatılsın (SL) mı?"
                         )
-                    with cc2:
+                    # 2. SATIR: Çıkış Tetikleyicisi ve Zaman Dilimi
+                    cc4, cc5, cc6 = st.columns(3)
+                    with cc4:
                         z_exit_cond = st.selectbox(
                             "Çıkış Tetikleyicisi",
                             options=["Anlık Fiyat", "Mum Kapanışı"],
@@ -616,9 +687,9 @@ def render_model_2_settings(
                                 else 1
                             ),
                             key=f"cond_{zone_id}_{account_id}",
-                            help="İğne atmalarda işlem yapılmasın diyorsan Mum Kapanışını seçmelisin.",
                         )
-                    with cc3:
+
+                    with cc5:
                         if z_exit_cond == "Mum Kapanışı":
                             tf_opts = ["M1", "M5", "M15", "M30", "H1", "H4", "D1"]
                             cur_tf = zone.get("exit_timeframe", "M15")
@@ -630,6 +701,9 @@ def render_model_2_settings(
                             )
                         else:
                             z_exit_tf = zone.get("exit_timeframe", "M15")
+
+                    with cc6:
+                        st.empty()  # Düzeni korumak için boş bıraktık
 
         # 🌟 YENİ: Anlık Değişiklik (Modifiye) Dedektörü
         is_modified = False
@@ -700,7 +774,10 @@ def render_model_2_settings(
                 or int(z_levels_above) != int(orig_zone.get("levels_above", 5))
                 or int(z_max_pos) != int(orig_zone.get("max_positions", 10))
                 or bool(z_clear) != bool(orig_zone.get("clear_on_exit", True))
+                or str(z_clear_side)
+                != str(orig_zone.get("clear_exit_side", ""))  # 🌟 YENİ
                 or str(z_clear_scope) != str(orig_zone.get("clear_scope", ""))
+                or str(z_clear_target) != str(orig_zone.get("clear_target_side", ""))
                 or str(z_exit_cond) != str(orig_zone.get("exit_condition", ""))
                 or str(z_exit_tf) != str(orig_zone.get("exit_timeframe", ""))
             ):
@@ -781,7 +858,9 @@ def render_model_2_settings(
                 "levels_above": z_levels_above,
                 "max_positions": z_max_pos,
                 "clear_on_exit": z_clear,
+                "clear_exit_side": z_clear_side,  # 🌟 YENİ
                 "clear_scope": z_clear_scope,
+                "clear_target_side": z_clear_target,
                 "exit_condition": z_exit_cond,
                 "exit_timeframe": z_exit_tf,
             }

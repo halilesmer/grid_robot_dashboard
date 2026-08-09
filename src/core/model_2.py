@@ -654,54 +654,74 @@ def manage_dynamic_grid():
             ):
                 is_exited = True
 
-        if is_exited:
+    if is_exited:
             if ACTIVE_ZONE.get("clear_on_exit", True):
-                scope = ACTIVE_ZONE.get("clear_scope", "Sadece Bekleyen Emirler")
-                # Geriye dönük uyumluluk
-                if scope == "Sadece Emirler": scope = "Sadece Bekleyen Emirler"
-                elif scope == "Emirler + Açık Pozisyonlar": scope = "Tüm İşlemler"
+                # 🚨 Güvenli referans fiyatı (Anlık fiyat hatası için)
+                ref_price = current_avg_price if exit_cond == "Anlık Fiyat" else close_price
+                actual_exit_dir = "BUY (Yukarı)" if ref_price > z_max else "SELL (Aşağı)"
+                trigger_side = ACTIVE_ZONE.get("clear_exit_side", "Farketmez")
+                
+                if trigger_side != "Farketmez" and trigger_side != actual_exit_dir:
+                    log_message(f"ℹ️ Fiyat bölgeden çıktı ({actual_exit_dir}) ancak temizlik '{trigger_side}' ayarlandığı için işlemler pas geçildi. Bölge pasif duruma alınıyor.")
+                else:
+                    scope = ACTIVE_ZONE.get("clear_scope", "Sadece Bekleyen Emirler")
+                    target = ACTIVE_ZONE.get("clear_target_side", "Farketmez (Hepsi)")
+                    
+                    if scope == "Sadece Emirler": scope = "Sadece Bekleyen Emirler"
+                    elif scope == "Emirler + Açık Pozisyonlar": scope = "Tüm İşlemler"
 
-                log_message(
-                    f"🧹 Bölge ({z_min}-{z_max}) dışına çıkıldı ({exit_cond}). Temizlik: {scope}"
-                )
-                target_magic = BASE_MAGIC_NUMBER + ACTIVE_ZONE_IDX + 1
+                    log_message(f"🧹 Bölge ({z_min}-{z_max}) DIŞINA ÇIKILDI! ({actual_exit_dir}). Kapsam: {scope} | Kapatılacak Yön: {target}")
+                    target_magic = BASE_MAGIC_NUMBER + ACTIVE_ZONE_IDX + 1
 
-                for order in robot_orders:
-                    if order.magic == target_magic:
-                        cancel_order(order)
+                    silinen_emir_sayisi = 0
+                    for order in robot_orders:
+                        if order.magic == target_magic:
+                            if target == "Farketmez (Hepsi)":
+                                cancel_order(order)
+                                silinen_emir_sayisi += 1
+                            elif target == "Sadece BUY İşlemleri" and order.type in [mt5.ORDER_TYPE_BUY_LIMIT, mt5.ORDER_TYPE_BUY_STOP]:
+                                cancel_order(order)
+                                silinen_emir_sayisi += 1
+                            elif target == "Sadece SELL İşlemleri" and order.type in [mt5.ORDER_TYPE_SELL_LIMIT, mt5.ORDER_TYPE_SELL_STOP]:
+                                cancel_order(order)
+                                silinen_emir_sayisi += 1
+                                
+                    log_message(f"🧹 Toplam {silinen_emir_sayisi} adet bekleyen {target} emri temizlendi.")
 
-                if scope == "Tüm İşlemler":
-                    for pos in robot_positions:
-                        if pos.magic == target_magic:
-                            close_position(mt5, pos, SYMBOL, log_message)
-                elif scope == "Ters Yönlü İşlemler":
-                    exit_direction = "UP" if close_price > z_max else "DOWN"
-                    log_message(f"🔍 Çıkış Yönü: {exit_direction}. Sadece ters yönlü açık pozisyonlar kapatılacak.")
-                    for pos in robot_positions:
-                        if pos.magic == target_magic:
-                            if exit_direction == "UP" and pos.type == mt5.POSITION_TYPE_SELL:
-                                log_message(f"🧹 Ters Yönlü Temizlik (YUKARI Çıkış): SELL pozisyonu kapatılıyor (Bilet: {pos.ticket})")
-                                close_position(mt5, pos, SYMBOL, log_message)
-                            elif exit_direction == "DOWN" and pos.type == mt5.POSITION_TYPE_BUY:
-                                log_message(f"🧹 Ters Yönlü Temizlik (AŞAĞI Çıkış): BUY pozisyonu kapatılıyor (Bilet: {pos.ticket})")
-                                close_position(mt5, pos, SYMBOL, log_message)
+                    if scope == "Tüm İşlemler":
+                        kapanan_poz_sayisi = 0
+                        for pos in robot_positions:
+                            if pos.magic == target_magic:
+                                if target == "Farketmez (Hepsi)":
+                                    close_position(mt5, pos, SYMBOL, log_message)
+                                    kapanan_poz_sayisi += 1
+                                elif target == "Sadece BUY İşlemleri" and pos.type == mt5.POSITION_TYPE_BUY:
+                                    close_position(mt5, pos, SYMBOL, log_message)
+                                    kapanan_poz_sayisi += 1
+                                elif target == "Sadece SELL İşlemleri" and pos.type == mt5.POSITION_TYPE_SELL:
+                                    close_position(mt5, pos, SYMBOL, log_message)
+                                    kapanan_poz_sayisi += 1
+                        
+                        log_message(f"🧹 Toplam {kapanan_poz_sayisi} adet {target} açık pozisyonu SL (Kapatıldı) oldu.")
 
                 robot_orders = get_all_robot_orders()
                 robot_positions = get_all_robot_positions()
 
-                # 🌟 YENİ: Arayüze "Bölgeden Çıkıldı" bilgisini ilet
+                # 3. ARAYÜZE "DURDURULDU" BİLGİSİNİ İLET
                 account_id = os.environ.get("ACTIVE_ACCOUNT_ID", "default")
                 states_file = get_ui_state_path(account_id)
                 try:
+                    bg_states = {}
                     if os.path.exists(states_file):
                         with open(states_file, "r", encoding="utf-8") as f:
                             bg_states = json.load(f)
-                        bg_states[str(ACTIVE_ZONE_IDX)] = "AUTO_CLEAR"
+                        
+                    bg_states[str(ACTIVE_ZONE_IDX)] = "AUTO_CLEAR"
 
-                        tmp_states_file = states_file + ".tmp"
-                        with open(tmp_states_file, "w", encoding="utf-8") as f:
-                            json.dump(bg_states, f)
-                        os.replace(tmp_states_file, states_file)
+                    tmp_states_file = states_file + ".tmp"
+                    with open(tmp_states_file, "w", encoding="utf-8") as f:
+                        json.dump(bg_states, f)
+                    os.replace(tmp_states_file, states_file)
                 except Exception as e:
                     pass
 

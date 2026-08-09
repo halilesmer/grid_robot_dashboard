@@ -19,15 +19,21 @@ def normalize_volume(mt5_module, symbol, volume):
     return float(f"{rounded_vol:.6f}")
 
 
-def cancel_all_pending_orders(mt5_module, magic=None):
-    """Sadece bekleyen emirleri (PENDING) siler, açık işlemlere (AKTİF) dokunmaz."""
+def cancel_all_pending_orders(mt5_module, magic=None, magic_prefix=200000):
+    """Sadece bekleyen emirleri (PENDING) siler. Manuel işlemleri (Magic: 0) korur."""
     orders = mt5_module.orders_get()
     if orders is None or len(orders) == 0:
         return
     for order in orders:
-        # Eğer belirli bir magic number verilmişse, sadece o robota ait olanları sil
-        if magic is not None and order.magic != magic:
-            continue
+        if magic is not None:
+            if order.magic != magic:
+                continue
+        else:
+            # 🚨 KORUMA: magic belirtilmemişse hesaptaki tüm emirleri SİLME!
+            # Yalnızca bu robotun serisine (200000 - 201000) ait olanları temizle.
+            if not (magic_prefix <= order.magic < magic_prefix + 1000):
+                continue
+                
         request = {
             "action": mt5_module.TRADE_ACTION_REMOVE,
             "order": order.ticket,
