@@ -654,7 +654,7 @@ def manage_dynamic_grid():
             ):
                 is_exited = True
 
-    if is_exited:
+        if is_exited:
             if ACTIVE_ZONE.get("clear_on_exit", True):
                 # 🚨 Güvenli referans fiyatı (Anlık fiyat hatası için)
                 ref_price = current_avg_price if exit_cond == "Anlık Fiyat" else close_price
