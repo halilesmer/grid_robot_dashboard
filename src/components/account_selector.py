@@ -190,17 +190,20 @@ def render_account_selector():
             if active_mt5_path:
                 appdata_base = os.path.expandvars(r"%APPDATA%\MetaQuotes\Terminal")
                 if os.path.exists(appdata_base):
-                    norm_target_path = os.path.normpath(active_mt5_path).lower()
+                    # MT5 yolu terminal64.exe'yi içerdiği için os.path.dirname ile sadece klasör yolunu alıyoruz
+                    target_dir = os.path.dirname(active_mt5_path)
+                    norm_target_dir = os.path.normpath(target_dir).lower()
+                    
                     for terminal_hash in os.listdir(appdata_base):
                         hash_dir = os.path.join(appdata_base, terminal_hash)
                         origin_txt = os.path.join(hash_dir, "origin.txt")
                         
-                        # origin.txt içindeki yol seçili hesabın mt5_path adresiyle eşleşiyor mu?
+                        # origin.txt içindeki yol seçili hesabın klasör adresiyle eşleşiyor mu?
                         if os.path.exists(origin_txt):
                             try:
                                 with open(origin_txt, "r", encoding="utf-16-le", errors="ignore") as f:
                                     orig_path = f.read().strip().replace("\x00", "").lower()
-                                if os.path.normpath(orig_path) == norm_target_path:
+                                if os.path.normpath(orig_path) == norm_target_dir:
                                     target_log_paths.append(os.path.join(hash_dir, "Logs", f"{today_str}.log"))
                                     break
                             except Exception:
