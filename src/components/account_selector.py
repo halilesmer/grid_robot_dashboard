@@ -167,21 +167,57 @@ def render_account_selector():
     # --- EN SAĞDAKİ ÜÇ NOKTA (POPOVER) MENÜSÜ ---
     with cols[-1].popover("⋮", width="stretch"):
 
-        # 🌟 YENİ: Dinamik MT5 Log İndirme Butonu
+        # 🌟 YENİ: Hesaba ve MT5 Yoluna Özel Dinamik Log Tespiti
         try:
-            import MetaTrader5 as mt5
-            term_info = mt5.terminal_info()
             log_data = None
-            log_filename = "mt5_log.txt"
+            today_str = datetime.datetime.now().strftime("%Y%m%d")
+            active_login = active_account.get("login", "hesap")
+            log_filename = f"MT5_{active_login}_{today_str}.log"
             
-            if term_info:
-                today_str = datetime.datetime.now().strftime("%Y%m%d")
-                log_filename = f"MT5_Terminal_{today_str}.log"
-                log_path = os.path.join(term_info.data_path, "Logs", f"{today_str}.log")
-                if os.path.exists(log_path):
-                    with open(log_path, "rb") as f:
+            target_log_paths = []
+
+            # 1. MT5 Çalışıyorsa Anlık Data Path'i Al
+            try:
+                import MetaTrader5 as mt5
+                term_info = mt5.terminal_info()
+                if term_info and hasattr(term_info, "data_path"):
+                    target_log_paths.append(os.path.join(term_info.data_path, "Logs", f"{today_str}.log"))
+            except Exception:
+                pass
+
+            # 2. Hesabın mt5_path Bilgisinden AppData/MetaQuotes/Terminal Altındaki Gerçek Klasörünü Tara
+            active_mt5_path = active_account.get("mt5_path", "")
+            if active_mt5_path:
+                appdata_base = os.path.expandvars(r"%APPDATA%\MetaQuotes\Terminal")
+                if os.path.exists(appdata_base):
+                    norm_target_path = os.path.normpath(active_mt5_path).lower()
+                    for terminal_hash in os.listdir(appdata_base):
+                        hash_dir = os.path.join(appdata_base, terminal_hash)
+                        origin_txt = os.path.join(hash_dir, "origin.txt")
+                        
+                        # origin.txt içindeki yol seçili hesabın mt5_path adresiyle eşleşiyor mu?
+                        if os.path.exists(origin_txt):
+                            try:
+                                with open(origin_txt, "r", encoding="utf-16-le", errors="ignore") as f:
+                                    orig_path = f.read().strip().replace("\x00", "").lower()
+                                if os.path.normpath(orig_path) == norm_target_path:
+                                    target_log_paths.append(os.path.join(hash_dir, "Logs", f"{today_str}.log"))
+                                    break
+                            except Exception:
+                                pass
+
+                # Yedek Yol: Doğrudan Program Files İçindeki Kurulum Dizinine Bak
+                term_dir = os.path.dirname(active_mt5_path)
+                target_log_paths.append(os.path.join(term_dir, "MQL5", "Logs", f"{today_str}.log"))
+                target_log_paths.append(os.path.join(term_dir, "logs", f"{today_str}.log"))
+
+            # Bulunan Yolları Sırayla Kontrol Et
+            for l_path in target_log_paths:
+                if os.path.exists(l_path):
+                    with open(l_path, "rb") as f:
                         log_data = f.read()
-            
+                    break
+
             if log_data:
                 st.download_button(
                     label="📥 MT5 Logunu İndir",
@@ -193,7 +229,7 @@ def render_account_selector():
             else:
                 st.button("📥 MT5 Logu Bulunamadı", disabled=True, use_container_width=True)
         except Exception:
-            st.button("📥 MT5 Bağlantısı Bekleniyor", disabled=True, use_container_width=True)
+            st.button("📥 MT5 Logu Okunamadı", disabled=True, use_container_width=True)
 
         if st.button(
             "✏️ Seçili Hesabı Düzenle",
