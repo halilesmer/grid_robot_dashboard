@@ -1032,6 +1032,16 @@ def run_startup_checks():
             f"🧠 Hafıza Kurtarıldı: Aktif bölgeler: {list(active_zones_state.keys())}"
         )
 
+    # 🛡️ YENİ KORUMA: Önceki oturumdan kalan "Temizle" (CLEAR) komutlarını yok et
+    account_id = os.environ.get("ACTIVE_ACCOUNT_ID", "default")
+    ui_states_file = get_ui_state_path(account_id)
+    if os.path.exists(ui_states_file):
+        try:
+            os.remove(ui_states_file)
+            log_message("🛡️ Güvenlik Koruması: Arayüzden kalan eski temizlik komutları (ui_states) silindi.")
+        except Exception:
+            pass
+
     log_message("Tum baslangic kontrolleri basarili!")
     return True
 
@@ -1059,16 +1069,8 @@ def main_loop():
                 continue
 
             if not INITIAL_CLEANUP_DONE:
-                eski_emirler = get_all_robot_orders()
-                if eski_emirler:
-                    log_message(
-                        "🚀 Başlangıç Temizliği: Eski ayarlardan kalan tüm bekleyen emirler siliniyor..."
-                    )
-                    for emir in eski_emirler:
-                        cancel_order(emir)
-                    log_message(
-                        "✅ Temizlik bitti. Ağ, yeni ayarlarınızla güncel merkeze göre sıfırdan örülecek."
-                    )
+                # 🚀 Başlangıç Temizliği İPTAL EDİLDİ (Açık işlemlerin ve emirlerin korunması için)
+                log_message("✅ Başlangıç emir koruması aktif. Eski bekleyen emirler silinmedi.")
                 INITIAL_CLEANUP_DONE = True
 
             try:
