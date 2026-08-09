@@ -2,6 +2,7 @@
 import streamlit as st
 import json
 import os
+import datetime
 from src.components.dialogs import confirm_delete_account_dialog
 
 ACCOUNTS_FILE = "configs/accounts.json"
@@ -165,6 +166,34 @@ def render_account_selector():
 
     # --- EN SAĞDAKİ ÜÇ NOKTA (POPOVER) MENÜSÜ ---
     with cols[-1].popover("⋮", width="stretch"):
+
+        # 🌟 YENİ: Dinamik MT5 Log İndirme Butonu
+        try:
+            import MetaTrader5 as mt5
+            term_info = mt5.terminal_info()
+            log_data = None
+            log_filename = "mt5_log.txt"
+            
+            if term_info:
+                today_str = datetime.datetime.now().strftime("%Y%m%d")
+                log_filename = f"MT5_Terminal_{today_str}.log"
+                log_path = os.path.join(term_info.data_path, "Logs", f"{today_str}.log")
+                if os.path.exists(log_path):
+                    with open(log_path, "rb") as f:
+                        log_data = f.read()
+            
+            if log_data:
+                st.download_button(
+                    label="📥 MT5 Logunu İndir",
+                    data=log_data,
+                    file_name=log_filename,
+                    mime="text/plain",
+                    use_container_width=True,
+                )
+            else:
+                st.button("📥 MT5 Logu Bulunamadı", disabled=True, use_container_width=True)
+        except Exception:
+            st.button("📥 MT5 Bağlantısı Bekleniyor", disabled=True, use_container_width=True)
 
         if st.button(
             "✏️ Seçili Hesabı Düzenle",

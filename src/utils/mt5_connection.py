@@ -3,6 +3,8 @@
 import platform
 import time
 import os
+import shutil  # 🌟 YENİ EKLENDİ (Dosya kopyalamak için)
+import datetime  # 🌟 YENİ EKLENDİ (Tarih formatı için)
 
 # Streamlit sicher importieren, um Subprocess-Abstürze zu verhindern!
 try:
@@ -129,4 +131,48 @@ def connect_to_mt5(account_config):
         mt5.shutdown()
         return False
 
+    # 🌟 BAĞLANTI BAŞARILI OLDUKTAN SONRA LOGLARI YEDEKLE (Opsiyonel olarak buraya ekleyebilirsin)
+    # backup_mt5_logs()
+
     return True
+
+
+# ==========================================
+# 🌟 YENİ: MT5 Terminal Loglarını Yedekleme Fonksiyonu
+# ==========================================
+def backup_mt5_logs(custom_log_dir="logs/mt5"):
+    """
+    MT5 Terminal loglarını okur ve projedeki logs/mt5 klasörüne kopyalar.
+    """
+    if not MT5_AVAILABLE or platform.system() != "Windows":
+        return  # Mac veya MT5 olmayan ortamlarda pas geç
+
+    # 1. Klasör yoksa oluştur
+    if not os.path.exists(custom_log_dir):
+        try:
+            os.makedirs(custom_log_dir)
+        except Exception:
+            pass
+
+    # 2. MT5 Terminal bilgilerini çek
+    term_info = mt5.terminal_info()
+    if term_info is None:
+        return
+
+    # 3. MT5 log klasörünün yolunu bul
+    mt5_logs_dir = os.path.join(term_info.data_path, "Logs")
+
+    # 4. Bugünün tarihine göre dosya adını oluştur (Örn: 20260810.log)
+    today_str = datetime.datetime.now().strftime("%Y%m%d")
+    today_log_file = f"{today_str}.log"
+    source_log_path = os.path.join(mt5_logs_dir, today_log_file)
+
+    # 5. Dosyayı kendi klasörümüze kopyala
+    if os.path.exists(source_log_path):
+        target_log_path = os.path.join(custom_log_dir, f"MT5_Terminal_{today_log_file}")
+        try:
+            # copy2 kullanarak dosya izinleri ve oluşturulma tarihlerini de koruruz
+            shutil.copy2(source_log_path, target_log_path)
+            # safe_log(f"MT5 Terminal Logu başarıyla yedeklendi.", type="warning")
+        except Exception as e:
+            safe_log(f"MT5 Log kopyalama hatası: {e}")
