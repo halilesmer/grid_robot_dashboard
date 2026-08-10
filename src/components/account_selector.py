@@ -46,14 +46,10 @@ def load_accounts():
 def render_account_selector():
     """Ana ekran için hibrit (Button + Selectbox) hesap seçim menüsünü oluşturur."""
 
-    # 🌟 Popover'ı (Açılır Menü) Kapatma Hilesi
+    # 🌟 Popover'ı (Açılır Menü) Kapatma Hilesi (Modern Versiyon)
     if st.session_state.get("close_popover"):
         st.session_state.close_popover = False
-        import streamlit.components.v1 as components
-
-        components.html(
-            "<script>window.parent.document.body.click();</script>", height=0, width=0
-        )
+        st.html("<script>window.parent.document.body.click();</script>")
 
     accounts = load_accounts()
 
