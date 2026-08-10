@@ -209,10 +209,14 @@ def render_account_selector():
                             except Exception:
                                 pass
 
-                # Yedek Yol: Kurulum Dizinindeki Log Klasörleri
+                # Yedek Yol: Kurulum Dizinindeki Log Klasörleri (Tekrarsız Ekleme)
                 term_dir = os.path.dirname(active_mt5_path)
-                target_log_dirs.append(os.path.join(term_dir, "MQL5", "Logs"))
-                target_log_dirs.append(os.path.join(term_dir, "logs"))
+                for backup_dir in [
+                    os.path.join(term_dir, "MQL5", "Logs"),
+                    os.path.join(term_dir, "logs"),
+                ]:
+                    if backup_dir not in target_log_dirs:
+                        target_log_dirs.append(backup_dir)
 
             # Bulunan Klasörlerdeki En Son Güncellenmiş (.log) Dosyasını Seç
             for log_dir in target_log_dirs:
@@ -382,20 +386,34 @@ def render_account_selector():
                                 break
 
                     selected_terminal = st.selectbox(
-                        "Bilgisayardaki MT5 Klasörleri (Hızlı Seçim)",
+                        "MT5 Yolu Seçimi *",
                         terminal_options,
                         index=def_term_idx,
+                        help="Listeden kurulu bir MT5 seçebilir veya en alttaki seçeneği işaretleyip özel bir adres girebilirsiniz.",
                     )
 
-                    if selected_terminal == "Farklı Bir Yol (Manuel Gireceğim)":
+                    # Eğer kullanıcı "Manuel Gireceğim" derse metin kutusunu aktif et, yoksa salt okunur bilgi olarak göster veya arkada kullan
+                    if "Farklı Bir Yol" in selected_terminal:
                         new_mt5_path = st.text_input(
-                            "MT5 Yolu (Manuel Giriş) *",
+                            "Özel MT5 Yolu *",
                             value=old_mt5_path if is_edit else "",
                             placeholder="C:/Program Files/MetaTrader 5/terminal64.exe",
                         )
                     else:
-                        # Listeden seçim yapıldıysa alt input kutusunu gösterme, yolu doğrudan arkada değişkene ata
-                        new_mt5_path = selected_terminal.split(" - ")[-1].strip()
+                        parsed_path = selected_terminal.split(" - ")[-1].strip()
+                        new_mt5_path = parsed_path
+
+                        if selected_terminal.startswith("🔴 Dolu"):
+                            st.error(
+                                "⚠️ Seçtiğiniz bu MT5 klasörü başka bir hesap tarafından kullanılıyor!"
+                            )
+
+                        st.text_input(
+                            "Seçilen MT5 Yolu (Otomatik)",
+                            value=parsed_path,
+                            disabled=True,
+                            help="Listeden seçim yaptığınız için bu alan otomatik doldurulmuştur.",
+                        )
 
                 new_notes = st.text_area(
                     "📝 Hesap Notu (İsteğe Bağlı)",
