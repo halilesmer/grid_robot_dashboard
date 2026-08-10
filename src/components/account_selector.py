@@ -167,30 +167,28 @@ def render_account_selector():
     # --- EN SAĞDAKİ ÜÇ NOKTA (POPOVER) MENÜSÜ ---
     with cols[-1].popover("⋮", width="stretch"):
 
-        # 🌟 YENİ: Hesaba ve MT5 Yoluna Özel Dinamik Log Tespiti
+        # 🌟 YENİ: En Güncel Log Dosyasını Klasör Tarayarak Bulma (Gelişmiş)
         try:
             log_data = None
-            today_str = datetime.datetime.now().strftime("%Y%m%d")
             active_login = active_account.get("login", "hesap")
-            log_filename = f"MT5_{active_login}_{today_str}.log"
+            log_filename = f"MT5_{active_login}_latest.log"
             
-            target_log_paths = []
+            target_log_dirs = []
 
-            # 1. MT5 Çalışıyorsa Anlık Data Path'i Al
+            # 1. MT5 Çalışıyorsa Anlık Data Path Klasörünü Al
             try:
                 import MetaTrader5 as mt5
                 term_info = mt5.terminal_info()
                 if term_info and hasattr(term_info, "data_path"):
-                    target_log_paths.append(os.path.join(term_info.data_path, "Logs", f"{today_str}.log"))
+                    target_log_dirs.append(os.path.join(term_info.data_path, "Logs"))
             except Exception:
                 pass
 
-            # 2. Hesabın mt5_path Bilgisinden AppData/MetaQuotes/Terminal Altındaki Gerçek Klasörünü Tara
+            # 2. Hesabın mt5_path Bilgisinden AppData İçindeki Logs Klasörünü Bul
             active_mt5_path = active_account.get("mt5_path", "")
             if active_mt5_path:
                 appdata_base = os.path.expandvars(r"%APPDATA%\MetaQuotes\Terminal")
                 if os.path.exists(appdata_base):
-                    # MT5 yolu terminal64.exe'yi içerdiği için os.path.dirname ile sadece klasör yolunu alıyoruz
                     target_dir = os.path.dirname(active_mt5_path)
                     norm_target_dir = os.path.normpath(target_dir).lower()
                     
@@ -198,28 +196,38 @@ def render_account_selector():
                         hash_dir = os.path.join(appdata_base, terminal_hash)
                         origin_txt = os.path.join(hash_dir, "origin.txt")
                         
-                        # origin.txt içindeki yol seçili hesabın klasör adresiyle eşleşiyor mu?
                         if os.path.exists(origin_txt):
                             try:
                                 with open(origin_txt, "r", encoding="utf-16-le", errors="ignore") as f:
                                     orig_path = f.read().strip().replace("\x00", "").lower()
                                 if os.path.normpath(orig_path) == norm_target_dir:
-                                    target_log_paths.append(os.path.join(hash_dir, "Logs", f"{today_str}.log"))
+                                    target_log_dirs.append(os.path.join(hash_dir, "Logs"))
                                     break
                             except Exception:
                                 pass
 
-                # Yedek Yol: Doğrudan Program Files İçindeki Kurulum Dizinine Bak
+                # Yedek Yol: Kurulum Dizinindeki Log Klasörleri
                 term_dir = os.path.dirname(active_mt5_path)
-                target_log_paths.append(os.path.join(term_dir, "MQL5", "Logs", f"{today_str}.log"))
-                target_log_paths.append(os.path.join(term_dir, "logs", f"{today_str}.log"))
+                target_log_dirs.append(os.path.join(term_dir, "MQL5", "Logs"))
+                target_log_dirs.append(os.path.join(term_dir, "logs"))
 
-            # Bulunan Yolları Sırayla Kontrol Et
-            for l_path in target_log_paths:
-                if os.path.exists(l_path):
-                    with open(l_path, "rb") as f:
-                        log_data = f.read()
-                    break
+            # Bulunan Klasörlerdeki En Son Güncellenmiş (.log) Dosyasını Seç
+            for log_dir in target_log_dirs:
+                if os.path.exists(log_dir):
+                    try:
+                        log_files = [f for f in os.listdir(log_dir) if f.endswith(".log")]
+                        if log_files:
+                            # Tarihe/isme göre sondan başa sırala (Örn: 20260810.log en başa gelir)
+                            log_files.sort(reverse=True) 
+                            latest_log_path = os.path.join(log_dir, log_files[0])
+                            
+                            with open(latest_log_path, "rb") as f:
+                                log_data = f.read()
+                            
+                            log_filename = f"MT5_{active_login}_{log_files[0]}"
+                            break
+                    except Exception:
+                        pass
 
             if log_data:
                 st.download_button(
