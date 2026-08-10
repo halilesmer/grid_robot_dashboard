@@ -59,9 +59,12 @@ def render_account_selector():
 
     if not accounts:
         st.warning(
-            "Hiç hesap bulunamadı! Lütfen '➕ Yeni' butonuna tıklayarak ilk hesabınızı ekleyin."
+            "Hiç hesap bulunamadı! Lütfen aşağıdaki formu doldurarak ilk hesabınızı sisteme kaydedin."
         )
         st.session_state.selected_account = None
+        st.session_state.show_add_form = (
+            True  # 🌟 YENİ EKLENDİ: Hesap yoksa formu otomatik aç
+        )
 
     # ==========================================
     # ÇİFT LOGİN (DUPLICATE) KONTROLÜ
@@ -172,7 +175,7 @@ def render_account_selector():
             log_data = None
             active_login = active_account.get("login", "hesap")
             log_filename = f"MT5_{active_login}_latest.log"
-            
+
             target_log_dirs = []
 
             # 1. MT5 Çalışıyorsa Anlık Data Path Klasörünü Al
@@ -191,11 +194,11 @@ def render_account_selector():
                 if os.path.exists(appdata_base):
                     target_dir = os.path.dirname(active_mt5_path)
                     norm_target_dir = os.path.normpath(target_dir).lower()
-                    
+
                     for terminal_hash in os.listdir(appdata_base):
                         hash_dir = os.path.join(appdata_base, terminal_hash)
                         origin_txt = os.path.join(hash_dir, "origin.txt")
-                        
+
                         if os.path.exists(origin_txt):
                             try:
                                 with open(origin_txt, "r", encoding="utf-16-le", errors="ignore") as f:
@@ -220,10 +223,10 @@ def render_account_selector():
                             # Tarihe/isme göre sondan başa sırala (Örn: 20260810.log en başa gelir)
                             log_files.sort(reverse=True) 
                             latest_log_path = os.path.join(log_dir, log_files[0])
-                            
+
                             with open(latest_log_path, "rb") as f:
                                 log_data = f.read()
-                            
+
                             log_filename = f"MT5_{active_login}_{log_files[0]}"
                             break
                     except Exception:
@@ -385,15 +388,14 @@ def render_account_selector():
                     )
 
                     if selected_terminal == "Farklı Bir Yol (Manuel Gireceğim)":
-                        auto_path = old_mt5_path if is_edit else ""
+                        new_mt5_path = st.text_input(
+                            "MT5 Yolu (Manuel Giriş) *",
+                            value=old_mt5_path if is_edit else "",
+                            placeholder="C:/Program Files/MetaTrader 5/terminal64.exe",
+                        )
                     else:
-                        auto_path = selected_terminal.split(" - ")[-1].strip()
-
-                    new_mt5_path = st.text_input(
-                        "MT5 Yolu *",
-                        value=auto_path,
-                        placeholder="C:/Program Files/MetaTrader 5/terminal64.exe",
-                    )
+                        # Listeden seçim yapıldıysa alt input kutusunu gösterme, yolu doğrudan arkada değişkene ata
+                        new_mt5_path = selected_terminal.split(" - ")[-1].strip()
 
                 new_notes = st.text_area(
                     "📝 Hesap Notu (İsteğe Bağlı)",
