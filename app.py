@@ -47,20 +47,16 @@ st.set_page_config(
 # 2. ORTAM VE SAYFA AYARI (İLK STREAMLIT KOMUTU)
 # ==========================================
 def get_dynamic_page_config():
-    """Çalışan portu veya ortam değişkenini algılayarak dinamik sekme başlığı üretir."""
+    """Başlatma komutundaki portu (sys.argv) doğrudan sorgulayarak kesin başlık üretir."""
     env = os.getenv("ROBOT_ENV", "").upper()
 
-    host = ""
-    try:
-        # Resmi Streamlit context API üzerinden HTTP başlıklarını alıyoruz
-        headers = getattr(st, "context", None)
-        if headers and hasattr(headers, "headers"):
-            host = headers.headers.get("Host", "")
-    except Exception:
-        pass
+    # 1. Komut satırı argümanlarından portu bul (Örn: --server.port 8520)
+    args_str = " ".join(sys.argv)
 
-    # Canlı ortam portları veya ortam değişkeni kontrolü
-    is_live = env == "LIVE" or any(p in host for p in ["8520", "8521", "8500"])
+    # 2. Canlı portlar veya ortam değişkeni kontrolü
+    is_live = env == "LIVE" or any(
+        port in args_str for port in ["8520", "8521", "8500"]
+    )
 
     if is_live:
         return "🔴 [LIVE] Grid Robot Control", "🔴"
