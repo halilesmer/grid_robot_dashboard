@@ -347,14 +347,12 @@ def render_account_selector():
                         "Hesap Adı *",
                         value=edit_acc.get("account_name", ""),
                         placeholder="Örn: Canlı Hesap - 1",
-                        key="dyn_acc_name",
                     )
                     new_login = st.text_input(
                         "Hesap No (Login) *",
                         value=old_login if is_edit else "",
                         placeholder="Örn: 12345678",
                         help="Girdiğiniz bu numara aynı zamanda sistemde Hesap ID'si olarak kullanılacaktır.",
-                        key="dyn_acc_login",
                     )
 
                     env_opts = ["DEMO", "LIVE"]
@@ -364,10 +362,7 @@ def render_account_selector():
                         else 0
                     )
                     new_env = st.selectbox(
-                        "Çevre (Ortam) *",
-                        env_opts,
-                        index=def_env_idx,
-                        key="dyn_acc_env",
+                        "Çevre (Ortam) *", env_opts, index=def_env_idx
                     )
 
                 with col2:
@@ -376,13 +371,11 @@ def render_account_selector():
                         value=edit_acc.get("password", ""),
                         type="password",
                         placeholder="MT5 Şifresi",
-                        key="dyn_acc_pass",
                     )
                     new_server = st.text_input(
                         "Sunucu *",
                         value=edit_acc.get("server", ""),
                         placeholder="Örn: Eightcap-Demo",
-                        key="dyn_acc_server",
                     )
 
                     def_term_idx = 0
@@ -396,7 +389,6 @@ def render_account_selector():
                         "MT5 Yolu Seçimi *",
                         terminal_options,
                         index=def_term_idx,
-                        key="dyn_acc_terminal",
                         help="Listeden kurulu bir MT5 seçebilir veya en alttaki seçeneği işaretleyip özel bir adres girebilirsiniz.",
                     )
 
@@ -405,7 +397,6 @@ def render_account_selector():
                             "Özel MT5 Yolu *",
                             value=old_mt5_path if is_edit else "",
                             placeholder="C:/Program Files/MetaTrader 5/terminal64.exe",
-                            key="dyn_acc_manual_path",
                         )
                     else:
                         parsed_path = selected_terminal.split(" - ")[-1].strip()
@@ -420,7 +411,6 @@ def render_account_selector():
                             "Seçilen MT5 Yolu (Otomatik)",
                             value=parsed_path,
                             disabled=True,
-                            key="dyn_acc_auto_path",
                             help="Listeden seçim yaptığınız için bu alan otomatik doldurulmuştur.",
                         )
 
@@ -430,7 +420,6 @@ def render_account_selector():
                     max_chars=1000,
                     placeholder="Bu hesapla ilgili stratejiniz, kısıtlamalarınız veya özel notlar... (Maks. 1000 karakter)",
                     height=100,
-                    key="dyn_acc_notes",
                 )
 
                 btn_col1, btn_col2 = st.columns(2)
@@ -439,12 +428,9 @@ def render_account_selector():
                     submit_btn = st.button(
                         "💾 Değişiklikleri Kaydet" if is_edit else "💾 Hesabı Ekle",
                         width="stretch",
-                        key="dyn_acc_submit",
                     )
                 with btn_col2:
-                    cancel_btn = st.button(
-                        "❌ İptal", width="stretch", key="dyn_acc_cancel"
-                    )
+                    cancel_btn = st.button("❌ İptal", width="stretch")
 
                 if cancel_btn:
                     st.session_state.show_add_form = False
@@ -523,4 +509,5 @@ def render_account_selector():
                                         f"Kayıt sırasında teknik bir hata oluştu: {e}"
                                     )
 
+    # 🌟 DOĞRU YER: Form açık olsa da kapalı olsa da seçili hesabı her zaman döndür.
     return st.session_state.selected_account
