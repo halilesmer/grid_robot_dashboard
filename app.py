@@ -6,6 +6,9 @@ import json
 from pathlib import Path
 import platform
 import time
+import sys
+import os
+from pathlib import Path
 import streamlit as st
 
 # ==========================================
@@ -13,59 +16,21 @@ import streamlit as st
 # ==========================================
 sys.path.append(str(Path(__file__).parent / "src"))
 
+
 # ==========================================
 # 2. ORTAM VE SAYFA AYARI (İLK STREAMLIT KOMUTU)
 # ==========================================
-def get_dynamic_page_config():
-    """Çalışan portu veya ortam değişkenini algılayarak dinamik sekme başlığı üretir."""
-    env = os.getenv("ROBOT_ENV", "").upper()
-    
-    # Port bilgisini HTTP başlıklarından almayı dene
-    host = ""
-    try:
-        from streamlit.web.server.websocket_headers import _get_websocket_headers
-        headers = _get_websocket_headers()
-        if headers:
-            host = headers.get("Host", "")
-    except Exception:
-        pass
+env = os.getenv("ROBOT_ENV", "TEST").upper()
 
-    # Canlı ortam portları veya ortam değişkeni kontrolü
-    is_live = env == "LIVE" or any(p in host for p in ["8520", "8521", "8500"])
+if env == "LIVE":
+    PAGE_TITLE = "🔴 [LIVE] Grid Robot Control"
+    PAGE_ICON = "🔴"
+else:
+    PAGE_TITLE = "🧪 [TEST] Grid Robot Control"
+    PAGE_ICON = "🧪"
 
-    if is_live:
-        return "🔴 [LIVE] Grid Robot Control", "🔴"
-    else:
-        return "🧪 [TEST] Grid Robot Control", "🧪"
+st.set_page_config(page_title=PAGE_TITLE, page_icon=PAGE_ICON, layout="wide")
 
-page_title, page_icon = get_dynamic_page_config()
-st.set_page_config(
-    page_title=page_title, page_icon=page_icon, layout="wide"
-)  # ==========================================
-
-
-# 2. ORTAM VE SAYFA AYARI (İLK STREAMLIT KOMUTU)
-# ==========================================
-def get_dynamic_page_config():
-    """Başlatma komutundaki portu (sys.argv) doğrudan sorgulayarak kesin başlık üretir."""
-    env = os.getenv("ROBOT_ENV", "").upper()
-
-    # 1. Komut satırı argümanlarından portu bul (Örn: --server.port 8520)
-    args_str = " ".join(sys.argv)
-
-    # 2. Canlı portlar veya ortam değişkeni kontrolü
-    is_live = env == "LIVE" or any(
-        port in args_str for port in ["8520", "8521", "8500"]
-    )
-
-    if is_live:
-        return "🔴 [LIVE] Grid Robot Control", "🔴"
-    else:
-        return "🧪 [TEST] Grid Robot Control", "🧪"
-
-
-page_title, page_icon = get_dynamic_page_config()
-st.set_page_config(page_title=page_title, page_icon=page_icon, layout="wide")
 
 # ==========================================
 # 3. KENDİ MODÜLLERİMİZİ İÇE AKTARMA
