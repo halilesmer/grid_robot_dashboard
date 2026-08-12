@@ -151,7 +151,8 @@ if live_data.get("remote_paused", False) and account_is_running:
     st.warning(
         "📡 **Motor Mobil MT5'ten UZAKTAN DURDURULDU.** "
         "Bekleyen emirler silindi, açık pozisyonlar korundu. "
-        "Tekrar başlatmak için mobil MT5'ten yorumu **GRID:START** olan bir bekleyen emir koyun.",
+        "Tekrar başlatmak için yukarıdaki **MOTOR** butonunu kullanın "
+        "(mobil MT5'te 1$ Buy Limit yalnızca durdurmak içindir).",
         icon="⏸️",
     )
 

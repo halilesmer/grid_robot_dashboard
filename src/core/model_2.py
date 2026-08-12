@@ -31,7 +31,11 @@ SIMULATED_PRICE = 0.0
 
 # 📡 Mobil MT5 Uzaktan Kumanda (Sinyal Emri) Değişkenleri
 REMOTE_PAUSED = False  # True ise motor uzaktan durdurulmuştur (ağ örmez)
-REMOTE_COMMAND_PREFIX = "GRID:"  # Emir yorumu bu önekle başlamalı
+REMOTE_COMMAND_PREFIX = "GRID:"  # Emir yorumu bu önekle başlamalı (masaüstü MT5)
+# 🔌 Mobil MT5'te yorum alanı olmadığı için "1$ Buy Limit (0.01 lot)" emri
+# STOP sinyali olarak kullanılır. Fiyat çok uçta olduğundan asla tetiklenmez.
+REMOTE_SIGNAL_PRICE = 1.0  # Sinyal fiyatı ($1)
+REMOTE_SIGNAL_VOLUME = 0.01  # Sinyal emri her zaman 0.01 lot olmalı
 
 active_zones_state = {}  # Hafıza Kurtarma ve Zombi Emir Yönetimi
 
@@ -218,12 +222,14 @@ except ImportError:
             if request.get("action") == self.TRADE_ACTION_PENDING:
 
                 class DummyOrder:
-                    def __init__(self, ticket, magic, price, type_, comment=""):
+                    def __init__(self, ticket, magic, price, type_, comment="", volume=0.0):
                         self.ticket = ticket
                         self.magic = magic
                         self.price_open = price
                         self.type = type_
                         self.comment = comment
+                        self.volume_current = volume
+                        self.volume_initial = volume
 
                 new_order = DummyOrder(
                     self.ticket_counter,
@@ -231,6 +237,7 @@ except ImportError:
                     request.get("price"),
                     request.get("type"),
                     request.get("comment", ""),
+                    request.get("volume", 0.0),
                 )
                 self.dummy_orders.append(new_order)
                 self.ticket_counter += 1
@@ -510,12 +517,18 @@ def process_zone_commands():
 # ═══════════════════════════════════════════════════════════════════════════════
 def check_remote_commands():
     """
-    Mobil MT5'ten 'yorum (comment)' alanına GRID:STOP / GRID:START yazılarak
-    koyulan sinyal emirlerini dinler.
+    Mobil MT5'ten uzaktan kumanda sinyallerini dinler. İki yöntem desteklenir:
 
-    Kural: Sinyal emri magic=0 (manuel) ve comment'i GRID:... ile başlayan bir
-    bekleyen emirdir. Komut işlendikten sonra o emir KENDİSİ SİLİNİR (self-destruct)
-    böylece tek seferlik tuş gibi çalışır.
+    1) 🔌 YENİ — COMMENT'SİZ (mobil için): Fiyatı REMOTE_SIGNAL_PRICE (1$)
+       ve hacmi REMOTE_SIGNAL_VOLUME (0.01 lot) olan MANUEL Buy Limit emri
+       → STOP komutu olarak işlenir. Mobil MT5'te yorum alanı olmadığı için
+       bu yöntem şarttır. Fiyat çok uçta kaldığından emir asla tetiklenmez.
+
+    2) Masaüstü MT5: comment'i GRID:STOP / GRID:START ile başlayan manuel
+       bekleyen emir → ilgili komut işlenir.
+
+    Kural: Sinyal emri magic=0 (manuel) olmalıdır. Komut işlendikten sonra o
+    emir KENDİSİ SİLİNİR (self-destruct) böylece tek seferlik tuş gibi çalışır.
     """
     global REMOTE_PAUSED, ACTIVE_ZONE, ACTIVE_ZONE_IDX
 
@@ -533,16 +546,35 @@ def check_remote_commands():
         if BASE_MAGIC_NUMBER <= order.magic < BASE_MAGIC_NUMBER + 1000:
             continue
 
-        comment = order.comment or ""
-        if not comment.strip().upper().startswith(REMOTE_COMMAND_PREFIX):
-            continue
-
-        cmd = comment.strip().upper().split(":")[-1].strip()
-        command_found = True
-        log_message(
-            f"📡 Mobil MT5 UZAKTAN KOMUT ALINDI: {cmd} (Sinyal Bileti: {order.ticket})",
-            "WARN",
+        # 🔌 Comment'siz STOP sinyali: 1$ Buy Limit (0.01 lot)
+        order_volume = getattr(order, "volume_current", None)
+        if order_volume is None:
+            order_volume = getattr(order, "volume_initial", 0.0)
+        is_price_signal = (
+            order.type == mt5.ORDER_TYPE_BUY_LIMIT
+            and abs(float(order_volume) - REMOTE_SIGNAL_VOLUME) < 1e-6
+            and abs(float(order.price_open) - REMOTE_SIGNAL_PRICE) < 1e-6
         )
+
+        # Masaüstü GRID: yorum komutu
+        comment = order.comment or ""
+        cmd = None
+        if is_price_signal:
+            cmd = "STOP"
+            command_found = True
+            log_message(
+                f"📡 MOBİL MT5 YORUMSUZ STOP SİNYALİ: 1$ Buy Limit (Bilet: {order.ticket})",
+                "WARN",
+            )
+        elif comment.strip().upper().startswith(REMOTE_COMMAND_PREFIX):
+            cmd = comment.strip().upper().split(":")[-1].strip()
+            command_found = True
+            log_message(
+                f"📡 Mobil MT5 UZAKTAN KOMUT ALINDI: {cmd} (Sinyal Bileti: {order.ticket})",
+                "WARN",
+            )
+        else:
+            continue
 
         # Komutu işle
         if cmd == "STOP":

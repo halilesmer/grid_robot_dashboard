@@ -74,9 +74,10 @@ def render_controls(is_running: bool, account_id: str = "default"):
         # Motor çalışıyorsa yeşil (primary), duruyorsa gri (secondary) olsun
         button_type = "primary" if is_running else "secondary"
         button_help = (
-            "Arka plan motorunu tamamen kapatır. Açık pozisyonlara dokunulmaz."
+            SETTINGS_TOOLTIPS["REMOTE_STOP_SIGNAL"]
             if is_running
-            else "MT5 ile iletişim kuran arka plan ticaret motorunu başlatır."
+            else "MT5 ile iletişim kuran arka plan ticaret motorunu başlatır. "
+            + SETTINGS_TOOLTIPS["REMOTE_STOP_SIGNAL"]
         )
 
         toggle_btn = st.button(
@@ -86,6 +87,12 @@ def render_controls(is_running: bool, account_id: str = "default"):
             help=button_help,
             key=f"toggle_btn_{account_id}",
         )
+
+        if is_running:
+            st.caption(
+                "📡 Unutma: Mobil MT5'te fiyatı **1$**, hacmi **0.01 lot** olan "
+                "**Buy Limit** emri koyun → motor uzaktan durur."
+            )
 
     action = "TOGGLE" if toggle_btn else None
     return action

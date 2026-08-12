@@ -16,4 +16,6 @@ SETTINGS_TOOLTIPS = {
     "ZONE_START": "Bölgeyi aktif hale getirir, robot belirlenen ayarlarla emir göndermeye başlar.",
     "ZONE_PAUSE": "Bölgeyi duraklatır. Bekleyen emirleri iptal eder ama açık pozisyonlara dokunmaz.",
     "ZONE_CLEAR": "Bölgeyi sıfırlar. Bekleyen emirleri siler ve AÇIK POZİSYONLARI piyasa fiyatından anında kapatır.",
+    # 📡 Mobil MT5 UZAKTAN DURDURMA (Comment'siz Sinyal)
+    "REMOTE_STOP_SIGNAL": "📡 MOBİL'DEN UZAKTAN DURDURMA: Mobil MT5'te yorum yazılamadığı için fiyatı TAM 1$ ve hacmi 0.01 lot olan bir BUY LIMIT emri sinyal olarak kullanılır. Emir işlenince motor durur, bekleyen emirler silinir (açık pozisyonlar korunur) ve sinyal emri otomatik silinir. Sinyal fiyatı uçta olduğundan asla tetiklenmez.",
 }
