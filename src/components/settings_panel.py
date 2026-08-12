@@ -162,12 +162,9 @@ def render_model_2_settings(
         if not is_running:
             motor_status = "stopped"
             btn_label = "🚀 Ana Motoru Çalıştır"
-        elif any_zone_start:
-            motor_status = "running"
-            btn_label = "🛑 Ana Motoru Durdur"
         else:
-            motor_status = "paused"
-            btn_label = "🛑 Ana Motoru Durdur"
+            motor_status = "running" if any_zone_start else "paused"
+            btn_label = "🟢 Ana Motor Çalışıyor"
 
         # Hangi durumda olduğumuzu CSS ile hedeflemek için bir işaretçi basıyoruz
         st.markdown(
@@ -224,11 +221,6 @@ def render_model_2_settings(
 
         start_label = "✅ Başladı" if current_state == "START" else "▶️ Başlat"
         pause_label = "🟡 Beklemede" if current_state == "PAUSE" else "⏸️ Beklet"
-        clear_label = (
-            "🗑️ Temizlendi"
-            if current_state in ["CLEAR", "AUTO_CLEAR"]
-            else "🗑️ Temizle"
-        )
 
         # Orijinal dosyadan veriyi çek (Kıyaslama için)
         orig_zones = current_settings.get("ZONES", [])
@@ -237,8 +229,8 @@ def render_model_2_settings(
         # 🛠️ Streamlit'in kendi çerçevesini kullanıyoruz
         with st.container(border=True):
             # 🌟 GÜNCELLENDİ: Metrikler başlığın içine alındığı için sütunlar sadeleştirildi
-            hdr_col, bc_upd, bc_div1, bc1, bc2, bc3, bc4 = st.columns(
-                [4.2, 0.8, 0.1, 0.8, 0.8, 0.8, 0.4],
+            hdr_col, bc_upd, bc_div1, bc1, bc2, bc3 = st.columns(
+                [4.2, 0.8, 0.1, 0.8, 0.8, 0.4],
                 vertical_alignment="center",
             )
 
@@ -275,23 +267,23 @@ def render_model_2_settings(
                     args=(account_id, zone_id, idx, "PAUSE"),
                 )
             with bc3:
-                if st.button(
-                    clear_label,
-                    key=f"clear_{zone_id}_{account_id}",
-                    width="stretch",
-                    type="primary" if current_state == "CLEAR" else "secondary",
-                    help="Acil Durum: Bekleyen emirleri siler ve AÇIK POZİSYONLARI ayara göre kapatır.",
-                ):
-                    # Lambda ile anlık değişkenleri (zone_id, idx) dondurarak modal'a gönderiyoruz
-                    confirm_clear_dialog(
-                        lambda acc=account_id, z_id=zone_id, i=idx: _handle_zone_action(
-                            acc, z_id, i, "CLEAR"
-                        )
-                    )
-
-            with bc4:
-                # 🌟 YENİ: 3 Noktalı Açılır Menü (Dropdown)
+                # 🌟 3 Noktalı Açılır Menü (Dropdown): Temizle, Yeni Bölge, Bölgeyi Sil
                 with st.popover("⋮", width="stretch"):
+                    # 🗑️ Temizle — HER ZAMAN nötr görünür; motor AUTO_CLEAR ile
+                    # bu butonu asla aktif (primary) hale getiremez.
+                    if st.button(
+                        "🗑️ Temizle",
+                        key=f"clear_{zone_id}_{account_id}",
+                        width="stretch",
+                        type="secondary",
+                        help="Acil Durum: Bekleyen emirleri siler ve AÇIK POZİSYONLARI ayara göre kapatır.",
+                    ):
+                        # Lambda ile anlık değişkenleri (zone_id, idx) dondurarak modal'a gönderiyoruz
+                        confirm_clear_dialog(
+                            lambda acc=account_id, z_id=zone_id, i=idx: _handle_zone_action(
+                                acc, z_id, i, "CLEAR"
+                            )
+                        )
                     if st.button(
                         "➕ Yeni Bölge Ekle",
                         key=f"add_{zone_id}_{account_id}",
