@@ -44,7 +44,10 @@ from src.utils.bot_manager import (
 from src.components.account_selector import render_account_selector
 from src.components.chart_viewer import render_chart
 from src.components.dialogs import confirm_stop_motor_dialog
-from src.utils.mt5_connection import connect_to_mt5_with_timeout
+from src.utils.mt5_connection import (
+    connect_to_mt5_with_timeout,
+    shutdown_mt5,
+)
 from src.components.header import render_main_title
 from src.components.settings_panel import render_settings_panel
 from src.components.log_viewer import render_log_viewer
@@ -55,6 +58,12 @@ from src.utils.config import load_settings, save_settings
 from src.utils.paths import get_metrics_path, get_sim_price_path
 
 import src.core.model_2 as model_2
+
+# 🔍 DONMA TEŞHİSİ: Her script çalıştırmasının aşama sürelerini logs/run_profiler.log'a yazar
+from src.utils.profiler import run_start, stage
+
+# 🔍 Yeni script çalıştırması başladı (takılma anında son satır kalan aşamayı gösterir)
+run_start(os.getenv("ROBOT_ENV", "TEST"))
 
 
 def get_live_metrics_from_file(account_id):
@@ -92,11 +101,13 @@ apply_custom_css()
 
 # 🌟 YENİ: Başlık En Üste Geldi
 render_main_title()
+stage("CSS + başlık")
 
 # ==========================================
 # 2. ÖNCE HESABI SEÇ (TAM GENİŞLİKTE)
 # ==========================================
 active_account = render_account_selector()
+stage("Hesap seçici")
 
 # Güvenlik: Eğer JSON dosyasında hiç hesap yoksa veya hata varsa programı burada durdur.
 if not active_account:
@@ -118,6 +129,7 @@ st.markdown("---")
 # ==========================================
 # Durumu globalden değil, Bot Manager'dan SADECE bu hesap için soruyoruz
 account_is_running = is_bot_running(account_id)
+stage("Bot durumu sorgusu (is_bot_running)")
 
 
 # ==========================================
@@ -128,6 +140,7 @@ current_settings = load_settings("Model 2")
 # Canlı verileri JSON dosyasından çek (Çünkü robot artık Subprocess olarak çalışıyor)
 # Dosya her zaman okunur: Başlangıç hatası (startup_error) afişi buradan beslenir.
 live_data = get_live_metrics_from_file(account_id)
+stage("Ayarlar + metrik yükleme")
 
 
 # ==========================================
@@ -171,6 +184,7 @@ if live_data.get("remote_paused", False) and account_is_running:
         "(mobil MT5'te 1$ Buy Limit yalnızca durdurmak içindir).",
         icon="⏸️",
     )
+stage("Hata/uyarı afişleri")
 
 
 # 🌟 Ana Motor tetikleyicisi artık settings_panel üzerinden yönetiliyor
@@ -190,8 +204,13 @@ if action == "TOGGLE":
             connection_success, connection_timed_out = connect_to_mt5_with_timeout(
                 active_account
             )
+        stage("MT5 bağlantı denemesi")
 
         if connection_success:
+            # 🌟 CRİTİK: Test bağlantısını serbest bırak! Alt süreç (bot_runner) aynı
+            # terminale bağlanırken IPC timeout (-10005) yaşamamak için arayüz artık
+            # terminali meşgul etmemeli.
+            shutdown_mt5()
             # Subprocess (Alt Süreç) başlat!
             if start_bot_process(account_id, "Model 2"):
                 st.toast(
@@ -248,6 +267,8 @@ if updated_settings:
     st.success(f"✅ Ayarlar başarıyla güncellendi ve {account_id} için kaydedildi!")
     st.rerun()
 
+stage("Ayarlar paneli render")
+
 st.divider()
 
 current_active_price = live_data.get("current_price", 0.0)
@@ -288,3 +309,5 @@ else:
     # Windows ortamında: Grafik GİZLİ, Loglar TAM EKRAN GENİŞLİĞİNDE
     st.markdown("---")
     render_log_viewer(account_id)
+
+stage("END — Grafik + log ekranı (script sonu)")

@@ -78,10 +78,24 @@ def connect_to_mt5(account_config):
     server = account_config.get("server")
 
     if login_id and password and server:
-        authorized = mt5.login(login=int(login_id), password=password, server=server)
+        # 🌟 IPC TIMEOUT (-10005) KORUMASI: Terminal yeni açılıyorsa login'e ilk denemede
+        # yanıt veremeyebilir. Yanlış şifre olsa bile (hızlıca) 3 kez deneyip pes etmeden
+        # önce terminale "nefes payı" veriyoruz.
+        authorized = False
+        last_err = mt5.last_error()
+        for attempt in range(1, 4):
+            authorized = mt5.login(
+                login=int(login_id), password=password, server=server
+            )
+            if authorized:
+                break
+            last_err = mt5.last_error()
+            if attempt < 3:
+                time.sleep(1.5)
+
         if not authorized:
             safe_log(
-                f"🔴 MT5 Girişi Başarısız! Hesap No: {login_id}. Hata Kodu: {mt5.last_error()}"
+                f"🔴 MT5 Girişi Başarısız! Hesap No: {login_id}. Hata Kodu: {last_err}"
             )
             mt5.shutdown()  # Hata durumunda hafızada asılı kalmaması için kapatıldı
             return False
@@ -136,6 +150,20 @@ def connect_to_mt5(account_config):
     # backup_mt5_logs()
 
     return True
+
+
+def shutdown_mt5():
+    """MT5 bağlantı oturumunu serbest bırakır.
+
+    Arayüz (frontend) "test bağlantısı" yaptıktan sonra artık terminali meşgul
+    etmemelidir; aksi halde alt süreç (bot_runner) aynı terminale bağlanmaya
+    çalışırken IPC çakışması (-10005 IPC timeout) yaşanabilir.
+    """
+    if MT5_AVAILABLE and platform.system() == "Windows":
+        try:
+            mt5.shutdown()
+        except Exception:
+            pass
 
 
 # ==========================================

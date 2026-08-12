@@ -7,6 +7,9 @@ from collections import deque
 # 🌟 YENİ: Merkezi yol yöneticisi
 from src.utils.paths import get_err_log_path
 
+# 🔍 DONMA TEŞHİSİ: Fragment çalıştırmalarının süresini profille (run_every nedeniyle sürekli koşar)
+from src.utils.profiler import stage
+
 MAX_LINES = 20  # Ekranda gösterilecek son satır sayısı
 MAX_FILE_SIZE = 2 * 1024 * 1024  # 2 MB Limit
 
@@ -86,6 +89,7 @@ def render_log_viewer(account_id: str = "default"):
         # YENİ: account_id parametresini fonksiyona gönderiyoruz
         logs = get_recent_logs(account_id)
         st.code(logs, language="bash")
+    stage("Frag: Robot log okuma")
 
     with tab2:
         st.caption(
@@ -93,3 +97,4 @@ def render_log_viewer(account_id: str = "default"):
         )
         mt5_logs = get_latest_mt5_log()
         st.code(mt5_logs, language="bash")
+    stage("Frag: MT5 log okuma")
