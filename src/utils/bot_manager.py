@@ -108,18 +108,34 @@ def _detached_popen(cmd, stdout, stderr, env):
     🚀 PHASE 3: Alt süreç yeni bir oturumda (session) açılır;
     Streamlit kapanır / port değişir / bilgisayar yeniden başlatılır (VM)
     ana arayüz çökse bile bot süreci YAŞAMAYA DEVAM EDER.
+
+    🌟 WinError 232 (0x800700E8) KORUMASI: `DETACHED_PROCESS` bayrağı, Streamlit
+    bir Windows hizmeti / zamanlanmış görev / oturum açılmadan başlatılmışsa
+    console pipe'ı tahsis edemeyip süreci hiç başlatamayabilir. Böyle bir
+    durumda aynı komut CREATE_NO_WINDOW ile tekrar denenir (süreç yine
+    konsolsuz başlar ve hayatta kalır).
     """
     if os.name == "nt":
-        return subprocess.Popen(
-            cmd,
-            stdout=stdout,
-            stderr=stderr,
-            text=True,
-            env=env,
-            creationflags=(
-                subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS
-            ),
-        )
+        cwd = str(project_root)  # Mutlak çalışma dizini: hizmet ortamlarında cwd boş/geçersiz olabilir
+        creation_flags_attempts = [
+            subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS,
+            subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW,
+        ]
+        last_err = None
+        for flags in creation_flags_attempts:
+            try:
+                return subprocess.Popen(
+                    cmd,
+                    stdout=stdout,
+                    stderr=stderr,
+                    text=True,
+                    env=env,
+                    cwd=cwd,
+                    creationflags=flags,
+                )
+            except OSError as e:
+                last_err = e
+        raise last_err
     return subprocess.Popen(
         cmd,
         stdout=stdout,
@@ -164,9 +180,29 @@ def start_bot_process(account_id: str, model_name: str) -> bool:
 
     except Exception as e:
         # Profesyonel hata yakalama: Çökme durumunda arayüze net bilgi ver
+        detail = str(e)
+        if isinstance(e, OSError):
+            winerr = getattr(e, "winerror", None)
+            errno_ = getattr(e, "errno", None)
+            filename = getattr(e, "filename", None)
+            detail = (
+                f"WinError {winerr} (0x{winerr & 0xFFFFFFFF:08X}) | errno={errno_} | "
+                f"{str(e)} | dosya/kısım: {filename if filename else 'yok'}"
+            )
         st.error(
-            f"🚨 Sistem Hatası: {account_id} için robot başlatılamadı!\n\nDetay: {str(e)}"
+            f"🚨 Sistem Hatası: {account_id} için robot başlatılamadı!\n\nDetay: {detail}"
         )
+        try:
+            err_path = get_err_log_path(account_id)
+            import datetime as _dt
+
+            with open(err_path, "a", encoding="utf-8") as f:
+                f.write(
+                    f"[{_dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] "
+                    f"[START_ERROR] {detail}\n"
+                )
+        except Exception:
+            pass
         return False
     finally:
         # GÜVENLİK DÜZELTMESİ: Açılan dosya akışı (file descriptor) hafızada kilitli kalmasın diye kapatılıyor
