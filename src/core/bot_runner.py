@@ -34,6 +34,9 @@ from src.utils.mt5_connection import connect_to_mt5
 # 🌟 YENİ: Merkezi yol yöneticisini içeri aktarıyoruz
 from src.utils.paths import get_metrics_path, get_sim_price_path
 
+# 🌟 YENİ: MT5 "Source of Truth" senkronizasyonu ve kalıcı state dosyası
+from src.utils.state_manager import build_synced_state, save_state, load_state
+
 
 def export_metrics_loop(bot_engine, account_id):
     """
@@ -123,18 +126,26 @@ def main():
 
     print(f"[{account_id}] MT5 Bağlantısı Başarılı! Robot döngüsü başlıyor...")
 
-    # YENİ EKLENEN KISIM: Başlangıçta eskiye ait bekleyen emirleri çöpe atarak temiz bir sayfa aç
-    try:
-        import MetaTrader5 as mt5
-        from src.utils.trade_utils import cancel_all_pending_orders
+    # 🚨 ESKİ PANİK MANTIĞI KALDIRILDI:
+    #   Başlangıçta cancel_all_pending_orders(mt5) çağrısı artık YOK.
+    #   Port değişimi / arayüz restart'ı / bilgisayar taşınması sonrası
+    #   açık pozisyonlar ve bekleyen emirler ASLA kapatılmaz.
 
-        cancel_all_pending_orders(mt5)
+    # 🧠 PHASE 2: MT5 "Source of Truth" senkronizasyonu.
+    #   Yerel dosyalara körü körüne güvenilmez; MT5'ten Account ID + Magic
+    #   üzerinden canlı pozisyonlar/emirler sorgulanır, yerel config ile
+    #   birleştirilir ve data/state_{account_id}.json yeniden inşa edilir.
+    try:
+        synced_state = build_synced_state(bot_engine, account_id, log_func=print)
+        save_state(account_id, synced_state)
         print(
-            f"[{account_id}] Eski bekleyen emirler temizlendi. (Güncel ayarlarla başlanıyor)"
+            f"[{account_id}] Kalıcı state dosyası yeniden inşa edildi: "
+            f"data/state_{account_id}.json"
         )
     except Exception as e:
         print(
-            f"[{account_id}] Emir temizliği yapılamadı (Hata önemli olmayabilir): {e}"
+            f"[{account_id}] State senkronizasyonu başarısız oldu "
+            f"(kritik değil, bot yine de başlatılıyor): {e}"
         )
 
     # İşlem öncesi motorun hafızasının tamamen temiz olduğundan emin ol
@@ -155,6 +166,12 @@ def main():
         print(f"[{account_id}] Süreç dışarıdan durduruldu (Graceful Shutdown).")
     finally:
         bot_engine.IS_RUNNING = False
+        # 🧠 Kapanış anında son durumu MT5'ten çekip state dosyasına yaz (boş da olsa)
+        try:
+            final_state = build_synced_state(bot_engine, account_id, log_func=print)
+            save_state(account_id, final_state)
+        except Exception:
+            pass
         print(f"[{account_id}] MT5 Bağlantısı kesiliyor ve süreç kapatılıyor.")
 
 

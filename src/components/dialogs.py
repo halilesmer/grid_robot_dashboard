@@ -56,3 +56,31 @@ def confirm_delete_account_dialog(account_name, on_confirm_func):
 
     if col_no.button("Hayır, İptal", width="stretch"):
         st.rerun()
+
+
+@st.dialog("🛑 Motor Durdurma Seçimi")
+def confirm_stop_motor_dialog(account_id, on_stop_func, on_stop_close_func):
+    """
+    Ana Motoru Durdurca açılan güvenlik seçim penceresi (Modal).
+
+    🚀 PHASE 4 Kuralı: İşlemler SADECE kullanıcının açık seçimiyle kapatılır.
+    1) "Sadece Durdur": Bot kapanır, pozisyonlar ve emirler broker'da KALIR.
+    2) "Durdur ve Tümünü Kapat": Bot kapanır, tüm robot pozisyonları kapatılır.
+    """
+    st.write("Robot motoru kapatılacak. Açık pozisyonlara ne yapılsın?")
+
+    st.info(
+        "🟡 **Sadece Durdur**: Pozisyonlar ve bekleyen emirler olduğu gibi korunur.\n\n"
+        "🔴 **Durdur ve Tümünü Kapat**: Tüm robot pozisyonları piyasa fiyatından kapatılır.",
+        icon="ℹ️",
+    )
+
+    col1, col2 = st.columns([1, 1])
+    if col1.button("🟡 Sadece Durdur", width="stretch"):
+        on_stop_func(account_id)
+        st.rerun()
+    if col2.button("🔴 Durdur ve Tümünü Kapat", type="primary", width="stretch"):
+        on_stop_close_func(account_id)
+        st.rerun()
+    if st.button("❌ İptal", width="stretch"):
+        st.rerun()

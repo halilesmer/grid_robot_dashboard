@@ -126,12 +126,72 @@ def render_model_2_settings(
     )
     with h_col1:
         st.markdown("###### 🎯 Dinamik Bölgeler (Zones)")
+
+    # 🎨 Motor Butonu Renk CSS'i (Durum Temelli):
+    #   stopped -> beyaz, running -> yeşil, paused -> sarı
+    #   İşaretçi div (.motor-marker-stop-X) içinde bulunduğu sütunu yakalar.
+    st.markdown(
+        """
+        <style>
+        [data-testid='stColumn']:has(.motor-marker) [data-testid='stBaseButton-secondary'] {
+            border: 2px solid #ddd !important;
+        }
+        [data-testid='stColumn']:has(.motor-marker-running) [data-testid='stBaseButton-secondary'] {
+            background: #22c55e !important;
+            border-color: #16a34a !important;
+            color: white !important;font-weight:600;
+        }
+        [data-testid='stColumn']:has(.motor-marker-paused) [data-testid='stBaseButton-secondary'] {
+            background: #facc15 !important;
+            border-color: #eab308 !important;
+            color: #1f2937 !important;font-weight:600;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
     with h_col2:
-        btn_label = "🛑 Ana Motoru Durdur" if is_running else "🚀 Ana Motoru Çalıştır"
-        btn_type = "secondary" if is_running else "primary"
-        if st.button(btn_label, type=btn_type, width="stretch"):
-            st.session_state[f"motor_toggle_{account_id}"] = True
-            st.rerun()
+        # 🎨 DURUM RENKLERİ:
+        #   Duruyor  -> beyaz (secondary)
+        #   Çalışıyor -> yeşil (en az 1 bölge START)
+        #   Beklemede -> sarı (çalışıyor ama hiçbir bölge aktif değil)
+        zone_states = list(st.session_state.get(ui_state_key, {}).values())
+        any_zone_start = any(s == "START" for s in zone_states)
+
+        if not is_running:
+            motor_status = "stopped"
+            btn_label = "🚀 Ana Motoru Çalıştır"
+        elif any_zone_start:
+            motor_status = "running"
+            btn_label = "🛑 Ana Motoru Durdur"
+        else:
+            motor_status = "paused"
+            btn_label = "🛑 Ana Motoru Durdur"
+
+        # Hangi durumda olduğumuzu CSS ile hedeflemek için bir işaretçi basıyoruz
+        st.markdown(
+            f'<div class="motor-marker motor-marker-{motor_status}" style="display:none;"></div>',
+            unsafe_allow_html=True,
+        )
+
+        b_col, i_col = st.columns([1, 0.18], vertical_alignment="center")
+        with b_col:
+            if st.button(
+                btn_label,
+                type="secondary",
+                width="stretch",
+                key=f"motor_main_{account_id}",
+            ):
+                st.session_state[f"motor_toggle_{account_id}"] = True
+                st.rerun()
+        with i_col:
+            if is_running:
+                emoji = "🟢" if motor_status == "running" else "🟡"
+                st.markdown(
+                    f"<div style='text-align:center;font-size:20px;'>{emoji}</div>",
+                    unsafe_allow_html=True,
+                )
     with h_col3:
         st.markdown(
             "<div style='text-align: center; font-size: 20px; color: #555;'>|</div>",

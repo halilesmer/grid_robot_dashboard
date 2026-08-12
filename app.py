@@ -35,9 +35,15 @@ st.set_page_config(page_title=PAGE_TITLE, page_icon=PAGE_ICON, layout="wide")
 # ==========================================
 # 3. KENDİ MODÜLLERİMİZİ İÇE AKTARMA
 # ==========================================
-from src.utils.bot_manager import is_bot_running, start_bot_process, stop_bot_process
+from src.utils.bot_manager import (
+    is_bot_running,
+    start_bot_process,
+    stop_bot_process,
+    stop_and_close_all,
+)
 from src.components.account_selector import render_account_selector
 from src.components.chart_viewer import render_chart
+from src.components.dialogs import confirm_stop_motor_dialog
 from src.utils.mt5_connection import connect_to_mt5
 from src.components.header import render_main_title
 from src.components.settings_panel import render_settings_panel
@@ -184,10 +190,14 @@ if action == "TOGGLE":
                 icon="❌",
             )
     else:
-        # Zombi bırakmadan, süreci işletim sistemi seviyesinde öldür
-        stop_bot_process(account_id)
-        st.toast(f"🛑 {active_account['account_name']} robotu durduruldu!", icon="⚠️")
-        st.rerun()
+        # 🚀 PHASE 4: Kapatma SADECE kullanıcının açık seçimiyle yapılır.
+        # "Durdur" -> süreç kapanır, pozisyonlar/emirler korunur.
+        # "Durdur ve Tümünü Kapat" -> süreç kapanır + tüm robot pozisyonları kapatılır.
+        confirm_stop_motor_dialog(
+            account_id,
+            on_stop_func=stop_bot_process,
+            on_stop_close_func=stop_and_close_all,
+        )
 
 
 # ==========================================

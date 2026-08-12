@@ -3,6 +3,9 @@ import json
 import os
 import streamlit as st
 
+# 🌟 YENİ: Merkezi yol yöneticisi (hesap bazlı dosya yolları)
+from src.utils.paths import get_settings_path
+
 # Standardwerte bleiben erhalten
 DEFAULT_SETTINGS_MODEL1 = {
     "GRID_STEP": 0.05,
@@ -51,8 +54,8 @@ def get_settings_file(model_name: str) -> str:
         except Exception:
             pass
 
-    safe_model_name = model_name.replace(" ", "_")
-    return f"configs/settings_{account_id}_{safe_model_name}.json"
+    # 🌟 YENİ: Yol üretimi tek merkezden (paths.py) — port bağımlılığı yok
+    return get_settings_path(account_id, model_name)
 
 
 def get_default_settings(model_name: str) -> dict:
