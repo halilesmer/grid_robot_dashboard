@@ -29,6 +29,9 @@ IS_RUNNING = False
 INITIAL_CLEANUP_DONE = False
 SIMULATED_PRICE = 0.0
 
+# 🌟 YENİ: MT5 bağlantı durumu izleyici (Arayüze "bağlantı koptu" bilgisini iletir)
+CONNECTION_LOST = False
+
 # 📡 Mobil MT5 Uzaktan Kumanda (Sinyal Emri) Değişkenleri
 REMOTE_PAUSED = False  # True ise motor uzaktan durdurulmuştur (ağ örmez)
 REMOTE_COMMAND_PREFIX = "GRID:"  # Emir yorumu bu önekle başlamalı (masaüstü MT5)
@@ -44,6 +47,7 @@ active_zones_state = {}  # Hafıza Kurtarma ve Zombi Emir Yönetimi
 # METRİK ARAYÜZÜ (Dashboard için)
 # ==========================================
 def get_live_metrics():
+    global CONNECTION_LOST
     metrics = {
         "profit": 0.0,
         "open_positions": 0,
@@ -51,16 +55,26 @@ def get_live_metrics():
         "current_price": 0.0,
         "algo_trading_error": False,
         "remote_paused": REMOTE_PAUSED,
+        "mt5_connected": True,      # 🌟 YENİ: Arayüz "bağlantı koptu" afişini buradan okur
+        "connection_lost": CONNECTION_LOST,
     }
 
     if mt5 is None or IS_MAC_TEST_MODE:
         if SIMULATED_PRICE > 0:
             metrics["current_price"] = SIMULATED_PRICE
+        CONNECTION_LOST = False
         return metrics
 
     terminal_info = mt5.terminal_info()
     if terminal_info is None:
+        # 🔴 MT5'e ulaşılamıyor! (Terminal kapalı veya ağ bağlantısı kopuk)
+        CONNECTION_LOST = True
+        metrics["mt5_connected"] = False
         return metrics
+
+    # Bağlantı geri geldi
+    CONNECTION_LOST = False
+    metrics["mt5_connected"] = True
 
     if not terminal_info.trade_allowed:
         metrics["algo_trading_error"] = True
@@ -1175,7 +1189,7 @@ def run_startup_checks():
 
 
 def main_loop():
-    global IS_RUNNING, INITIAL_CLEANUP_DONE
+    global IS_RUNNING, INITIAL_CLEANUP_DONE, CONNECTION_LOST
 
     if not run_startup_checks():
         log_message("Baslangic kontrolleri basarisiz. Robot durduruluyor.", "ERROR")
@@ -1195,8 +1209,24 @@ def main_loop():
 
             term_info = mt5.terminal_info()
             if term_info is None or not term_info.trade_allowed:
+                if term_info is None and not CONNECTION_LOST:
+                    # 🚨 MT5 ile BAĞLANTI KOPTU — arayüze bildir ve logla
+                    CONNECTION_LOST = True
+                    log_message(
+                        "🚨 KRİTİK: MT5 BAĞLANTISI KOPTU! Terminal kapatıldı veya "
+                        "ağ/internet bağlantısı yok. Bağlantı geri gelene kadar işlem yapılmayacak.",
+                        "ERROR",
+                    )
                 time.sleep(10)
                 continue
+            else:
+                if CONNECTION_LOST:
+                    # ✅ Bağlantı geri geldi
+                    CONNECTION_LOST = False
+                    log_message(
+                        "✅ MT5 bağlantısı geri geldi. Robot çalışmaya devam ediyor.",
+                        "WARN",
+                    )
 
             if not is_market_open():
                 time.sleep(MARKET_CLOSED_CHECK_INTERVAL)

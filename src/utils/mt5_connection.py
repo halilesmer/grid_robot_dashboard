@@ -3,6 +3,7 @@
 import platform
 import time
 import os
+import threading  # 🌟 YENİ: Arayüzün kilitlenmemesi için zaman aşımlı bağlantı
 import shutil  # 🌟 YENİ EKLENDİ (Dosya kopyalamak için)
 import datetime  # 🌟 YENİ EKLENDİ (Tarih formatı için)
 
@@ -135,6 +136,57 @@ def connect_to_mt5(account_config):
     # backup_mt5_logs()
 
     return True
+
+
+# ==========================================
+# 🌟 YENİ: ZAMAN AŞIMLI (TIMEOUT) MT5 BAĞLANTISI — Arayüz Kilitlenmesin!
+#
+# Streamlit script dosyası TAMAMEN tek iş parçacığında (thread) çalışır.
+# connect_to_mt5() doğrudan çağrıldığında, MT5 terminal açılışı veya sunucuya
+# giriş (initialize/login) ağ bağlantısı olmadığında ÇOK UZUN sürebilir ve bu
+# süre boyunca Tarayıcı ön yüzü donar (kullanıcı hiçbir şey yapamaz).
+#
+# Bu fonksiyon bağlantıyı ARKA PLANDAN dener ve en fazla 'timeout' saniye bekler.
+# Süre dolarsa hemen (False, True) döner → arayüz kilitlenmez, net hata gösterir.
+#
+# Dönüş: (başarı_bool, zaman_aşımı_bool)
+# ==========================================
+def connect_to_mt5_with_timeout(account_config, timeout=20):
+    """connect_to_mt5'i arka planda çalıştırır; UI'ı kilitlemeden sonuç döner."""
+    if not account_config:
+        safe_log("Bağlanılacak hesap seçilmedi!")
+        return False, False
+
+    # Mac simülasyonu veya MT5 kütüphanesi yoksa zaten anında dönüyoruz (thread'e gerek yok)
+    if not MT5_AVAILABLE or platform.system() != "Windows":
+        return connect_to_mt5(account_config), False
+
+    result = {}
+
+    def _worker():
+        try:
+            result["ok"] = connect_to_mt5(account_config)
+        except Exception as e:
+            result["ok"] = False
+            result["err"] = str(e)
+
+    worker = threading.Thread(target=_worker, daemon=True)
+    worker.start()
+    worker.join(timeout=timeout)
+
+    if worker.is_alive():
+        # ⚠️ Zaman aşımı: MT5 hâlâ açılmaya/bağlanmaya çalışıyor.
+        # Kullanıcıyı sonsuza dek bekleterek ön yüzü dondurmak YERİNE hata döndür.
+        safe_log(
+            f"MT5 bağlantısı {timeout} saniye içinde tamamlanamadı (zaman aşımı). "
+            "Terminal kapalı veya sunucuya ulaşılamıyor olabilir."
+        )
+        return False, True
+
+    if result.get("err"):
+        safe_log(f"MT5 bağlantı iş parçacığı hatası: {result['err']}")
+
+    return result.get("ok", False), False
 
 
 # ==========================================

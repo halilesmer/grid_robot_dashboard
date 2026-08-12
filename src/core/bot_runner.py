@@ -29,7 +29,7 @@ if sys.platform == "win32":
 project_root = Path(__file__).parent.parent.parent
 sys.path.append(str(project_root))
 
-from src.utils.mt5_connection import connect_to_mt5
+from src.utils.mt5_connection import connect_to_mt5_with_timeout
 
 # 🌟 YENİ: Merkezi yol yöneticisini içeri aktarıyoruz
 from src.utils.paths import get_metrics_path, get_sim_price_path
@@ -118,10 +118,48 @@ def main():
 
     # 4. SADECE bu hesaba özel MT5 Terminaline bağlan
     print(f"[{account_id}] MT5 Terminaline bağlanılıyor...")
-    if not connect_to_mt5(active_account):
+    # 🌟 ZAMAN AŞIMI KORUMASI: MT5 açılamazsa alt süreç de sessizce asılı kalmasın!
+    connection_success, connection_timed_out = connect_to_mt5_with_timeout(
+        active_account
+    )
+    if not connection_success:
         print(
             f"Hata: {account_id} için MetaTrader 5'e bağlanılamadı. Süreç sonlandırılıyor."
         )
+        if connection_timed_out:
+            startup_error_msg = (
+                "MetaTrader 5 terminali zaman aşımı içinde açılamadı veya sunucuya "
+                "ulaşılamadı. Lütfen MT5 terminalinin açık olduğundan ve ağ/internet "
+                "bağlantınızın aktif olduğundan emin olun."
+            )
+        else:
+            startup_error_msg = (
+                "MetaTrader 5 terminaline giriş yapılamadı, sunucu/şifre bilgileri "
+                "hatalı veya Algo Trading kapalı. Lütfen MT5 hesap bilgilerinizi ve "
+                "terminal ayarlarını kontrol edin."
+            )
+        # 🔴 BAĞLANTI HATASINI ARAYÜZE İLET (Kalıcı hata afişi için)
+        #    Süreç kapanıyor ama arayüz bu dosyayı okuyup net hata gösterebilecek.
+        try:
+            metrics_file = get_metrics_path(account_id)
+            tmp_metrics_file = metrics_file + ".tmp"
+            with open(tmp_metrics_file, "w", encoding="utf-8") as f:
+                json.dump(
+                    {
+                        "profit": 0.0,
+                        "open_positions": 0,
+                        "pending_orders": 0,
+                        "current_price": 0.0,
+                        "algo_trading_error": False,
+                        "remote_paused": False,
+                        "mt5_connected": False,
+                        "startup_error": startup_error_msg,
+                    },
+                    f,
+                )
+            os.replace(tmp_metrics_file, metrics_file)
+        except Exception:
+            pass
         sys.exit(1)
 
     print(f"[{account_id}] MT5 Bağlantısı Başarılı! Robot döngüsü başlıyor...")

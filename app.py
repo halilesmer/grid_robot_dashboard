@@ -44,7 +44,7 @@ from src.utils.bot_manager import (
 from src.components.account_selector import render_account_selector
 from src.components.chart_viewer import render_chart
 from src.components.dialogs import confirm_stop_motor_dialog
-from src.utils.mt5_connection import connect_to_mt5
+from src.utils.mt5_connection import connect_to_mt5_with_timeout
 from src.components.header import render_main_title
 from src.components.settings_panel import render_settings_panel
 from src.components.log_viewer import render_log_viewer
@@ -63,7 +63,14 @@ def get_live_metrics_from_file(account_id):
     if os.path.exists(metrics_file):
         try:
             with open(metrics_file, "r", encoding="utf-8") as f:
-                return json.load(f)
+                data = json.load(f)
+            age = time.time() - os.path.getmtime(metrics_file)
+            data.setdefault("mt5_connected", True)
+            data.setdefault("startup_error", None)
+            # Eski (bayat) bir başlangıç hatası afişi, 30 saniyeden eskiyse gösterilmez
+            if data.get("startup_error") and age > 30:
+                data["startup_error"] = None
+            return data
         except Exception:
             pass  # Wenn die Datei exakt in dieser Millisekunde geschrieben wird
     return {
@@ -73,6 +80,8 @@ def get_live_metrics_from_file(account_id):
         "current_price": 0.0,
         "algo_trading_error": False,
         "remote_paused": False,
+        "mt5_connected": True,
+        "startup_error": None,
     }
 
 
@@ -117,17 +126,8 @@ account_is_running = is_bot_running(account_id)
 current_settings = load_settings("Model 2")
 
 # Canlı verileri JSON dosyasından çek (Çünkü robot artık Subprocess olarak çalışıyor)
-if account_is_running:
-    live_data = get_live_metrics_from_file(account_id)
-else:
-    live_data = {
-        "profit": 0.0,
-        "open_positions": 0,
-        "pending_orders": 0,
-        "current_price": 0.0,
-        "algo_trading_error": False,
-        "remote_paused": False,
-    }
+# Dosya her zaman okunur: Başlangıç hatası (startup_error) afişi buradan beslenir.
+live_data = get_live_metrics_from_file(account_id)
 
 
 # ==========================================
@@ -144,6 +144,22 @@ if live_data.get("algo_trading_error", False):
         stop_bot_process(account_id)
         st.toast("🛑 Motor kilitlendi: Algo Trading kapalı!", icon="⚠️")
         st.rerun()
+
+
+# 🔴 MT5 BAĞLANTISI KOPTU/BULUNAMADI UYARISI (Subprocess'ten gelen canlı durum)
+if live_data.get("startup_error"):
+    st.error(
+        f"🚨 **MT5 BAĞLANTI HATASI:** {live_data.get('startup_error')}",
+        icon="🚫",
+    )
+elif account_is_running and not live_data.get("mt5_connected", True):
+    st.error(
+        "🚨 **KRİTİK HATA:** MetaTrader 5 ile bağlantı KOPTU! "
+        "Robot çalışıyor ama MT5'e ulaşamıyor. "
+        "MT5 terminalinin açık ve ağ bağlantınızın aktif olduğunu kontrol edin. "
+        "Bağlantı geri gelince robot otomatik olarak devam edecek.",
+        icon="🚫",
+    )
 
 
 # 📡 Mobil MT5'ten (Sinyal Emri ile) uzaktan durduruldu mu?
@@ -168,8 +184,12 @@ if st.session_state.get(f"motor_toggle_{account_id}"):
 # ==========================================
 if action == "TOGGLE":
     if not account_is_running:
-        # Önce MT5 bağlantısını test et
-        connection_success = connect_to_mt5(active_account)
+        # Önce MT5 bağlantısını test et.
+        # 🌟 YENİ: Zaman aşımlı bağlantı — MT5 açılamaz/ulaşılamazsa arayüz ASLA donmaz!
+        with st.spinner("🔄 MT5 terminaline bağlanılıyor..."):
+            connection_success, connection_timed_out = connect_to_mt5_with_timeout(
+                active_account
+            )
 
         if connection_success:
             # Subprocess (Alt Süreç) başlat!
@@ -180,16 +200,26 @@ if action == "TOGGLE":
                 )
                 st.rerun()
             else:
-                st.toast(
-                    "🔴 Hata: Robot başlatılamadı! Lütfen hata kayıtlarını (logs) inceleyin.",
+                st.error(
+                    "🔴 **Robot Başlatılamadı!** Lütfen hata kayıtlarını (logs) inceleyin.",
                     icon="❌",
                 )
         else:
-            # EKLENDİ: Bağlantı başarısız olursa kullanıcıya bildir!
-            st.toast(
-                "🔴 MT5 Bağlantı Hatası! Terminal açılamadı veya bilgiler yanlış.",
-                icon="❌",
-            )
+            # 🌟 EKLENDİ: Bağlantı başarısız olursa KALICI ve net hata göster
+            if connection_timed_out:
+                st.error(
+                    "🔴 **MT5 BAĞLANTI ZAMAN AŞIMI!** Terminal açılamadı veya sunucuya "
+                    "ulaşılamadı. MT5 terminalinin açık olduğundan ve ağ/internet "
+                    "bağlantınızın aktif olduğundan emin olun, sonra tekrar deneyin.",
+                    icon="🚨",
+                )
+            else:
+                st.error(
+                    "🔴 **MT5 BAĞLANTI HATASI!** Terminal açılamadı veya hesap giriş "
+                    "bilgileri (sunucu/şifre) yanlış. Lütfen MT5 terminalinin açık "
+                    "olduğunu ve hesap bilgilerinizin doğruluğunu kontrol edin.",
+                    icon="🚨",
+                )
     else:
         # 🚀 PHASE 4: Kapatma SADECE kullanıcının açık seçimiyle yapılır.
         # "Durdur" -> süreç kapanır, pozisyonlar/emirler korunur.

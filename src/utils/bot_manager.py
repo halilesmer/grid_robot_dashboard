@@ -12,7 +12,7 @@ project_root = Path(__file__).parent.parent.parent
 sys.path.append(str(project_root))
 
 # Gerekli bağlantı ve temizlik fonksiyonlarını içeri aktar
-from src.utils.mt5_connection import connect_to_mt5
+from src.utils.mt5_connection import connect_to_mt5_with_timeout
 from src.utils.trade_utils import cancel_all_pending_orders, close_position
 
 import psutil  # 🌟 YENİ: İşletim sistemi süreçlerini okumak için
@@ -243,7 +243,10 @@ def stop_and_close_all(account_id: str) -> bool:
         if not active_account or mt5 is None:
             return True
 
-        if connect_to_mt5(active_account):
+        # 🌟 ZAMAN AŞIMLI BAĞLANTI: MT5 ulaşılamıyorsa "Durdur & Kapat" da arayüzü dondurmasın!
+        connection_success, _timed_out = connect_to_mt5_with_timeout(active_account)
+
+        if connection_success:
             try:
                 # 1. TÜM robot açık pozisyonları kapat
                 positions = mt5.positions_get()
