@@ -18,6 +18,9 @@ logs/
 *.tmp
 logs/*.txt
 
+# 🧠 Kalıcı Durum (state_manager) — runtime verisi, sürüm takibi dışında
+data/
+
 # İşletim Sistemi
 .DS_Store
 **/.DS_Store
