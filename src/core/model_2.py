@@ -29,6 +29,10 @@ IS_RUNNING = False
 INITIAL_CLEANUP_DONE = False
 SIMULATED_PRICE = 0.0
 
+# 📡 Mobil MT5 Uzaktan Kumanda (Sinyal Emri) Değişkenleri
+REMOTE_PAUSED = False  # True ise motor uzaktan durdurulmuştur (ağ örmez)
+REMOTE_COMMAND_PREFIX = "GRID:"  # Emir yorumu bu önekle başlamalı
+
 active_zones_state = {}  # Hafıza Kurtarma ve Zombi Emir Yönetimi
 
 
@@ -42,6 +46,7 @@ def get_live_metrics():
         "pending_orders": 0,
         "current_price": 0.0,
         "algo_trading_error": False,
+        "remote_paused": REMOTE_PAUSED,
     }
 
     if mt5 is None or IS_MAC_TEST_MODE:
@@ -213,17 +218,19 @@ except ImportError:
             if request.get("action") == self.TRADE_ACTION_PENDING:
 
                 class DummyOrder:
-                    def __init__(self, ticket, magic, price, type_):
+                    def __init__(self, ticket, magic, price, type_, comment=""):
                         self.ticket = ticket
                         self.magic = magic
                         self.price_open = price
                         self.type = type_
+                        self.comment = comment
 
                 new_order = DummyOrder(
                     self.ticket_counter,
                     request.get("magic"),
                     request.get("price"),
                     request.get("type"),
+                    request.get("comment", ""),
                 )
                 self.dummy_orders.append(new_order)
                 self.ticket_counter += 1
@@ -498,11 +505,100 @@ def process_zone_commands():
             pass
 
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# 📡 MOBİL MT5 UZAKTAN KUMANDA (SİNYAL EMRİ DİNLEYİCİ)
+# ═══════════════════════════════════════════════════════════════════════════════
+def check_remote_commands():
+    """
+    Mobil MT5'ten 'yorum (comment)' alanına GRID:STOP / GRID:START yazılarak
+    koyulan sinyal emirlerini dinler.
+
+    Kural: Sinyal emri magic=0 (manuel) ve comment'i GRID:... ile başlayan bir
+    bekleyen emirdir. Komut işlendikten sonra o emir KENDİSİ SİLİNİR (self-destruct)
+    böylece tek seferlik tuş gibi çalışır.
+    """
+    global REMOTE_PAUSED, ACTIVE_ZONE, ACTIVE_ZONE_IDX
+
+    if IS_MAC_TEST_MODE:
+        # Mac test modunda DummyMT5 kullanılır; aynı mantık orada da çalışır.
+        pass
+
+    orders = mt5.orders_get(symbol=SYMBOL)
+    if orders is None or len(orders) == 0:
+        return False
+
+    command_found = False
+    for order in orders:
+        # Sinyal emirleri asla robotun kendi emirleri (magic 200000+) olmamalı
+        if BASE_MAGIC_NUMBER <= order.magic < BASE_MAGIC_NUMBER + 1000:
+            continue
+
+        comment = order.comment or ""
+        if not comment.strip().upper().startswith(REMOTE_COMMAND_PREFIX):
+            continue
+
+        cmd = comment.strip().upper().split(":")[-1].strip()
+        command_found = True
+        log_message(
+            f"📡 Mobil MT5 UZAKTAN KOMUT ALINDI: {cmd} (Sinyal Bileti: {order.ticket})",
+            "WARN",
+        )
+
+        # Komutu işle
+        if cmd == "STOP":
+            if not REMOTE_PAUSED:
+                REMOTE_PAUSED = True
+                log_message(
+                    "🛑 Motor uzaktan DURDURULDU. Bekleyen robot emirleri siliniyor. (Açık pozisyonlar korunur)",
+                    "WARN",
+                )
+                # Tüm robot bekleyen emirlerini temizle, pozisyonlara dokunma
+                for ro in get_all_robot_orders() or []:
+                    cancel_order(ro)
+            else:
+                log_message("ℹ️ Motor zaten uzaktan durdurulmuştu. (STOP tekrarlandı)")
+
+        elif cmd == "START":
+            if REMOTE_PAUSED:
+                REMOTE_PAUSED = False
+                # Bölge durumları ayakta kalmış olabilir; ağ örmenin devam etmesi için
+                # aktif bölge bilgisini sıfırlayarak yeniden girişe izin ver.
+                ACTIVE_ZONE = None
+                ACTIVE_ZONE_IDX = None
+                log_message("🚀 Motor uzaktan TEKRAR BAŞLATILDI. (GRID:START)", "WARN")
+            else:
+                log_message("ℹ️ Motor zaten çalışıyordu. (START tekrarlandı)")
+
+        else:
+            log_message(
+                f"⚠️ Bilinmeyen uzaktan komut: {cmd} (Beklenen: STOP / START)",
+                "ERROR",
+            )
+
+        # 🔫 Self-destruct: Sinyal emrini sil (tek seferlik tuş mantığı)
+        # Düşük seviyeli mt5.order_send yerine safe_send_order kullanıyoruz;
+        # böylece retcode 10009 kontrol edilir ve emir silinemezse log'a düşer.
+        if cancel_order(order):
+            log_message(f"🧹 Sinyal emri {order.ticket} temizlendi (self-destruct).")
+        else:
+            log_message(
+                f"⚠️ Sinyal emri {order.ticket} silinemedi! Boşta kalan sinyal, sonraki döngüde tekrar işlenecek.",
+                "ERROR",
+            )
+
+    return command_found
+
+
 # 2. ESKİ manage_dynamic_grid FONKSİYONUNU BUNUNLA DEĞİŞTİR (Canlı Güncelleme Çözümü)
 def manage_dynamic_grid():
     global ACTIVE_ZONE, ACTIVE_ZONE_IDX
 
     process_zone_commands()
+
+    # 📡 UZAKTAN DURDURMA KALE DUVARI: Motor uzaktan kapatıldıysa ağ örme, silme
+    # ve temizlik işlemlerinin TAMAMI devre dışı kalır (pozisyonlar korunur).
+    if REMOTE_PAUSED:
+        return True
 
     # CANLI AYAR GÜNCELLEMESİ (Stale Reference Koruması)
     if ACTIVE_ZONE_IDX is not None and ACTIVE_ZONE_IDX < len(ZONES):
@@ -1058,6 +1154,12 @@ def main_loop():
     try:
         while IS_RUNNING:
             load_dynamic_settings()
+
+            # 📡 MOBİL MT5 UZAKTAN KOMUT: Sinyal emri var mı diye bak
+            try:
+                check_remote_commands()
+            except Exception as e:
+                log_message(f"Uzaktan komut okuması başarısız: {e}", "ERROR")
 
             term_info = mt5.terminal_info()
             if term_info is None or not term_info.trade_allowed:

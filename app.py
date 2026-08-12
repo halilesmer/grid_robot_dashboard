@@ -66,6 +66,7 @@ def get_live_metrics_from_file(account_id):
         "pending_orders": 0,
         "current_price": 0.0,
         "algo_trading_error": False,
+        "remote_paused": False,
     }
 
 
@@ -119,6 +120,7 @@ else:
         "pending_orders": 0,
         "current_price": 0.0,
         "algo_trading_error": False,
+        "remote_paused": False,
     }
 
 
@@ -136,6 +138,16 @@ if live_data.get("algo_trading_error", False):
         stop_bot_process(account_id)
         st.toast("🛑 Motor kilitlendi: Algo Trading kapalı!", icon="⚠️")
         st.rerun()
+
+
+# 📡 Mobil MT5'ten (Sinyal Emri ile) uzaktan durduruldu mu?
+if live_data.get("remote_paused", False) and account_is_running:
+    st.warning(
+        "📡 **Motor Mobil MT5'ten UZAKTAN DURDURULDU.** "
+        "Bekleyen emirler silindi, açık pozisyonlar korundu. "
+        "Tekrar başlatmak için mobil MT5'ten yorumu **GRID:START** olan bir bekleyen emir koyun.",
+        icon="⏸️",
+    )
 
 
 # 🌟 Ana Motor tetikleyicisi artık settings_panel üzerinden yönetiliyor
