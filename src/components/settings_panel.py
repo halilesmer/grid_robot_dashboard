@@ -73,6 +73,22 @@ def _handle_zone_action(account_id: str, zone_id: str, idx: int, state: str):
     ui_state_key = f"ui_zone_states_{account_id}"
     if ui_state_key in st.session_state:
         st.session_state[ui_state_key][zone_id] = state
+        
+        # 🌟 RACE CONDITION KORUMASI: Dosyaya SADECE kullanıcı butona bastığında yaz
+        zones_session_key = f"model2_zones_{account_id}"
+        if zones_session_key in st.session_state:
+            backend_states = {}
+            for i, z in enumerate(st.session_state[zones_session_key]):
+                backend_states[str(i)] = st.session_state[ui_state_key].get(z["id"], "CLEAR")
+            
+            try:
+                ui_file = get_ui_state_path(account_id)
+                tmp_ui_file = ui_file + ".tmp"
+                with open(tmp_ui_file, "w", encoding="utf-8") as f:
+                    json.dump(backend_states, f)
+                os.replace(tmp_ui_file, ui_file)
+            except Exception:
+                pass
 
 
 def _force_upper_symbol(key: str):
@@ -81,6 +97,7 @@ def _force_upper_symbol(key: str):
         st.session_state[key] = str(st.session_state[key]).upper().strip()
 
 
+@st.fragment(run_every="2s")
 def render_model_2_settings(
     current_settings, account_id, live_data, active_account, is_running=False
 ):
@@ -115,8 +132,8 @@ def render_model_2_settings(
                         st.session_state[ui_state_key][zone_id] = saved_states.get(
                             str(i), "CLEAR"
                         )
-                    elif saved_states.get(str(i)) == "AUTO_CLEAR":
-                        st.session_state[ui_state_key][zone_id] = "AUTO_CLEAR"
+                    elif saved_states.get(str(i)) in ("AUTO_CLEAR", "PAUSE", "START"):
+                        st.session_state[ui_state_key][zone_id] = saved_states.get(str(i))
         except Exception:
             pass
 
@@ -920,17 +937,6 @@ def render_model_2_settings(
 
     # Hafıza kaybını önlemek için her renderda listeyi eşitle!
     st.session_state[zones_session_key] = updated_zones
-
-    # Robot (model_2.py) arka planda hala IDX kullandığı için ona uygun JSON köprüsü oluşturuyoruz
-    backend_states = {}
-    for i, z in enumerate(updated_zones):
-        backend_states[str(i)] = st.session_state[ui_state_key].get(z["id"], "CLEAR")
-
-    ui_file = get_ui_state_path(account_id)
-    tmp_ui_file = ui_file + ".tmp"
-    with open(tmp_ui_file, "w", encoding="utf-8") as f:
-        json.dump(backend_states, f)
-    os.replace(tmp_ui_file, ui_file)
 
     # ── Güncelleme Tetikleyicisi (Bölge başlığından gelen sinyali yakalar) ───
     if st.session_state.get(f"save_req_{account_id}", False):
