@@ -266,14 +266,20 @@ def remote_signal_watcher(acc_id, is_running):
 
         if zones_session_key in st.session_state and ui_state_key in st.session_state:
             memory_states = st.session_state[ui_state_key]
+            need_rerun = False
+
             for i, z in enumerate(st.session_state[zones_session_key]):
                 disk_val = disk_states.get(str(i))
-                mem_val = memory_states.get(z.get("id"))
+                zone_id = z.get("id")
+                mem_val = memory_states.get(zone_id)
 
-                # Sadece MT5'ten sinyal gelir ve diskteki durum hafızadakinden farklı olursa yenile!
+                # Sadece MT5'ten sinyal gelir ve diskteki durum hafızadakinden farklı olursa tetikle
                 if disk_val in ("AUTO_CLEAR", "PAUSE", "START") and disk_val != mem_val:
-                    st.session_state[ui_state_key][z.get("id")] = disk_val
-                    st.rerun(scope="app")
+                    st.session_state[ui_state_key][zone_id] = disk_val
+                    need_rerun = True
+
+            if need_rerun:
+                st.rerun()
     except Exception:
         pass
 
