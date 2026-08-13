@@ -495,11 +495,11 @@ def send_pending_order(
         "magic": BASE_MAGIC_NUMBER + zone_idx + 1,
         "comment": f"Model2_Zone{zone_idx + 1}",
         "type_time": mt5.ORDER_TIME_GTC,
-        "type_filling": (
-            FILLING_MODE if FILLING_MODE is not None else mt5.ORDER_FILLING_IOC
-        ),
         "tp": tp_price,
     }
+    # 🌟 DÜZELTME: Bekleyen emirlerde 'type_filling' parametresi kaldırıldı.
+    # Aksi halde IOC/FOK bayrakları broker tarafından emrin anında iptal edilmesine yol açar.
+
     if sl_price is not None and sl_price > 0:
         request["sl"] = sl_price
 

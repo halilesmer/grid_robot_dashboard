@@ -112,15 +112,15 @@ def _detached_popen(cmd, stdout, stderr, env):
     if os.name == "nt":
         cwd = str(project_root)
         creation_flags_attempts = [
-            subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS,
             subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW,
+            subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS,
         ]
         last_err = None
         for flags in creation_flags_attempts:
             try:
                 return subprocess.Popen(
                     cmd,
-                    stdin=subprocess.DEVNULL,  # 🌟 EKSİK OLAN KRİTİK PARAMETRE
+                    stdin=subprocess.DEVNULL,
                     stdout=stdout,
                     stderr=stderr,
                     text=True,
@@ -133,12 +133,12 @@ def _detached_popen(cmd, stdout, stderr, env):
         raise last_err
     return subprocess.Popen(
         cmd,
-        stdin=subprocess.DEVNULL,  # 🌟 EKSİK OLAN KRİTİK PARAMETRE
+        stdin=subprocess.DEVNULL,
         stdout=stdout,
         stderr=stderr,
         text=True,
         env=env,
-        start_new_session=True,
+        start_new_session=True,  # Yeni oturum: ana arayüzden gelen sinyallerden izole
     )
 
 
