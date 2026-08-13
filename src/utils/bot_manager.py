@@ -105,18 +105,12 @@ def self_cleanup(account_id: str):
 def _detached_popen(cmd, stdout, stderr, env):
     """Streamlit'ten BAĞIMSIZ bir süreç başlatır.
 
-    🚀 PHASE 3: Alt süreç yeni bir oturumda (session) açılır;
-    Streamlit kapanır / port değişir / bilgisayar yeniden başlatılır (VM)
-    ana arayüz çökse bile bot süreci YAŞAMAYA DEVAM EDER.
-
-    🌟 WinError 232 (0x800700E8) KORUMASI: `DETACHED_PROCESS` bayrağı, Streamlit
-    bir Windows hizmeti / zamanlanmış görev / oturum açılmadan başlatılmışsa
-    console pipe'ı tahsis edemeyip süreci hiç başlatamayabilir. Böyle bir
-    durumda aynı komut CREATE_NO_WINDOW ile tekrar denenir (süreç yine
-    konsolsuz başlar ve hayatta kalır).
+    WinError 232 (0x800700E8) KORUMASI: Streamlit arayüzü kendi standart girdilerini (stdin)
+    sarmaladığı için, alt süreçler bunu devralmaya (inherit) çalıştığında pipe (boru hattı)
+    çöker. stdin=subprocess.DEVNULL eklenerek bu kopma engellenmiştir.
     """
     if os.name == "nt":
-        cwd = str(project_root)  # Mutlak çalışma dizini: hizmet ortamlarında cwd boş/geçersiz olabilir
+        cwd = str(project_root)
         creation_flags_attempts = [
             subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS,
             subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW,
@@ -126,6 +120,7 @@ def _detached_popen(cmd, stdout, stderr, env):
             try:
                 return subprocess.Popen(
                     cmd,
+                    stdin=subprocess.DEVNULL,  # 🌟 EKSİK OLAN KRİTİK PARAMETRE
                     stdout=stdout,
                     stderr=stderr,
                     text=True,
@@ -138,11 +133,12 @@ def _detached_popen(cmd, stdout, stderr, env):
         raise last_err
     return subprocess.Popen(
         cmd,
+        stdin=subprocess.DEVNULL,  # 🌟 EKSİK OLAN KRİTİK PARAMETRE
         stdout=stdout,
         stderr=stderr,
         text=True,
         env=env,
-        start_new_session=True,  # Yeni oturum: ana arayüzden gelen sinyallerden izole
+        start_new_session=True,
     )
 
 
