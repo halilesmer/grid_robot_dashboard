@@ -162,6 +162,11 @@ def render_model_2_settings(
             border-color: #eab308 !important;
             color: #1f2937 !important;font-weight:600;
         }
+        [data-testid='stColumn']:has(.motor-marker-disconnected) [data-testid='stBaseButton-secondary'] {
+            background: #ef4444 !important;
+            border-color: #dc2626 !important;
+            color: white !important;font-weight:600;
+        }
         </style>
         """,
         unsafe_allow_html=True,
@@ -175,12 +180,16 @@ def render_model_2_settings(
         zone_states = list(st.session_state.get(ui_state_key, {}).values())
         any_zone_start = any(s == "START" for s in zone_states)
 
+        mt5_connected = live_data.get("mt5_connected", True) if live_data else True
         if not is_running:
             motor_status = "stopped"
             btn_label = "🚀 Ana Motoru Çalıştır"
+        elif not mt5_connected:
+            motor_status = "disconnected"
+            btn_label = "🔴 MT5'e bağlanmadı"
         else:
             motor_status = "running" if any_zone_start else "paused"
-            btn_label = "🟢 Ana Motor Çalışıyor"
+            btn_label = "🟢 MT5'e bağlandı"
 
         # Hangi durumda olduğumuzu CSS ile hedeflemek için bir işaretçi basıyoruz
         st.markdown(
@@ -200,7 +209,12 @@ def render_model_2_settings(
                 st.rerun()
         with i_col:
             if is_running:
-                emoji = "🟢" if motor_status == "running" else "🟡"
+                if motor_status == "disconnected":
+                    emoji = "🔴"
+                elif motor_status == "running":
+                    emoji = "🟢"
+                else:
+                    emoji = "🟡"
                 st.markdown(
                     f"<div style='text-align:center;font-size:20px;'>{emoji}</div>",
                     unsafe_allow_html=True,
