@@ -42,8 +42,6 @@ def get_settings_file(model_name: str) -> str:
     else:
         # 2. YOKSA Streamlit arayüzünde (App.py) olduğumuzu varsay ve oradan çek
         try:
-            import streamlit as st
-
             if (
                 "selected_account" in st.session_state
                 and st.session_state.selected_account
@@ -69,9 +67,6 @@ def load_settings(model_name: str = "Model 1"):
     file_path = get_settings_file(model_name)
     default_settings = get_default_settings(model_name)
 
-    # Erstelle den Ordner 'configs', falls er nicht existiert
-    os.makedirs(os.path.dirname(file_path), exist_ok=True)
-
     if not os.path.exists(file_path):
         save_settings(default_settings, model_name)
         return default_settings
@@ -85,9 +80,6 @@ def load_settings(model_name: str = "Model 1"):
 def save_settings(settings_dict, model_name: str = "Model 1"):
     """Yeni ayarları JSON dosyasına kaydeder."""
     file_path = get_settings_file(model_name)
-
-    # Erstelle den Ordner 'configs', falls er nicht existiert
-    os.makedirs(os.path.dirname(file_path), exist_ok=True)
 
     with open(file_path, "w", encoding="utf-8") as f:
         json.dump(settings_dict, f, indent=4)
