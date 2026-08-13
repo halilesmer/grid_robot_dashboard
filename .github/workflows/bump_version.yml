@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - master
+      - test
 
 jobs:
   bump-version:
@@ -18,12 +19,69 @@ jobs:
         with:
           fetch-depth: 0
 
+<<<<<<< Updated upstream
       - name: Automated Version Bump
         uses: phips28/gh-action-bump-version@v11.0.7
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
+<<<<<<< Updated upstream
           PACKAGEJSON_DIR: '.'
           PACKAGEJSON_FILENAME: 'VERSION'
           VERSION_TYPE: 'file'
           COMMIT_MESSAGE: 'chore(release): {{version}} [skip ci]'
+=======
+          minor-wording: 'feat'
+          major-wording: 'BREAKING CHANGE'
+          patch-wording: 'fix'
+          target-branch: ${{ github.ref_name }}
+
+      - name: Update VERSION File
+        run: |
+          echo "${{ steps.version_bump.outputs.new_tag }}" > VERSION
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add VERSION
+          git commit -m "chore(version): bump version to ${{ steps.version_bump.outputs.new_tag }} [skip ci]" || echo "No changes"
+          git push origin ${{ github.ref_name }}
+=======
+      - name: Bump Version and Tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # 1. Mevcut sürümü VERSION dosyasından veya v1.0.0'dan oku
+          if [ -f VERSION ]; then
+            CURRENT_VERSION=$(cat VERSION | tr -d 'v')
+          else
+            CURRENT_VERSION="1.0.0"
+          fi
+
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT_VERSION"
+
+          # 2. Commit mesajını kontrol et ve sürümü artır
+          LAST_COMMIT=$(git log -1 --pretty=%B)
+
+          if [[ "$LAST_COMMIT" =~ "feat" ]]; then
+            MINOR=$((MINOR + 1))
+            PATCH=0
+          elif [[ "$LAST_COMMIT" =~ "fix" ]]; then
+            PATCH=$((PATCH + 1))
+          else
+            echo "Arayüz/Sürüm değişikliği gerektiren bir commit kelimesi (feat/fix) bulunamadı, atlanıyor."
+            exit 0
+          fi
+
+          NEW_VERSION="v${MAJOR}.${MINOR}.${PATCH}"
+          echo "Yeni Sürüm: $NEW_VERSION"
+
+          # 3. VERSION dosyasını güncelle
+          echo "$NEW_VERSION" > VERSION
+
+          # 4. Git Commit & Tag İşlemleri
+          git add VERSION
+          git commit -m "chore(release): bump version to $NEW_VERSION [skip ci]"
+          git tag "$NEW_VERSION"
+          git push origin HEAD:${{ github.ref_name }} --tags
+>>>>>>> Stashed changes
+>>>>>>> Stashed changes
