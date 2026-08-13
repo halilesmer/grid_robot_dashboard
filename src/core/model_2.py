@@ -12,7 +12,8 @@ from src.utils.paths import get_err_log_path, get_ui_state_path
 # ==========================================
 # TEMEL DEĞİŞKENLER VE AYARLAR
 # ==========================================
-LOOP_INTERVAL_SECONDS = 1.0
+# Arayüzden bağımsız çalışan ana döngünün saniye cinsinden dinlenme süresi
+LOOP_INTERVAL_SECONDS = 3.0  # 🌟 1.0 saniyeden 3.0 saniyeye çıkarılarak CPU ve Log rahatlatıldı
 ZONES = []
 ORDER_TYPE = "BUY"  # Sadece ilk başlatma koruması için tutuluyor
 SYMBOL = "USOUSD"
@@ -726,10 +727,12 @@ def manage_dynamic_grid():
             vol_min = SYMBOL_INFO.volume_min if SYMBOL_INFO else 0.01
 
             if remaining_lot >= vol_min:
+                # 🌟 DÜZELTME: Tolerans MT5 noktalarından (point*2) arayüz adımlarına çıkarıldı.
+                # Aksi takdirde aynı seviyede 0.01 lot yüzlerce kez açılarak hesap patlatılır.
+                tolerance_step = grid_step * 0.4 if direction == "BUY" else sell_grid_step * 0.4
                 has_pending = any(
                     o.magic == pos.magic
-                    and abs(round(o.price_open, 4) - round(pos.price_open, 4))
-                    <= round((SYMBOL_INFO.point * 2 if SYMBOL_INFO else 0.02), 4)
+                    and abs(round(o.price_open, 4) - round(pos.price_open, 4)) <= round(tolerance_step, 4)
                     for o in robot_orders
                 )
 
