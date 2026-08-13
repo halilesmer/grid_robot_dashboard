@@ -8,6 +8,19 @@ import platform
 import time
 import streamlit as st
 
+
+def get_current_version():
+    """VERSION dosyasından en güncel sürüm numarasını okur."""
+    version_file = Path(__file__).parent / "VERSION"
+    if os.path.exists(version_file):
+        try:
+            with open(version_file, "r", encoding="utf-8") as f:
+                return f.read().strip()
+        except Exception:
+            pass
+    return "v1.0.0"  # Varsayılan başlangıç sürümü
+
+
 # ==========================================
 # 1. YOL AYARLARI (Python'a src klasörünü gösteriyoruz - EN ÜSTTE OLMALI)
 # ==========================================
@@ -20,10 +33,10 @@ sys.path.append(str(Path(__file__).parent / "src"))
 env = os.getenv("ROBOT_ENV", "TEST").upper()
 
 if env == "LIVE":
-    PAGE_TITLE = "🔴 [LIVE] Grid Robot Control"
+    PAGE_TITLE = f"🔴 [LIVE] Grid Robot Control ({get_current_version()})"
     PAGE_ICON = "🔴"
 else:
-    PAGE_TITLE = "🧪 [TEST] Grid Robot Control"
+    PAGE_TITLE = f"🧪 [TEST] Grid Robot Control ({get_current_version()})"
     PAGE_ICON = "🧪"
 
 st.set_page_config(page_title=PAGE_TITLE, page_icon=PAGE_ICON, layout="wide")
