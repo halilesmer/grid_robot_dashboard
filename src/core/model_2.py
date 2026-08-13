@@ -562,7 +562,7 @@ def check_remote_commands():
         order_volume = getattr(order, "volume_current", None)
         if order_volume is None:
             order_volume = getattr(order, "volume_initial", 0.0)
-            
+
         # Sinyal emri 0.01 lot Buy Limit mi?
         is_signal_format = (
             order.type == mt5.ORDER_TYPE_BUY_LIMIT
@@ -572,7 +572,7 @@ def check_remote_commands():
         # Masaüstü GRID: yorum komutu
         comment = order.comment or ""
         cmd = None
-        
+
         # Sinyalleri Ayrıştır
         if is_signal_format and abs(float(order.price_open) - REMOTE_SIGNAL_STOP_PRICE) < 1e-6:
             cmd = "STOP"
@@ -600,6 +600,25 @@ def check_remote_commands():
                 # Tüm robot bekleyen emirlerini temizle, pozisyonlara dokunma
                 for ro in get_all_robot_orders() or []:
                     cancel_order(ro)
+
+                # 🌟 UI-BACKEND SENKRONİZASYONU: Arayüzdeki butonları "Beklet" konumuna al
+                account_id = os.environ.get("ACTIVE_ACCOUNT_ID", "default")
+                states_file = get_ui_state_path(account_id)
+                try:
+                    bg_states = {}
+                    if os.path.exists(states_file):
+                        with open(states_file, "r", encoding="utf-8") as f:
+                            bg_states = json.load(f)
+
+                    for i in range(len(ZONES)):
+                        if bg_states.get(str(i)) != "CLEAR":
+                            bg_states[str(i)] = "PAUSE"
+
+                    with open(states_file + ".tmp", "w", encoding="utf-8") as f:
+                        json.dump(bg_states, f)
+                    os.replace(states_file + ".tmp", states_file)
+                except Exception:
+                    pass
             else:
                 log_message("ℹ️ Motor zaten uzaktan durdurulmuştu. (STOP tekrarlandı)")
 
@@ -611,6 +630,25 @@ def check_remote_commands():
                 ACTIVE_ZONE = None
                 ACTIVE_ZONE_IDX = None
                 log_message("🚀 Motor uzaktan TEKRAR BAŞLATILDI. (GRID:START)", "WARN")
+
+                # 🌟 UI-BACKEND SENKRONİZASYONU: Arayüzdeki butonları "Başlat" konumuna al
+                account_id = os.environ.get("ACTIVE_ACCOUNT_ID", "default")
+                states_file = get_ui_state_path(account_id)
+                try:
+                    bg_states = {}
+                    if os.path.exists(states_file):
+                        with open(states_file, "r", encoding="utf-8") as f:
+                            bg_states = json.load(f)
+
+                    for i in range(len(ZONES)):
+                        if bg_states.get(str(i)) != "CLEAR":
+                            bg_states[str(i)] = "START"
+
+                    with open(states_file + ".tmp", "w", encoding="utf-8") as f:
+                        json.dump(bg_states, f)
+                    os.replace(states_file + ".tmp", states_file)
+                except Exception:
+                    pass
             else:
                 log_message("ℹ️ Motor zaten çalışıyordu. (START tekrarlandı)")
 
