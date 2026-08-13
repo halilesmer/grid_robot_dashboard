@@ -36,10 +36,10 @@ CONNECTION_LOST = False
 # 📡 Mobil MT5 Uzaktan Kumanda (Sinyal Emri) Değişkenleri
 REMOTE_PAUSED = False  # True ise motor uzaktan durdurulmuştur (ağ örmez)
 REMOTE_COMMAND_PREFIX = "GRID:"  # Emir yorumu bu önekle başlamalı (masaüstü MT5)
-# 🔌 Mobil MT5'te yorum alanı olmadığı için "1$ Buy Limit (0.01 lot)" emri
-# STOP sinyali olarak kullanılır. Fiyat çok uçta olduğundan asla tetiklenmez.
-REMOTE_SIGNAL_PRICE = 1.0  # Sinyal fiyatı ($1)
-REMOTE_SIGNAL_VOLUME = 0.01  # Sinyal emri her zaman 0.01 lot olmalı
+# 🔌 Mobil MT5'te yorum alanı olmadığı için uç fiyatlardaki Buy Limit emirleri kullanılır
+REMOTE_SIGNAL_STOP_PRICE = 1.0   # STOP sinyal fiyatı ($1)
+REMOTE_SIGNAL_START_PRICE = 2.0  # 🌟 YENİ: START sinyal fiyatı ($2)
+REMOTE_SIGNAL_VOLUME = 0.01      # Sinyal emri her zaman 0.01 lot olmalı
 
 active_zones_state = {}  # Hafıza Kurtarma ve Zombi Emir Yönetimi
 
@@ -495,10 +495,9 @@ def send_pending_order(
         "magic": BASE_MAGIC_NUMBER + zone_idx + 1,
         "comment": f"Model2_Zone{zone_idx + 1}",
         "type_time": mt5.ORDER_TIME_GTC,
+        "type_filling": mt5.ORDER_FILLING_RETURN,  # 🌟 KESİN ÇÖZÜM: Bekleyen emirlerin FOK(0) kabul edilip sunucu tarafından silinmemesi için RETURN(2) zorunludur.
         "tp": tp_price,
     }
-    # 🌟 DÜZELTME: Bekleyen emirlerde 'type_filling' parametresi kaldırıldı.
-    # Aksi halde IOC/FOK bayrakları broker tarafından emrin anında iptal edilmesine yol açar.
 
     if sl_price is not None and sl_price > 0:
         request["sl"] = sl_price
@@ -533,10 +532,10 @@ def check_remote_commands():
     """
     Mobil MT5'ten uzaktan kumanda sinyallerini dinler. İki yöntem desteklenir:
 
-    1) 🔌 YENİ — COMMENT'SİZ (mobil için): Fiyatı REMOTE_SIGNAL_PRICE (1$)
-       ve hacmi REMOTE_SIGNAL_VOLUME (0.01 lot) olan MANUEL Buy Limit emri
-       → STOP komutu olarak işlenir. Mobil MT5'te yorum alanı olmadığı için
-       bu yöntem şarttır. Fiyat çok uçta kaldığından emir asla tetiklenmez.
+    1) 🔌 YENİ — COMMENT'SİZ (mobil için): Uç fiyatlardaki MANUEL Buy Limit emirleri (0.01 lot):
+       - $1 = STOP (Durdur)
+       - $2 = START (Yeniden Başlat)
+       Fiyat çok uçta kaldığından bu emirler asla tetiklenmez, sadece tuş görevi görür.
 
     2) Masaüstü MT5: comment'i GRID:STOP / GRID:START ile başlayan manuel
        bekleyen emir → ilgili komut işlenir.
@@ -560,33 +559,33 @@ def check_remote_commands():
         if BASE_MAGIC_NUMBER <= order.magic < BASE_MAGIC_NUMBER + 1000:
             continue
 
-        # 🔌 Comment'siz STOP sinyali: 1$ Buy Limit (0.01 lot)
         order_volume = getattr(order, "volume_current", None)
         if order_volume is None:
             order_volume = getattr(order, "volume_initial", 0.0)
-        is_price_signal = (
+            
+        # Sinyal emri 0.01 lot Buy Limit mi?
+        is_signal_format = (
             order.type == mt5.ORDER_TYPE_BUY_LIMIT
             and abs(float(order_volume) - REMOTE_SIGNAL_VOLUME) < 1e-6
-            and abs(float(order.price_open) - REMOTE_SIGNAL_PRICE) < 1e-6
         )
 
         # Masaüstü GRID: yorum komutu
         comment = order.comment or ""
         cmd = None
-        if is_price_signal:
+        
+        # Sinyalleri Ayrıştır
+        if is_signal_format and abs(float(order.price_open) - REMOTE_SIGNAL_STOP_PRICE) < 1e-6:
             cmd = "STOP"
             command_found = True
-            log_message(
-                f"📡 MOBİL MT5 YORUMSUZ STOP SİNYALİ: 1$ Buy Limit (Bilet: {order.ticket})",
-                "WARN",
-            )
+            log_message(f"📡 MOBİL MT5 YORUMSUZ STOP SİNYALİ: $1 Buy Limit (Bilet: {order.ticket})", "WARN")
+        elif is_signal_format and abs(float(order.price_open) - REMOTE_SIGNAL_START_PRICE) < 1e-6:
+            cmd = "START"
+            command_found = True
+            log_message(f"📡 MOBİL MT5 YORUMSUZ START SİNYALİ: $2 Buy Limit (Bilet: {order.ticket})", "WARN")
         elif comment.strip().upper().startswith(REMOTE_COMMAND_PREFIX):
             cmd = comment.strip().upper().split(":")[-1].strip()
             command_found = True
-            log_message(
-                f"📡 Mobil MT5 UZAKTAN KOMUT ALINDI: {cmd} (Sinyal Bileti: {order.ticket})",
-                "WARN",
-            )
+            log_message(f"📡 Mobil MT5 UZAKTAN KOMUT ALINDI: {cmd} (Sinyal Bileti: {order.ticket})", "WARN")
         else:
             continue
 
@@ -686,6 +685,7 @@ def manage_dynamic_grid():
         return False
 
     # 2. KISMİ DOLUM (PARTIAL FILL) KONTROLÜ - ÇİFT YÖNLÜ
+    processed_prices = set()
     for pos in robot_positions:
         pos_zone_idx = pos.magic - BASE_MAGIC_NUMBER - 1
         if 0 <= pos_zone_idx < len(ZONES):
@@ -710,7 +710,7 @@ def manage_dynamic_grid():
                     z_data.get("sell_stop_loss", z_data.get("stop_loss", 0.0))
                 )
 
-            # 🌟 YENİ EKLENDİ: Arayüzden güncellenen TP/SL açık pozisyonlara anında yansısın
+            # 1. TP/SL GÜNCELLEMESİ (Tüm açık pozisyonlar için bağımsız çalışır)
             expected_tp = normalize_price(pos.price_open + tp_val) if direction == "BUY" else normalize_price(pos.price_open - tp_val)
             expected_sl = 0.0
             if sl_val > 0:
@@ -723,50 +723,30 @@ def manage_dynamic_grid():
                 log_message(f"🔄 Açık Pozisyon Güncellemesi: Bölge {pos_zone_idx+1} | Bilet {pos.ticket} için yeni TP/SL ayarlanıyor.")
                 modify_position_tp_sl(pos, expected_tp, expected_sl)
 
-            remaining_lot = round(target_lot - pos.volume, 8)
-            vol_min = SYMBOL_INFO.volume_min if SYMBOL_INFO else 0.01
+            # 2. KISMİ DOLUM EMİR OLUŞTURMA (Aynı fiyattaki pozisyon hacimlerini toplayarak tek seferde işler)
+            grid_step_tmp = float(z_data.get("grid_step", 0.05))
+            sell_grid_step_tmp = float(z_data.get("sell_grid_step", grid_step_tmp))
+            tolerance_step = grid_step_tmp * 0.4 if direction == "BUY" else sell_grid_step_tmp * 0.4
 
-            if remaining_lot >= vol_min:
-                # 🌟 DÜZELTME: Tolerans MT5 noktalarından (point*2) arayüz adımlarına çıkarıldı.
-                # Aksi takdirde aynı seviyede 0.01 lot yüzlerce kez açılarak hesap patlatılır.
-                tolerance_step = grid_step * 0.4 if direction == "BUY" else sell_grid_step * 0.4
-                has_pending = any(
-                    o.magic == pos.magic
-                    and abs(round(o.price_open, 4) - round(pos.price_open, 4)) <= round(tolerance_step, 4)
-                    for o in robot_orders
-                )
+            is_processed = any(direction == p_dir and abs(round(pos.price_open, 4) - round(p_price, 4)) <= round(tolerance_step, 4) for p_dir, p_price in processed_prices)
+            
+            if not is_processed:
+                processed_prices.add((direction, pos.price_open))
+                
+                total_pos_volume = sum(p.volume for p in robot_positions if p.magic == pos.magic and p.type == pos.type and abs(round(p.price_open, 4) - round(pos.price_open, 4)) <= round(tolerance_step, 4))
+                remaining_lot = round(target_lot - total_pos_volume, 8)
+                vol_min = SYMBOL_INFO.volume_min if SYMBOL_INFO else 0.01
 
-                if (
-                    not has_pending
-                    and active_zones_state.get(pos_zone_idx, "START") == "START"
-                ):
-                    log_message(
-                        f"🔄 Kısmi Dolum: Bölge {pos_zone_idx+1} | Kalan {remaining_lot} lot ({direction}) emir gönderiliyor."
+                if remaining_lot >= vol_min:
+                    has_pending = any(
+                        o.magic == pos.magic
+                        and abs(round(o.price_open, 4) - round(pos.price_open, 4)) <= round(tolerance_step, 4)
+                        for o in robot_orders
                     )
 
-                    if direction == "BUY":
-                        tp_price = normalize_price(pos.price_open + tp_val)
-                        sl_price = (
-                            normalize_price(pos.price_open - sl_val)
-                            if sl_val > 0
-                            else None
-                        )
-                    else:
-                        tp_price = normalize_price(pos.price_open - tp_val)
-                        sl_price = (
-                            normalize_price(pos.price_open + sl_val)
-                            if sl_val > 0
-                            else None
-                        )
-
-                    send_pending_order(
-                        pos.price_open,
-                        remaining_lot,
-                        tp_price,
-                        sl_price,
-                        zone_idx=pos_zone_idx,
-                        direction=direction,
-                    )
+                    if not has_pending and active_zones_state.get(pos_zone_idx, "START") == "START":
+                        log_message(f"🔄 Kısmi Dolum: Bölge {pos_zone_idx+1} | Kalan {remaining_lot} lot ({direction}) emir gönderiliyor.")
+                        send_pending_order(pos.price_open, remaining_lot, expected_tp, expected_sl if expected_sl > 0 else None, zone_idx=pos_zone_idx, direction=direction)
 
     robot_orders = get_all_robot_orders()
 
@@ -1077,7 +1057,19 @@ def manage_dynamic_grid():
                 order_tp = order.tp if order.tp else 0.0
                 order_sl = order.sl if order.sl else 0.0
                 
-                if abs(float(order.volume_initial) - float(lot_val)) > 0.0001 or \
+                # Kısmi Dolum Koruması: O fiyatta zaten bir pozisyon varsa beklenen lot fark kadar olmalı
+                pos_vol = sum(p.volume for p in robot_positions if p.magic == target_magic and p.type == mt5.POSITION_TYPE_BUY and abs(round(normalize_price(p.price_open), 4) - round(order_price, 4)) <= round(buy_tolerance, 4))
+                if pos_vol > 0:
+                    expected_lot = round(float(lot_val) - pos_vol, 8)
+                    if expected_lot < (SYMBOL_INFO.volume_min if SYMBOL_INFO else 0.01):
+                        expected_lot = 0.0
+                else:
+                    expected_lot = float(lot_val)
+                
+                expected_lot_norm = normalize_volume(expected_lot) if expected_lot > 0 else 0.0
+                
+                if expected_lot_norm == 0.0 or \
+                   abs(float(order.volume_initial) - expected_lot_norm) > 0.0001 or \
                    abs(float(order_tp) - float(expected_tp)) > 0.0001 or \
                    abs(float(order_sl) - float(expected_sl)) > 0.0001:
                     is_valid = False
@@ -1094,7 +1086,19 @@ def manage_dynamic_grid():
                 order_tp = order.tp if order.tp else 0.0
                 order_sl = order.sl if order.sl else 0.0
                 
-                if abs(float(order.volume_initial) - float(sell_lot_val)) > 0.0001 or \
+                # Kısmi Dolum Koruması: O fiyatta zaten bir pozisyon varsa beklenen lot fark kadar olmalı
+                pos_vol = sum(p.volume for p in robot_positions if p.magic == target_magic and p.type == mt5.POSITION_TYPE_SELL and abs(round(normalize_price(p.price_open), 4) - round(order_price, 4)) <= round(sell_tolerance, 4))
+                if pos_vol > 0:
+                    expected_lot = round(float(sell_lot_val) - pos_vol, 8)
+                    if expected_lot < (SYMBOL_INFO.volume_min if SYMBOL_INFO else 0.01):
+                        expected_lot = 0.0
+                else:
+                    expected_lot = float(sell_lot_val)
+                
+                expected_lot_norm = normalize_volume(expected_lot) if expected_lot > 0 else 0.0
+                
+                if expected_lot_norm == 0.0 or \
+                   abs(float(order.volume_initial) - expected_lot_norm) > 0.0001 or \
                    abs(float(order_tp) - float(expected_tp)) > 0.0001 or \
                    abs(float(order_sl) - float(expected_sl)) > 0.0001:
                     is_valid = False
