@@ -97,7 +97,6 @@ def _force_upper_symbol(key: str):
         st.session_state[key] = str(st.session_state[key]).upper().strip()
 
 
-@st.fragment(run_every="2s")
 def render_model_2_settings(
     current_settings, account_id, live_data, active_account, is_running=False
 ):

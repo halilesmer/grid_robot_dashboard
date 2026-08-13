@@ -52,7 +52,7 @@ from src.styles.custom_css import apply_custom_css
 from src.utils.config import load_settings, save_settings
 
 # 🌟 YENİ: Merkezi yol yöneticisi
-from src.utils.paths import get_metrics_path, get_sim_price_path
+from src.utils.paths import get_metrics_path, get_sim_price_path, get_ui_state_path
 
 import src.core.model_2 as model_2
 
@@ -246,6 +246,40 @@ if action == "TOGGLE":
             on_stop_close_func=stop_and_close_all,
         )
 
+
+# ==========================================
+# 🌟 GİZLİ BEKÇİ (EVENT-DRIVEN WATCHER)
+# ==========================================
+@st.fragment(run_every="1.5s")
+def remote_signal_watcher(acc_id, is_running):
+    if not is_running:
+        return
+    ui_file = get_ui_state_path(acc_id)
+    if not os.path.exists(ui_file):
+        return
+    try:
+        with open(ui_file, "r", encoding="utf-8") as f:
+            disk_states = json.load(f)
+
+        ui_state_key = f"ui_zone_states_{acc_id}"
+        zones_session_key = f"model2_zones_{acc_id}"
+
+        if zones_session_key in st.session_state and ui_state_key in st.session_state:
+            memory_states = st.session_state[ui_state_key]
+            for i, z in enumerate(st.session_state[zones_session_key]):
+                disk_val = disk_states.get(str(i))
+                mem_val = memory_states.get(z.get("id"))
+
+                # Sadece MT5'ten sinyal gelir ve diskteki durum hafızadakinden farklı olursa yenile!
+                if disk_val in ("AUTO_CLEAR", "PAUSE", "START") and disk_val != mem_val:
+                    st.session_state[ui_state_key][z.get("id")] = disk_val
+                    st.rerun(scope="app")
+    except Exception:
+        pass
+
+
+# Bekçiyi panelden hemen önce çalıştır
+remote_signal_watcher(account_id, account_is_running)
 
 # ==========================================
 # AYARLAR VE MAC SİMÜLATÖRÜ
