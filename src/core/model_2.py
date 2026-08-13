@@ -403,9 +403,8 @@ def modify_position_tp_sl(position, tp_price, sl_price=None):
         "position": position.ticket,
         "symbol": SYMBOL,
         "tp": tp_price,
+        "sl": sl_price if sl_price is not None and sl_price > 0 else 0.0
     }
-    if sl_price is not None and sl_price > 0:
-        request["sl"] = sl_price
     return safe_send_order(mt5, request, log_message)
 
 
@@ -709,6 +708,19 @@ def manage_dynamic_grid():
                 sl_val = float(
                     z_data.get("sell_stop_loss", z_data.get("stop_loss", 0.0))
                 )
+
+            # 🌟 YENİ EKLENDİ: Arayüzden güncellenen TP/SL açık pozisyonlara anında yansısın
+            expected_tp = normalize_price(pos.price_open + tp_val) if direction == "BUY" else normalize_price(pos.price_open - tp_val)
+            expected_sl = 0.0
+            if sl_val > 0:
+                expected_sl = normalize_price(pos.price_open - sl_val) if direction == "BUY" else normalize_price(pos.price_open + sl_val)
+            
+            pos_tp = pos.tp if pos.tp else 0.0
+            pos_sl = pos.sl if pos.sl else 0.0
+            
+            if abs(float(pos_tp) - float(expected_tp)) > 0.0001 or abs(float(pos_sl) - float(expected_sl)) > 0.0001:
+                log_message(f"🔄 Açık Pozisyon Güncellemesi: Bölge {pos_zone_idx+1} | Bilet {pos.ticket} için yeni TP/SL ayarlanıyor.")
+                modify_position_tp_sl(pos, expected_tp, expected_sl)
 
             remaining_lot = round(target_lot - pos.volume, 8)
             vol_min = SYMBOL_INFO.volume_min if SYMBOL_INFO else 0.01
@@ -1055,11 +1067,34 @@ def manage_dynamic_grid():
                 abs(round(order_price, 4) - round(al, 4)) <= round(buy_tolerance, 4)
                 for al in acceptable_buy_levels
             )
+            # 🌟 YENİ: Arayüzden güncellenen Lot, TP veya SL değerleri mevcut emirle uyuşmuyorsa emri sil
+            if is_valid:
+                expected_tp = normalize_price(order_price + tp_val)
+                expected_sl = normalize_price(order_price - sl_val) if sl_val > 0 else 0.0
+                order_tp = order.tp if order.tp else 0.0
+                order_sl = order.sl if order.sl else 0.0
+                
+                if abs(float(order.volume_initial) - float(lot_val)) > 0.0001 or \
+                   abs(float(order_tp) - float(expected_tp)) > 0.0001 or \
+                   abs(float(order_sl) - float(expected_sl)) > 0.0001:
+                    is_valid = False
+
         elif order.type in [mt5.ORDER_TYPE_SELL_LIMIT, mt5.ORDER_TYPE_SELL_STOP]:
             is_valid = any(
                 abs(round(order_price, 4) - round(al, 4)) <= round(sell_tolerance, 4)
                 for al in acceptable_sell_levels
             )
+            # 🌟 YENİ: Arayüzden güncellenen Lot, TP veya SL değerleri mevcut emirle uyuşmuyorsa emri sil
+            if is_valid:
+                expected_tp = normalize_price(order_price - sell_tp_val)
+                expected_sl = normalize_price(order_price + sell_sl_val) if sell_sl_val > 0 else 0.0
+                order_tp = order.tp if order.tp else 0.0
+                order_sl = order.sl if order.sl else 0.0
+                
+                if abs(float(order.volume_initial) - float(sell_lot_val)) > 0.0001 or \
+                   abs(float(order_tp) - float(expected_tp)) > 0.0001 or \
+                   abs(float(order_sl) - float(expected_sl)) > 0.0001:
+                    is_valid = False
 
         if not is_valid:
             cancel_order(order)
