@@ -26,4 +26,40 @@ jobs:
           PACKAGEJSON_DIR: '.'
           PACKAGEJSON_FILENAME: 'VERSION'
           VERSION_TYPE: 'file'
-          COMMIT_MESSAGE: 'chore(release): {{version}} [skip ci]'
+          COMMIT_MESSAGE: 'chore(release): {{version}} [skip ci]'          COMMIT_MESSAGE: 'chore(release): {{version}} [skip ci]'
+=======
+      - name: Bump Version and Tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          if [ -f VERSION ]; then
+            CURRENT_VERSION=$(cat VERSION | tr -d 'v')
+          else
+            CURRENT_VERSION="1.0.0"
+          fi
+
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT_VERSION"
+
+          LAST_COMMIT=$(git log -1 --pretty=%B)
+
+          if [[ "$LAST_COMMIT" =~ "feat" ]]; then
+            MINOR=$((MINOR + 1))
+            PATCH=0
+          elif [[ "$LAST_COMMIT" =~ "fix" ]]; then
+            PATCH=$((PATCH + 1))
+          else
+            echo "Sürüm değişikliği gerektiren commit (feat/fix) bulunamadı, pas geçiliyor."
+            exit 0
+          fi
+
+          NEW_VERSION="v${MAJOR}.${MINOR}.${PATCH}"
+          echo "Yeni Sürüm: $NEW_VERSION"
+
+          echo "$NEW_VERSION" > VERSION
+
+          git add VERSION
+          git commit -m "chore(release): bump version to $NEW_VERSION [skip ci]"
+          git tag "$NEW_VERSION"
+          git push origin HEAD:${{ github.ref_name }} --tags
+>>>>>>> Stashed changes
