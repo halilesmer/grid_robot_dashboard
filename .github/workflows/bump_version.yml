@@ -18,6 +18,7 @@ jobs:
         with:
           fetch-depth: 0
 
+<<<<<<< Updated upstream
       - name: Automated Version Bump
         uses: phips28/gh-action-bump-version@v11.0.7
         env:
@@ -26,7 +27,7 @@ jobs:
           PACKAGEJSON_DIR: '.'
           PACKAGEJSON_FILENAME: 'VERSION'
           VERSION_TYPE: 'file'
-          COMMIT_MESSAGE: 'chore(release): {{version}} [skip ci]'          COMMIT_MESSAGE: 'chore(release): {{version}} [skip ci]'
+          COMMIT_MESSAGE: 'chore(release): {{version}} [skip ci]'
 =======
       - name: Bump Version and Tag
         run: |
