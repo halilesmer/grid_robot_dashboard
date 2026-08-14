@@ -909,10 +909,15 @@ def manage_dynamic_grid():
                     log_message(f"🧹 Toplam {silinen_emir_sayisi} adet bekleyen {target} emri temizlendi.")
 
                     if scope == "Tüm İşlemler":
-                        log_message("🧹 AÇIK POZİSYONLAR KORUNDU (güvenlik kuralı). Sadece bekleyen emirler temizlendi.")
+                        log_message(
+                            "🧹 AÇIK POZİSYONLAR KORUNDU (güvenlik kuralı). Sadece bekleyen emirler temizlendi."
+                        )
 
                 robot_orders = get_all_robot_orders()
                 robot_positions = get_all_robot_positions()
+
+                if robot_orders is None or robot_positions is None:
+                    return False
 
                 # 3. ARAYÜZE "DURDURULDU" BİLGİSİNİ İLET
                 account_id = os.environ.get("ACTIVE_ACCOUNT_ID", "default")

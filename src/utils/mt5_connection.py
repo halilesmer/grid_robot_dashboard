@@ -243,7 +243,7 @@ def shutdown_mt5():
 #
 # Dönüş: (başarı_bool, zaman_aşımı_bool)
 # ==========================================
-def connect_to_mt5_with_timeout(account_config, timeout=180):
+def connect_to_mt5_with_timeout(account_config, timeout=20):
     """connect_to_mt5'i arka planda çalıştırır; UI'ı kilitlemeden sonuç döner."""
     if not account_config:
         safe_log("Bağlanılacak hesap seçilmedi!")
