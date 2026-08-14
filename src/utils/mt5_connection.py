@@ -97,15 +97,16 @@ def connect_to_mt5(account_config):
             pass
 
     # 🌟 GÜVENLİ BAĞLANTI (Sağlam terminali öldürmeden bağlan)
+    # PORTABLE=TRUE : Farklı Windows kullanıcıları (Admin vs Apo) arasındaki IPC ve AppData çakışmalarını önler!
     if mt5_path and os.path.exists(mt5_path):
-        init_success = mt5.initialize(path=mt5_path, timeout=120000)
+        init_success = mt5.initialize(path=mt5_path, timeout=120000, portable=True)
     else:
         if mt5_path:
             safe_log(
                 f"UYARI: Belirtilen MT5 yolu bulunamadı ({mt5_path}). Standart terminal açılıyor...",
                 type="warning",
             )
-        init_success = mt5.initialize(timeout=120000)
+        init_success = mt5.initialize(timeout=120000, portable=True)
 
     # 🌟 ZOMBİ AVCISI (Kurtarma): Eğer ilk bağlantı başarısız olursa (IPC hatası vb.), terminal asılı kalmış demektir. Öldür ve tekrar dene!
     if not init_success:
@@ -122,9 +123,9 @@ def connect_to_mt5(account_config):
             type="warning",
         )
         if mt5_path and os.path.exists(mt5_path):
-            init_success = mt5.initialize(path=mt5_path, timeout=150000)
+            init_success = mt5.initialize(path=mt5_path, timeout=150000, portable=True)
         else:
-            init_success = mt5.initialize(timeout=150000)
+            init_success = mt5.initialize(timeout=150000, portable=True)
 
     if not init_success:
         last_err = mt5.last_error()
