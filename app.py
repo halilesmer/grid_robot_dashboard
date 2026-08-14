@@ -79,14 +79,32 @@ run_start(os.getenv("ROBOT_ENV", "TEST"))
 # 🌟 PWA kodunu enjekte et (manifest + service worker)
 inject_pwa_code()
 
-if st.session_state.get("pending_hard_restart"):
+# ==========================================
+# SİSTEM YÖNETİCİSİ (PWA + SELF-UPDATE) - ANA EKRAN
+# ==========================================
+with st.expander("⚙️ Sistem Yöneticisi & Güncelleme Merkezi", expanded=False):
+    st.info(
+        f"Geçerli Ortam: **{env}** | Dal (Branch): **{'master' if env == 'LIVE' else 'test'}**"
+    )
+
+    if st.button("🔄 Güncellemeleri Denetle ve Yükle", use_container_width=True):
+        target_branch = "master" if env == "LIVE" else "test"
+        with st.spinner(
+            f"Güncellemeler GitHub ({target_branch}) dalından çekiliyor..."
+        ):
+            success, message = execute_git_pull(branch=target_branch)
+            if success:
+                st.session_state["update_success_msg"] = message
+                st.rerun()  # 🚀 Sunucuyu kapatmadan sayfayı anında yeni kodla yeniler!
+            else:
+                st.error("❌ Güncelleme Başarısız!")
+                st.error(message)
+
+# Güncelleme sonrası başarı mesajını ekrana bas
+if "update_success_msg" in st.session_state:
     st.success("✅ Uygulama başarıyla güncellendi!")
-    if "git_pull_msg" in st.session_state:
-        st.code(st.session_state["git_pull_msg"], language="bash")
-    st.info("Sistem modülleri yenileniyor... Lütfen bekleyin.")
-    time.sleep(3)
-    st.session_state["pending_hard_restart"] = False
-    hard_restart_server()
+    st.code(st.session_state["update_success_msg"], language="bash")
+    del st.session_state["update_success_msg"]
 
 
 def get_live_metrics_from_file(account_id):
