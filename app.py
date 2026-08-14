@@ -118,15 +118,18 @@ def get_live_metrics_from_file(account_id):
 
 
 # ==========================================
-# SIDEBAR: SİSTEM YÖNETİCİSİ (PWA + SELF-UPDATE)
+# SİSTEM YÖNETİCİSİ (PWA + SELF-UPDATE) - ANA EKRAN
 # ==========================================
-with st.sidebar:
-    st.divider()
-    st.subheader("⚙️ Sistem Yöneticisi")
+with st.expander("⚙️ Sistem Yöneticisi & Güncelleme Merkezi", expanded=False):
+    st.info(
+        f"Geçerli Ortam: **{env}** | Dal (Branch): **{'master' if env == 'LIVE' else 'test'}**"
+    )
 
     if st.button("🔄 Güncellemeleri Denetle ve Yükle", use_container_width=True):
         target_branch = "master" if env == "LIVE" else "test"
-        with st.spinner(f"Güncellemeler GitHub ({target_branch}) dalından çekiliyor..."):
+        with st.spinner(
+            f"Güncellemeler GitHub ({target_branch}) dalından çekiliyor..."
+        ):
             success, message = execute_git_pull(branch=target_branch)
             if success:
                 st.session_state["git_pull_msg"] = message
