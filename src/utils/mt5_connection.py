@@ -57,41 +57,83 @@ def connect_to_mt5(account_config):
 
     # 1. NAVIGATOR: Welches Terminal soll gestartet werden?
     mt5_path = account_config.get("mt5_path")
+    init_success = False
 
-    # 🌟 ZOMBİ MT5 AVCISI (Pre-Launch Cleanup)
-    # Eğer bu path'e ait terminal zaten kilitlenmişse (asılıysa), önce onu öldür.
-    if mt5_path and os.path.exists(mt5_path):
+    def _kill_zombie_mt5(path):
+        """Yardımcı Fonksiyon: Kilitlenmiş MT5'i işletim sistemi seviyesinde öldürür."""
+        if not path or not os.path.exists(path):
+            return
         try:
             import psutil
             import subprocess
-            target_exe = os.path.basename(mt5_path).lower()
-            for proc in psutil.process_iter(['pid', 'name', 'exe']):
+
+            target_exe = os.path.basename(path).lower()
+            for proc in psutil.process_iter(["pid", "name", "exe"]):
                 try:
-                    if proc.info['name'] and proc.info['name'].lower() == target_exe:
-                        exe_path = proc.info.get('exe')
-                        if exe_path and os.path.normpath(exe_path).lower() == os.path.normpath(mt5_path).lower():
-                            safe_log(f"Asılı kalan MT5 terminali tespit edildi. Öldürülüyor... PID: {proc.info['pid']}", type="warning")
-                            # İşletim sistemi seviyesinde acımasızca öldür
-                            subprocess.call(['taskkill', '/F', '/PID', str(proc.info['pid'])], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                            time.sleep(2.0) # İşletim sisteminin dosyaları serbest bırakması için nefes payı
-                except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                    if proc.info["name"] and proc.info["name"].lower() == target_exe:
+                        exe_path = proc.info.get("exe")
+                        if (
+                            exe_path
+                            and os.path.normpath(exe_path).lower()
+                            == os.path.normpath(path).lower()
+                        ):
+                            safe_log(
+                                f"Asılı kalan MT5 terminali tespit edildi. Öldürülüyor... PID: {proc.info['pid']}",
+                                type="warning",
+                            )
+                            subprocess.call(
+                                ["taskkill", "/F", "/PID", str(proc.info["pid"])],
+                                stdout=subprocess.DEVNULL,
+                                stderr=subprocess.DEVNULL,
+                            )
+                            time.sleep(2.0)
+                except (
+                    psutil.NoSuchProcess,
+                    psutil.AccessDenied,
+                    psutil.ZombieProcess,
+                ):
                     pass
         except ImportError:
-            safe_log("Zombi MT5 tespiti yapılamadı. psutil kütüphanesi eksik.", type="warning")
+            pass
 
-    # Prüfen, ob der Pfad in der JSON steht und die Datei auf dem Windows-Server wirklich existiert
+    # 🌟 GÜVENLİ BAĞLANTI (Sağlam terminali öldürmeden bağlan)
     if mt5_path and os.path.exists(mt5_path):
-        init_success = mt5.initialize(path=mt5_path)
+        init_success = mt5.initialize(path=mt5_path, timeout=120000)
     else:
         if mt5_path:
             safe_log(
                 f"UYARI: Belirtilen MT5 yolu bulunamadı ({mt5_path}). Standart terminal açılıyor...",
                 type="warning",
             )
-        init_success = mt5.initialize()
+        init_success = mt5.initialize(timeout=120000)
+
+    # 🌟 ZOMBİ AVCISI (Kurtarma): Eğer ilk bağlantı başarısız olursa (IPC hatası vb.), terminal asılı kalmış demektir. Öldür ve tekrar dene!
+    if not init_success:
+        last_err = mt5.last_error()
+        safe_log(
+            f"İlk bağlantı başarısız (Hata: {last_err}). Terminal kilitli olabilir. Kurtarma protokolü başlatılıyor...",
+            type="warning",
+        )
+
+        _kill_zombie_mt5(mt5_path)
+
+        safe_log(
+            "Terminal sıfırdan başlatılıyor. Bu işlem VPS hızına bağlı olarak 1-2 dakika sürebilir...",
+            type="warning",
+        )
+        if mt5_path and os.path.exists(mt5_path):
+            init_success = mt5.initialize(path=mt5_path, timeout=150000)
+        else:
+            init_success = mt5.initialize(timeout=150000)
 
     if not init_success:
-        safe_log(f"MetaTrader 5 başlatılamadı! Hata Kodu: {mt5.last_error()}")
+        last_err = mt5.last_error()
+        if last_err[0] == -10003:
+            safe_log(
+                f"MT5 IPC Bağlantısı Reddedildi! (Hata: {last_err}). Python (VS Code/Streamlit) ile MT5'in aynı yönetici (Run as Admin) yetkisine sahip olduğundan emin olun."
+            )
+        else:
+            safe_log(f"MetaTrader 5 başlatılamadı! Son Hata Kodu: {last_err}")
         return False
 
     login_id = account_config.get("login")
@@ -200,7 +242,7 @@ def shutdown_mt5():
 #
 # Dönüş: (başarı_bool, zaman_aşımı_bool)
 # ==========================================
-def connect_to_mt5_with_timeout(account_config, timeout=20):
+def connect_to_mt5_with_timeout(account_config, timeout=180):
     """connect_to_mt5'i arka planda çalıştırır; UI'ı kilitlemeden sonuç döner."""
     if not account_config:
         safe_log("Bağlanılacak hesap seçilmedi!")
