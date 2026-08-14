@@ -65,6 +65,8 @@ from src.utils.config import load_settings, save_settings
 
 # 🌟 YENİ: Merkezi yol yöneticisi
 from src.utils.paths import get_metrics_path, get_sim_price_path, get_ui_state_path
+from src.utils.self_updater import execute_git_pull, hard_restart_server
+from src.ui.pwa_installer import inject_pwa_code
 
 import src.core.model_2 as model_2
 
@@ -73,6 +75,18 @@ from src.utils.profiler import run_start, stage
 
 # 🔍 Yeni script çalıştırması başladı (takılma anında son satır kalan aşamayı gösterir)
 run_start(os.getenv("ROBOT_ENV", "TEST"))
+
+# 🌟 PWA kodunu enjekte et (manifest + service worker)
+inject_pwa_code()
+
+if st.session_state.get("pending_hard_restart"):
+    st.success("✅ Uygulama başarıyla güncellendi!")
+    if "git_pull_msg" in st.session_state:
+        st.code(st.session_state["git_pull_msg"], language="bash")
+    st.info("Sistem modülleri yenileniyor... Lütfen bekleyin.")
+    time.sleep(3)
+    st.session_state["pending_hard_restart"] = False
+    hard_restart_server()
 
 
 def get_live_metrics_from_file(account_id):
@@ -102,6 +116,25 @@ def get_live_metrics_from_file(account_id):
         "startup_error": None,
     }
 
+
+# ==========================================
+# SIDEBAR: SİSTEM YÖNETİCİSİ (PWA + SELF-UPDATE)
+# ==========================================
+with st.sidebar:
+    st.divider()
+    st.subheader("⚙️ Sistem Yöneticisi")
+
+    if st.button("🔄 Güncellemeleri Denetle ve Yükle", use_container_width=True):
+        target_branch = "master" if env == "LIVE" else "test"
+        with st.spinner(f"Güncellemeler GitHub ({target_branch}) dalından çekiliyor..."):
+            success, message = execute_git_pull(branch=target_branch)
+            if success:
+                st.session_state["git_pull_msg"] = message
+                st.session_state["pending_hard_restart"] = True
+                st.rerun()
+            else:
+                st.error("❌ Güncelleme Başarısız!")
+                st.error(message)
 
 # ==========================================
 # 1. STREAMLIT CONFIG & CSS

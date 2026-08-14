@@ -38,37 +38,28 @@ from src.utils.paths import get_metrics_path, get_sim_price_path
 from src.utils.state_manager import build_synced_state, save_state, load_state
 
 
-def export_metrics_loop(bot_engine, account_id):
-    """
-    Bu fonksiyon arka planda sürekli çalışarak robotun metriklerini okur
-    ve Dashboard'un görebilmesi için bir JSON dosyasına yazar.
-    Aynı zamanda Mac Test Modunda arayüzden gelen sahte fiyatı okur.
-    """
+def export_metrics_step(bot_engine, account_id):
+    """Ana döngüye (main thread) entegre metrik dışa aktarıcı. Threading çökmesini engeller."""
     metrics_file = get_metrics_path(account_id)
     sim_file = get_sim_price_path(account_id)
 
-    while bot_engine.IS_RUNNING:
-        # 1. Metrikleri dışarı aktar (Arayüz görsün diye)
-        if hasattr(bot_engine, "get_live_metrics"):
-            try:
-                metrics = bot_engine.get_live_metrics()
-                tmp_metrics_file = metrics_file + ".tmp"
-                with open(tmp_metrics_file, "w", encoding="utf-8") as f:
-                    json.dump(metrics, f)
-                os.replace(tmp_metrics_file, metrics_file)
-            except Exception as e:
-                pass  # Okuma hatası anlık olabilir, devam et.
+    if hasattr(bot_engine, "get_live_metrics"):
+        try:
+            metrics = bot_engine.get_live_metrics()
+            tmp_metrics_file = metrics_file + ".tmp"
+            with open(tmp_metrics_file, "w", encoding="utf-8") as f:
+                json.dump(metrics, f)
+            os.replace(tmp_metrics_file, metrics_file)
+        except Exception:
+            pass
 
-        # 2. Arayüzden gelen sahte fiyatı (Simülatörü) içeri al
-        if sys.platform != "win32" and os.path.exists(sim_file):
-            try:
-                with open(sim_file, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                    bot_engine.SIMULATED_PRICE = data.get("price", 75.0)
-            except Exception:
-                pass
-
-        time.sleep(1)
+    if sys.platform != "win32" and os.path.exists(sim_file):
+        try:
+            with open(sim_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                bot_engine.SIMULATED_PRICE = data.get("price", 75.0)
+        except Exception:
+            pass
 
 
 def main():
@@ -191,11 +182,14 @@ def main():
     if hasattr(bot_engine, "INITIAL_CLEANUP_DONE"):
         bot_engine.INITIAL_CLEANUP_DONE = False
 
-    # 5. Metrikleri dışarı aktaran arka plan dinleyicisini başlat
-    metrics_thread = threading.Thread(
-        target=export_metrics_loop, args=(bot_engine, account_id), daemon=True
-    )
-    metrics_thread.start()
+    # 5. Metrikleri ana döngüye (main thread) bağla (Threading MT5'i çökertir!)
+    original_sleep = bot_engine.time.sleep
+
+    def hooked_sleep(secs):
+        export_metrics_step(bot_engine, account_id)
+        original_sleep(secs)
+
+    bot_engine.time.sleep = hooked_sleep
 
     # 6. Asıl Robot Döngüsünü başlat (Bu fonksiyon sonsuz döngüdür, süreci hayatta tutar)
     try:
