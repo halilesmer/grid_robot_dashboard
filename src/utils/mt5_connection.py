@@ -58,6 +58,27 @@ def connect_to_mt5(account_config):
     # 1. NAVIGATOR: Welches Terminal soll gestartet werden?
     mt5_path = account_config.get("mt5_path")
 
+    # 🌟 ZOMBİ MT5 AVCISI (Pre-Launch Cleanup)
+    # Eğer bu path'e ait terminal zaten kilitlenmişse (asılıysa), önce onu öldür.
+    if mt5_path and os.path.exists(mt5_path):
+        try:
+            import psutil
+            import subprocess
+            target_exe = os.path.basename(mt5_path).lower()
+            for proc in psutil.process_iter(['pid', 'name', 'exe']):
+                try:
+                    if proc.info['name'] and proc.info['name'].lower() == target_exe:
+                        exe_path = proc.info.get('exe')
+                        if exe_path and os.path.normpath(exe_path).lower() == os.path.normpath(mt5_path).lower():
+                            safe_log(f"Asılı kalan MT5 terminali tespit edildi. Öldürülüyor... PID: {proc.info['pid']}", type="warning")
+                            # İşletim sistemi seviyesinde acımasızca öldür
+                            subprocess.call(['taskkill', '/F', '/PID', str(proc.info['pid'])], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                            time.sleep(2.0) # İşletim sisteminin dosyaları serbest bırakması için nefes payı
+                except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                    pass
+        except ImportError:
+            safe_log("Zombi MT5 tespiti yapılamadı. psutil kütüphanesi eksik.", type="warning")
+
     # Prüfen, ob der Pfad in der JSON steht und die Datei auf dem Windows-Server wirklich existiert
     if mt5_path and os.path.exists(mt5_path):
         init_success = mt5.initialize(path=mt5_path)
