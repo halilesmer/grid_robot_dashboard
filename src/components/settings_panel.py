@@ -136,7 +136,7 @@ def render_model_2_settings(
         except Exception:
             pass
 
-    # 🌟 GÜNCELLENDİ: Ana Motor ve Kontrol Sıklığı yan yana
+    # 🌟 GÜNCELLENDİ: MT5 Bağlantısı ve Kontrol Sıklığı yan yana
     h_col1, h_col2, h_col3, h_col4, h_col5 = st.columns(
         [0.45, 0.20, 0.02, 0.20, 0.13], vertical_alignment="center"
     )
@@ -183,7 +183,7 @@ def render_model_2_settings(
         mt5_connected = live_data.get("mt5_connected", True) if live_data else True
         if not is_running:
             motor_status = "stopped"
-            btn_label = "🚀 Ana Motoru Çalıştır"
+            btn_label = "🚀 MT5'e Bağlan"
         elif not mt5_connected:
             motor_status = "disconnected"
             btn_label = "🔴 MT5'e bağlanmadı"
@@ -306,7 +306,7 @@ def render_model_2_settings(
                         key=f"clear_{zone_id}_{account_id}",
                         width="stretch",
                         type="secondary",
-                        help="Acil Durum: Bekleyen emirleri siler ve AÇIK POZİSYONLARI ayara göre kapatır.",
+                        help="Acil Durum: Bekleyen emirleri siler. AÇIK POZİSYONLARA ASLA DOKUNULMAZ.",
                     ):
                         # Lambda ile anlık değişkenleri (zone_id, idx) dondurarak modal'a gönderiyoruz
                         confirm_clear_dialog(
@@ -739,22 +739,10 @@ def render_model_2_settings(
                         )
 
                     with cc3:
-                        scope_opts = [
-                            "Sadece Bekleyen Emirler",
-                            "Tüm İşlemler (Emirler + Pozisyonlar)",
-                        ]
-                        cur_scope = zone.get("clear_scope", "Sadece Bekleyen Emirler")
-                        if cur_scope == "Sadece Emirler":
-                            cur_scope = "Sadece Bekleyen Emirler"
-                        if cur_scope not in scope_opts:
-                            cur_scope = "Sadece Bekleyen Emirler"
-
-                        z_clear_scope = st.selectbox(
-                            "Neler Temizlensin?",
-                            options=scope_opts,
-                            index=scope_opts.index(cur_scope),
-                            key=f"scope_{zone_id}_{account_id}",
-                            help="Sadece bekleyen emirler mi iptal edilsin, yoksa açık pozisyonlar da kapatılsın (SL) mı?"
+                        z_clear_scope = "Sadece Bekleyen Emirler"
+                        st.markdown(
+                            "<small style='color: gray;'>🧹 Temizlik kapsamı: Sadece Bekleyen Emirler</small>",
+                            unsafe_allow_html=True,
                         )
                     # 2. SATIR: Çıkış Tetikleyicisi ve Zaman Dilimi
                     cc4, cc5, cc6 = st.columns(3)

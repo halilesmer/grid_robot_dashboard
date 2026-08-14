@@ -3,7 +3,7 @@ import datetime
 import platform
 import json
 import os
-from src.utils.trade_utils import safe_send_order, close_position
+from src.utils.trade_utils import safe_send_order
 from src.utils.config import get_settings_file
 
 # 🌟 YENİ: Merkezi yol yöneticisi
@@ -709,14 +709,6 @@ def manage_dynamic_grid():
             )
             cancel_order(order)
 
-    for pos in robot_positions:
-        pos_zone_idx = pos.magic - BASE_MAGIC_NUMBER - 1
-        if active_zones_state.get(pos_zone_idx, "START") == "CLEAR":
-            log_message(
-                f"🧹 BÖLGE {pos_zone_idx+1} KULLANICI EMRİYLE SIFIRLANIYOR: Pozisyon kapatılıyor."
-            )
-            close_position(mt5, pos, SYMBOL, log_message)
-
     robot_orders = get_all_robot_orders()
     robot_positions = get_all_robot_positions()
     if robot_orders is None or robot_positions is None:
@@ -839,11 +831,8 @@ def manage_dynamic_grid():
                 if trigger_side != "Farketmez" and trigger_side != actual_exit_dir:
                     log_message(f"ℹ️ Fiyat bölgeden çıktı ({actual_exit_dir}) ancak temizlik '{trigger_side}' ayarlandığı için işlemler pas geçildi. Bölge pasif duruma alınıyor.")
                 else:
-                    scope = ACTIVE_ZONE.get("clear_scope", "Sadece Bekleyen Emirler")
+                    scope = "Sadece Bekleyen Emirler"
                     target = ACTIVE_ZONE.get("clear_target_side", "Farketmez (Hepsi)")
-                    
-                    if scope == "Sadece Emirler": scope = "Sadece Bekleyen Emirler"
-                    elif scope == "Emirler + Açık Pozisyonlar": scope = "Tüm İşlemler"
 
                     log_message(f"🧹 Bölge ({z_min}-{z_max}) DIŞINA ÇIKILDI! ({actual_exit_dir}). Kapsam: {scope} | Kapatılacak Yön: {target}")
                     target_magic = BASE_MAGIC_NUMBER + ACTIVE_ZONE_IDX + 1
@@ -864,20 +853,7 @@ def manage_dynamic_grid():
                     log_message(f"🧹 Toplam {silinen_emir_sayisi} adet bekleyen {target} emri temizlendi.")
 
                     if scope == "Tüm İşlemler":
-                        kapanan_poz_sayisi = 0
-                        for pos in robot_positions:
-                            if pos.magic == target_magic:
-                                if target == "Farketmez (Hepsi)":
-                                    close_position(mt5, pos, SYMBOL, log_message)
-                                    kapanan_poz_sayisi += 1
-                                elif target == "Sadece BUY İşlemleri" and pos.type == mt5.POSITION_TYPE_BUY:
-                                    close_position(mt5, pos, SYMBOL, log_message)
-                                    kapanan_poz_sayisi += 1
-                                elif target == "Sadece SELL İşlemleri" and pos.type == mt5.POSITION_TYPE_SELL:
-                                    close_position(mt5, pos, SYMBOL, log_message)
-                                    kapanan_poz_sayisi += 1
-                        
-                        log_message(f"🧹 Toplam {kapanan_poz_sayisi} adet {target} açık pozisyonu SL (Kapatıldı) oldu.")
+                        log_message("🧹 AÇIK POZİSYONLAR KORUNDU (güvenlik kuralı). Sadece bekleyen emirler temizlendi.")
 
                 robot_orders = get_all_robot_orders()
                 robot_positions = get_all_robot_positions()

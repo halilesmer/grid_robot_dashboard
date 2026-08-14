@@ -49,7 +49,6 @@ from src.utils.bot_manager import (
     is_bot_running,
     start_bot_process,
     stop_bot_process,
-    stop_and_close_all,
 )
 from src.components.account_selector import render_account_selector
 from src.components.chart_viewer import render_chart
@@ -165,7 +164,7 @@ if live_data.get("algo_trading_error", False):
 
     if account_is_running:
         stop_bot_process(account_id)
-        st.toast("🛑 Motor kilitlendi: Algo Trading kapalı!", icon="⚠️")
+        st.toast("🛑 Bağlantı kilitlendi: Algo Trading kapalı!", icon="⚠️")
         st.rerun()
 
 
@@ -188,16 +187,16 @@ elif account_is_running and not live_data.get("mt5_connected", True):
 # 📡 Mobil MT5'ten (Sinyal Emri ile) uzaktan durduruldu mu?
 if live_data.get("remote_paused", False) and account_is_running:
     st.warning(
-        "📡 **Motor Mobil MT5'ten UZAKTAN DURDURULDU.** "
+        "📡 **Sistem Mobil MT5'ten UZAKTAN DURDURULDU.** "
         "Bekleyen emirler silindi, açık pozisyonlar korundu. "
-        "Tekrar başlatmak için yukarıdaki **MOTOR** butonunu kullanın "
+        "Tekrar bağlanmak için yukarıdaki **MT5'e Bağlan** butonunu kullanın "
         "(mobil MT5'te 1$ Buy Limit yalnızca durdurmak içindir).",
         icon="⏸️",
     )
 stage("Hata/uyarı afişleri")
 
 
-# 🌟 Ana Motor tetikleyicisi artık settings_panel üzerinden yönetiliyor
+# 🌟 MT5 bağlantı tetikleyicisi artık settings_panel üzerinden yönetiliyor
 action = None
 if st.session_state.get(f"motor_toggle_{account_id}"):
     action = "TOGGLE"
@@ -250,13 +249,10 @@ if action == "TOGGLE":
                     icon="🚨",
                 )
     else:
-        # 🚀 PHASE 4: Kapatma SADECE kullanıcının açık seçimiyle yapılır.
-        # "Durdur" -> süreç kapanır, pozisyonlar/emirler korunur.
-        # "Durdur ve Tümünü Kapat" -> süreç kapanır + tüm robot pozisyonları kapatılır.
+        # MT5 bağlantısı kesilir; AÇIK POZİSYONLARA ASLA DOKUNULMAZ.
         confirm_stop_motor_dialog(
             account_id,
             on_stop_func=stop_bot_process,
-            on_stop_close_func=stop_and_close_all,
         )
 
 
