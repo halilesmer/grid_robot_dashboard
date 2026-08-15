@@ -190,15 +190,27 @@ def show_mt5_connect_dialog(account_info, acc_id):
 # ==========================================
 # Bu bileşen buton gibi durur, tıklanınca açılır, boşluğa tıklanınca otomatik kapanır.
 with st.popover("⚙️ Sistem Ayarları"):
+    port_num = os.getenv("STREAMLIT_PORT", "8501")
+    local_ip = get_local_ip()
+
     st.markdown("##### 💻 Sistem Bilgileri")
     st.caption(f"**Host Makine:** {platform.node()}")
     st.caption(f"**İşletim Sistemi:** {platform.system()} {platform.release()}")
-    st.caption(f"**Yerel IP (Ağ):** {get_local_ip()}")
+    st.caption(f"**Yerel IP (Ağ):** {local_ip}")
+
+    st.divider()
+
+    st.markdown("##### 🔗 Erişim Adresleri")
+    st.caption(
+        f"**Aynı Cihazdan (Local):** [http://localhost:{port_num}](http://localhost:{port_num})"
+    )
+    st.caption(
+        f"**Ağ Üzerinden (Mobil/PC):** [http://{local_ip}:{port_num}](http://{local_ip}:{port_num})"
+    )
 
     st.divider()
 
     st.markdown("##### 🌍 Çalışma Ortamı")
-    port_num = os.getenv("STREAMLIT_PORT", "8501")
     st.caption(
         f"**Ortam:** {env} | **Port:** {port_num} | **Dal (Branch):** {'master' if env == 'LIVE' else 'test'}"
     )
