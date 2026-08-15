@@ -93,17 +93,20 @@ inject_pwa_code()
 @st.dialog("🔄 Güncelleme Kontrolü")
 def show_update_dialog(env_name, target_branch):
     with st.spinner("GitHub ile versiyon kimlikleri karşılaştırılıyor..."):
-        success, update_result = check_for_updates(branch=target_branch)
+        success, update_data = check_for_updates(branch=target_branch)
 
     if not success:
-        st.error(f"Bağlantı Hatası: {update_result}")
+        st.error(f"Bağlantı Hatası: {update_data}")
         if st.button("Kapat", use_container_width=True):
             st.rerun()
         return
 
-    # update_result boolean döner: True ise yeni kod var, False ise aynı sürüm.
-    if update_result:
-        st.info("🚀 **Yeni bir güncelleme mevcut!**")
+    has_update, local_ver, remote_ver = update_data
+
+    if has_update:
+        st.info(
+            f"🚀 **Yeni bir güncelleme mevcut!**\n\n📌 **Lokal Sürüm:** `{local_ver}`\n🚀 **Yeni Sürüm:** `{remote_ver}`"
+        )
         col1, col2 = st.columns(2)
         if col1.button("Şimdi Güncelle", type="primary", use_container_width=True):
             with st.spinner("Güncelleme indiriliyor..."):
@@ -116,7 +119,9 @@ def show_update_dialog(env_name, target_branch):
         if col2.button("İptal", use_container_width=True):
             st.rerun()
     else:
-        st.warning("Aynı sürüm. Yine de güncellemek ister misiniz?")
+        st.warning(
+            f"Sürümünüz Güncel!\n\n📌 **Lokal Sürüm:** `{local_ver}`\n🚀 **Sunucu Sürümü:** `{remote_ver}`\n\nYine de zorla güncellemek ister misiniz?"
+        )
         col1, col2 = st.columns(2)
         if col1.button("Evet", type="primary", use_container_width=True):
             with st.spinner("Zorla güncelleniyor..."):
@@ -150,7 +155,7 @@ def show_mt5_connect_dialog(account_info, acc_id):
     st.info("MetaTrader 5 terminali ile iletişim kuruluyor...")
     with st.spinner("Bağlantı test ediliyor (Zaman aşımı: 5sn)..."):
         connection_success, connection_timed_out = connect_to_mt5_with_timeout(
-            account_info
+            account_info, timeout=5
         )
 
     if connection_success:
@@ -174,6 +179,7 @@ def show_mt5_connect_dialog(account_info, acc_id):
 
         col1, col2 = st.columns(2)
         if col1.button("🔄 Tekrar Bağlan", type="primary", use_container_width=True):
+            st.session_state[f"motor_toggle_{acc_id}"] = True
             st.rerun()
         if col2.button("❌ İptal", use_container_width=True):
             st.rerun()
@@ -204,8 +210,14 @@ with st.popover("⚙️ Sistem Ayarları"):
 
 # Eğer başarılı bir güncelleme yapıldıysa ana sayfada bildirim göster (Modal kapandıktan sonra)
 if "update_success_msg" in st.session_state:
-    st.success("✅ Uygulama başarıyla güncellendi!")
-    st.code(st.session_state["update_success_msg"], language="bash")
+    st.toast("✅ Uygulama başarıyla güncellendi!", icon="🚀")
+    # Terminal çıktılarını ekranda göstermek yerine sessizce log'a kaydet
+    try:
+        os.makedirs("logs", exist_ok=True)
+        with open("logs/update.log", "a", encoding="utf-8") as f:
+            f.write(st.session_state["update_success_msg"] + "\n")
+    except Exception:
+        pass
     del st.session_state["update_success_msg"]
 
 
@@ -219,7 +231,7 @@ def get_live_metrics_from_file(account_id):
             age = time.time() - os.path.getmtime(metrics_file)
             data.setdefault("mt5_connected", True)
             data.setdefault("startup_error", None)
-            data.setdefault("market_open", True)
+            data.setdefault("market_open", False)
             data["data_age"] = age
             # Eski (bayat) bir başlangıç hatası afişi, 30 saniyeden eskiyse gösterilmez
             if data.get("startup_error") and age > 30:
@@ -236,8 +248,8 @@ def get_live_metrics_from_file(account_id):
         "remote_paused": False,
         "mt5_connected": True,
         "startup_error": None,
-        "market_open": True,
-        "data_age": 0.0,
+        "market_open": False,
+        "data_age": 999.0,
     }
 
 
@@ -293,10 +305,15 @@ stage("Ayarlar + metrik yükleme")
 # PİYASA ROZETİ VE CANLILIK GÖSTERGESİ (HEARTBEAT)
 # ==========================================
 if account_is_running:
-    m_open = live_data.get("market_open", True)
-    d_age = live_data.get("data_age", 0.0)
+    m_open = live_data.get("market_open", False)
+    d_age = live_data.get("data_age", 999.0)
 
     is_live = d_age < 10
+
+    # 🌟 GÜVENLİK: Eğer robotla bağlantı (senkronizasyon) koptuysa piyasa durumunu doğrudan Kapalı kabul et
+    if not is_live:
+        m_open = False
+
     dot_color = "🟢" if is_live else "🔴"
     sync_text = (
         f"Son senkronizasyon: {int(d_age)} sn önce"

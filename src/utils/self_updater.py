@@ -69,6 +69,28 @@ def check_for_updates(branch="test"):
 
         # Eğer hash'ler farklıysa yeni bir kod/güncelleme var demektir
         has_update = local_hash != remote_hash
-        return True, has_update
+
+        # Sürüm numaralarını (VERSION) arayüze göstermek için oku
+        try:
+            project_root = os.path.abspath(
+                os.path.join(os.path.dirname(__file__), "../..")
+            )
+            version_file = os.path.join(project_root, "VERSION")
+            with open(version_file, "r", encoding="utf-8") as f:
+                local_ver = f.read().strip()
+        except Exception:
+            local_ver = "v1.0.0"
+
+        try:
+            remote_ver = subprocess.run(
+                ["git", "show", f"origin/{branch}:VERSION"],
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout.strip()
+        except Exception:
+            remote_ver = "Bilinmiyor"
+
+        return True, (has_update, local_ver, remote_ver)
     except Exception as e:
         return False, str(e)
