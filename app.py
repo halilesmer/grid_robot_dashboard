@@ -143,6 +143,43 @@ def get_local_ip():
 
 
 # ==========================================
+# MT5 BAĞLANTI MODALI (DONMAYI ENGELLEYEN ASİSTAN)
+# ==========================================
+@st.dialog("🔌 MT5 Bağlantı Asistanı")
+def show_mt5_connect_dialog(account_info, acc_id):
+    st.info("MetaTrader 5 terminali ile iletişim kuruluyor...")
+    with st.spinner("Bağlantı test ediliyor (Zaman aşımı: 5sn)..."):
+        connection_success, connection_timed_out = connect_to_mt5_with_timeout(
+            account_info
+        )
+
+    if connection_success:
+        shutdown_mt5()
+        if start_bot_process(acc_id, "Model 2"):
+            st.toast(
+                f"🚀 {account_info['account_name']} için robot başlatıldı!", icon="✅"
+            )
+            st.rerun()
+        else:
+            st.error("🔴 Robot başlatılamadı! Log kayıtlarını inceleyin.")
+    else:
+        if connection_timed_out:
+            st.error(
+                "🔴 **ZAMAN AŞIMI:** MT5 terminaline ulaşılamadı. Terminalin açık olduğundan emin olun."
+            )
+        else:
+            st.error(
+                "🔴 **BAĞLANTI HATASI:** Giriş bilgileri hatalı veya Algo Trading kapalı."
+            )
+
+        col1, col2 = st.columns(2)
+        if col1.button("🔄 Tekrar Bağlan", type="primary", use_container_width=True):
+            st.rerun()
+        if col2.button("❌ İptal", use_container_width=True):
+            st.rerun()
+
+
+# ==========================================
 # AKILLI SİSTEM YÖNETİCİSİ (POPOVER)
 # ==========================================
 # Bu bileşen buton gibi durur, tıklanınca açılır, boşluğa tıklanınca otomatik kapanır.
@@ -155,8 +192,9 @@ with st.popover("⚙️ Sistem Ayarları"):
     st.divider()
 
     st.markdown("##### 🌍 Çalışma Ortamı")
+    port_num = os.getenv("STREAMLIT_PORT", "8501")
     st.caption(
-        f"**Ortam:** {env} | **Dal (Branch):** {'master' if env == 'LIVE' else 'test'}"
+        f"**Ortam:** {env} | **Port:** {port_num} | **Dal (Branch):** {'master' if env == 'LIVE' else 'test'}"
     )
 
     # Butona basılınca modalı (dialog) tetikler
@@ -181,6 +219,8 @@ def get_live_metrics_from_file(account_id):
             age = time.time() - os.path.getmtime(metrics_file)
             data.setdefault("mt5_connected", True)
             data.setdefault("startup_error", None)
+            data.setdefault("market_open", True)
+            data["data_age"] = age
             # Eski (bayat) bir başlangıç hatası afişi, 30 saniyeden eskiyse gösterilmez
             if data.get("startup_error") and age > 30:
                 data["startup_error"] = None
@@ -196,6 +236,8 @@ def get_live_metrics_from_file(account_id):
         "remote_paused": False,
         "mt5_connected": True,
         "startup_error": None,
+        "market_open": True,
+        "data_age": 0.0,
     }
 
 
@@ -246,6 +288,24 @@ current_settings = load_settings("Model 2")
 # Dosya her zaman okunur: Başlangıç hatası (startup_error) afişi buradan beslenir.
 live_data = get_live_metrics_from_file(account_id)
 stage("Ayarlar + metrik yükleme")
+
+# ==========================================
+# PİYASA ROZETİ VE CANLILIK GÖSTERGESİ (HEARTBEAT)
+# ==========================================
+if account_is_running:
+    m_open = live_data.get("market_open", True)
+    d_age = live_data.get("data_age", 0.0)
+
+    is_live = d_age < 10
+    dot_color = "🟢" if is_live else "🔴"
+    sync_text = (
+        f"Son senkronizasyon: {int(d_age)} sn önce"
+        if is_live
+        else "Senkronizasyon koptu!"
+    )
+    market_badge = "🟢 **Piyasa Açık**" if m_open else "🌙 **Piyasa Kapalı**"
+
+    st.markdown(f"&nbsp; {market_badge} &nbsp;|&nbsp; {dot_color} *{sync_text}*")
 
 
 # ==========================================
@@ -303,54 +363,15 @@ if st.session_state.get(f"motor_toggle_{account_id}"):
 # ==========================================
 if action == "TOGGLE":
     if not account_is_running:
-        # Önce MT5 bağlantısını test et.
-        # 🌟 YENİ: Zaman aşımlı bağlantı — MT5 açılamaz/ulaşılamazsa arayüz ASLA donmaz!
-        with st.spinner("🔄 MT5 terminaline bağlanılıyor..."):
-            connection_success, connection_timed_out = connect_to_mt5_with_timeout(
-                active_account
-            )
-        stage("MT5 bağlantı denemesi")
-
-        if connection_success:
-            # 🌟 CRİTİK: Test bağlantısını serbest bırak! Alt süreç (bot_runner) aynı
-            # terminale bağlanırken IPC timeout (-10005) yaşamamak için arayüz artık
-            # terminali meşgul etmemeli.
-            shutdown_mt5()
-            # Subprocess (Alt Süreç) başlat!
-            if start_bot_process(account_id, "Model 2"):
-                st.toast(
-                    f"🚀 {active_account['account_name']} için robot izole olarak başlatıldı!",
-                    icon="✅",
-                )
-                st.rerun()
-            else:
-                st.error(
-                    "🔴 **Robot Başlatılamadı!** Lütfen hata kayıtlarını (logs) inceleyin.",
-                    icon="❌",
-                )
-        else:
-            # 🌟 EKLENDİ: Bağlantı başarısız olursa KALICI ve net hata göster
-            if connection_timed_out:
-                st.error(
-                    "🔴 **MT5 BAĞLANTI ZAMAN AŞIMI!** Terminal açılamadı veya sunucuya "
-                    "ulaşılamadı. MT5 terminalinin açık olduğundan ve ağ/internet "
-                    "bağlantınızın aktif olduğundan emin olun, sonra tekrar deneyin.",
-                    icon="🚨",
-                )
-            else:
-                st.error(
-                    "🔴 **MT5 BAĞLANTI HATASI!** Terminal açılamadı veya hesap giriş "
-                    "bilgileri (sunucu/şifre) yanlış. Lütfen MT5 terminalinin açık "
-                    "olduğunu ve hesap bilgilerinizin doğruluğunu kontrol edin.",
-                    icon="🚨",
-                )
+        # MT5 bağlantı donmasını engelleyen modalı tetikle
+        show_mt5_connect_dialog(active_account, account_id)
+        stage("MT5 bağlantı denemesi (Modal tetiklendi)")
     else:
         # MT5 bağlantısı kesilir; AÇIK POZİSYONLARA ASLA DOKUNULMAZ.
         confirm_stop_motor_dialog(
             account_id,
             on_stop_func=stop_bot_process,
         )
-
 
 # ==========================================
 # 🌟 GİZLİ BEKÇİ (EVENT-DRIVEN WATCHER)

@@ -56,8 +56,9 @@ def get_live_metrics():
         "current_price": 0.0,
         "algo_trading_error": False,
         "remote_paused": REMOTE_PAUSED,
-        "mt5_connected": True,      # 🌟 YENİ: Arayüz "bağlantı koptu" afişini buradan okur
+        "mt5_connected": True,
         "connection_lost": CONNECTION_LOST,
+        "market_open": is_market_open(),
     }
 
     if mt5 is None or IS_MAC_TEST_MODE:
