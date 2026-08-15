@@ -304,15 +304,16 @@ stage("Ayarlar + metrik yükleme")
 # ==========================================
 # PİYASA ROZETİ VE CANLILIK GÖSTERGESİ (HEARTBEAT)
 # ==========================================
+if not account_is_running or live_data.get("data_age", 999.0) > 10:
+    # 🌟 KRİTİK HATA ÇÖZÜMÜ: Robot durduysa veya senkronizasyon koptuysa,
+    # eski JSON'daki bayat veriler alt panellerde "Açık" görünmesin diye kaynağında temizle!
+    live_data["market_open"] = False
+    live_data["mt5_connected"] = False
+
 if account_is_running:
     m_open = live_data.get("market_open", False)
     d_age = live_data.get("data_age", 999.0)
-
     is_live = d_age < 10
-
-    # 🌟 GÜVENLİK: Eğer robotla bağlantı (senkronizasyon) koptuysa piyasa durumunu doğrudan Kapalı kabul et
-    if not is_live:
-        m_open = False
 
     dot_color = "🟢" if is_live else "🔴"
     sync_text = (
