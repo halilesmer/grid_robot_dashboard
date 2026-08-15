@@ -2,7 +2,6 @@
 import streamlit as st
 import json
 import os
-import datetime
 from src.components.dialogs import confirm_delete_account_dialog
 
 ACCOUNTS_FILE = "configs/accounts.json"
@@ -43,6 +42,204 @@ def load_accounts():
         return []
 
 
+@st.dialog("⚙️ Hesap Yönetimi", width="large")
+def account_management_dialog(edit_acc=None):
+    accounts = load_accounts()
+    login_ids = [str(acc.get("login")) for acc in accounts if acc.get("login")]
+
+    edit_acc = edit_acc or {}
+    is_edit = bool(edit_acc)
+    old_login = str(edit_acc.get("login", ""))
+    k_suf = f"_{old_login}" if is_edit else "_new"
+
+    used_terminals = {
+        os.path.normpath(a.get("mt5_path", "")).lower(): a.get(
+            "account_name", "Bilinmeyen"
+        )
+        for a in accounts
+        if a.get("mt5_path") and str(a.get("login")) != old_login
+    }
+
+    found_terminals = get_installed_mt5_terminals()
+    terminal_options = ["Farklı Bir Yol (Manuel Gireceğim)"]
+    old_mt5_path = edit_acc.get("mt5_path", "") if is_edit else ""
+
+    for t_path in found_terminals:
+        norm_path = os.path.normpath(t_path).lower()
+        if norm_path in used_terminals:
+            terminal_options.append(f"🔴 Dolu ({used_terminals[norm_path]}) - {t_path}")
+        else:
+            terminal_options.append(f"🟢 Boşta - {t_path}")
+
+    if (
+        is_edit
+        and old_mt5_path
+        and not any(old_mt5_path in opt for opt in terminal_options)
+    ):
+        terminal_options.append(f"🟢 Mevcut Adres - {old_mt5_path}")
+
+    st.markdown(f"#### {'✏️ Hesabı Düzenle' if is_edit else '➕ Yeni MT5 Hesabı Ekle'}")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        new_acc_name = st.text_input(
+            "Hesap Adı *",
+            value=edit_acc.get("account_name", "") if is_edit else "",
+            placeholder="Örn: Canlı Hesap - 1",
+            key=f"name{k_suf}",
+        )
+        new_login = st.text_input(
+            "Hesap No (Login) *",
+            value=old_login if is_edit else "",
+            placeholder="Örn: 12345678",
+            help="Girdiğiniz bu numara aynı zamanda sistemde Hesap ID'si olarak kullanılacaktır.",
+            key=f"login{k_suf}",
+        )
+        env_opts = ["DEMO", "LIVE"]
+        def_env_idx = (
+            env_opts.index(edit_acc.get("env_type", "DEMO"))
+            if is_edit and edit_acc.get("env_type") in env_opts
+            else 0
+        )
+        new_env = st.selectbox(
+            "Çevre (Ortam) *", env_opts, index=def_env_idx, key=f"env{k_suf}"
+        )
+
+    with col2:
+        new_password = st.text_input(
+            "Şifre *",
+            value=edit_acc.get("password", "") if is_edit else "",
+            type="password",
+            placeholder="MT5 Şifresi",
+            key=f"pwd{k_suf}",
+        )
+        new_server = st.text_input(
+            "Sunucu *",
+            value=edit_acc.get("server", "") if is_edit else "",
+            placeholder="Örn: Eightcap-Demo",
+            key=f"srv{k_suf}",
+        )
+
+        def_term_idx = 0
+        if is_edit and old_mt5_path:
+            for idx, opt in enumerate(terminal_options):
+                if old_mt5_path in opt:
+                    def_term_idx = idx
+                    break
+
+        selected_terminal = st.selectbox(
+            "MT5 Yolu Seçimi *",
+            terminal_options,
+            index=def_term_idx,
+            help="Listeden kurulu bir MT5 seçebilir veya özel bir adres girebilirsiniz.",
+            key=f"term_sel{k_suf}",
+        )
+
+        if "Farklı Bir Yol" in selected_terminal:
+            new_mt5_path = st.text_input(
+                "Özel MT5 Yolu *",
+                value=old_mt5_path if is_edit else "",
+                placeholder="C:/Program Files/MetaTrader 5/terminal64.exe",
+                key=f"term_path{k_suf}",
+            )
+        else:
+            parsed_path = selected_terminal.split(" - ")[-1].strip()
+            new_mt5_path = parsed_path
+            if selected_terminal.startswith("🔴 Dolu"):
+                st.error(
+                    "⚠️ Seçtiğiniz bu MT5 klasörü başka bir hesap tarafından kullanılıyor!"
+                )
+            st.text_input(
+                "Seçilen MT5 Yolu (Otomatik)",
+                value=parsed_path,
+                disabled=True,
+                help="Listeden seçim yaptığınız için otomatik doldurulmuştur.",
+                key=f"term_auto{k_suf}",
+            )
+
+    new_notes = st.text_area(
+        "📝 Hesap Notu (İsteğe Bağlı)",
+        value=edit_acc.get("notes", "") if is_edit else "",
+        max_chars=1000,
+        placeholder="Bu hesapla ilgili özel notlar... (Maks. 1000 karakter)",
+        height=100,
+        key=f"notes{k_suf}",
+    )
+
+    btn_col1, btn_col2 = st.columns(2)
+    with btn_col1:
+        if st.button(
+            "💾 Değişiklikleri Kaydet" if is_edit else "💾 Hesabı Ekle",
+            width="stretch",
+            type="primary",
+        ):
+            if (
+                not new_login
+                or not new_acc_name
+                or not new_password
+                or not new_server
+                or not new_mt5_path
+            ):
+                st.error("🚨 Lütfen yıldızlı tüm zorunlu alanları eksiksiz doldurun!")
+            else:
+                other_logins = [x for x in login_ids if x != old_login]
+                if str(new_login) in other_logins:
+                    st.error(
+                        f"🚫 Hata: '{new_login}' numaralı hesap zaten sisteme kayıtlı!"
+                    )
+                else:
+                    norm_new_path = os.path.normpath(new_mt5_path).lower()
+                    if norm_new_path in used_terminals:
+                        st.error(
+                            f"🚨 HATA: Bu MT5 terminali halihazırda '{used_terminals[norm_new_path]}' hesabı tarafından kullanılıyor!"
+                        )
+                    else:
+                        try:
+                            login_val = int(new_login)
+                        except ValueError:
+                            login_val = new_login
+
+                        new_account_data = {
+                            "id": str(new_login),
+                            "account_name": new_acc_name,
+                            "env_type": new_env,
+                            "login": login_val,
+                            "password": new_password,
+                            "server": new_server,
+                            "mt5_path": new_mt5_path.replace("\\", "/"),
+                            "notes": new_notes,
+                        }
+
+                        if is_edit:
+                            for idx, a in enumerate(accounts):
+                                if str(a.get("login")) == old_login:
+                                    accounts[idx] = new_account_data
+                                    break
+                        else:
+                            accounts.append(new_account_data)
+
+                        try:
+                            os.makedirs(os.path.dirname(ACCOUNTS_FILE), exist_ok=True)
+                            with open(ACCOUNTS_FILE, "w", encoding="utf-8") as f:
+                                json.dump(
+                                    {"accounts": accounts},
+                                    f,
+                                    indent=4,
+                                    ensure_ascii=False,
+                                )
+
+                            st.session_state.selected_account = new_account_data
+                            st.session_state.close_popover = True
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Kayıt sırasında hata oluştu: {e}")
+
+    with btn_col2:
+        if st.button("❌ İptal", width="stretch"):
+            st.session_state.close_popover = True
+            st.rerun()
+
+
 def render_account_selector():
     """Ana ekran için hibrit (Button + Selectbox) hesap seçim menüsünü oluşturur."""
 
@@ -55,12 +252,11 @@ def render_account_selector():
 
     if not accounts:
         st.warning(
-            "Hiç hesap bulunamadı! Lütfen aşağıdaki formu doldurarak ilk hesabınızı sisteme kaydedin."
+            "Hiç hesap bulunamadı! Lütfen aşağıdaki butona tıklayarak ilk hesabınızı sisteme kaydedin."
         )
         st.session_state.selected_account = None
-        st.session_state.show_add_form = (
-            True  # 🌟 YENİ EKLENDİ: Hesap yoksa formu otomatik aç
-        )
+        if st.button("➕ İlk Hesabını Ekle", type="primary"):
+            account_management_dialog(None)
 
     # ==========================================
     # ÇİFT LOGİN (DUPLICATE) KONTROLÜ
@@ -95,9 +291,6 @@ def render_account_selector():
         active_login = "Bilinmeyen"
         active_name = "Hesap Yok"
         active_type = "DEMO"
-
-    if "show_add_form" not in st.session_state:
-        st.session_state.show_add_form = False
 
     is_running = st.session_state.get("robot_running", False)
 
@@ -251,10 +444,7 @@ def render_account_selector():
             disabled=not accounts or is_running,
             key="popover_edit_btn",
         ):
-            st.session_state.edit_account = active_account
-            st.session_state.show_add_form = True
-            st.session_state.close_popover = True  # Menüyü kapat
-            st.rerun()
+            account_management_dialog(active_account)
 
         if st.button(
             "🗑️ Seçili Hesabı Sil",
@@ -270,11 +460,11 @@ def render_account_selector():
                     if str(a.get("login")) != str(active_account.get("login"))
                 ]
                 try:
+                    os.makedirs(os.path.dirname(ACCOUNTS_FILE), exist_ok=True)
                     with open(ACCOUNTS_FILE, "w", encoding="utf-8") as f:
                         json.dump(
                             {"accounts": new_accounts}, f, indent=4, ensure_ascii=False
                         )
-
                     st.session_state.selected_account = (
                         new_accounts[0] if new_accounts else None
                     )
@@ -289,221 +479,6 @@ def render_account_selector():
             type="primary",
             key="popover_add_btn",
         ):
-            st.session_state.show_add_form = not st.session_state.show_add_form
-            st.session_state.edit_account = None
-            st.session_state.close_popover = True  # Menüyü kapat
-            st.rerun()
-    # ==========================================
-    # 3. YENİ HESAP EKLEME / DÜZENLEME FORMU
-    # ==========================================
-    if st.session_state.show_add_form:
-        st.markdown("---")
+            account_management_dialog(None)
 
-        edit_acc = st.session_state.get("edit_account") or {}
-        is_edit = bool(edit_acc)
-        old_login = str(edit_acc.get("login", ""))
-
-        used_terminals = {
-            os.path.normpath(a.get("mt5_path", "")).lower(): a.get(
-                "account_name", "Bilinmeyen"
-            )
-            for a in accounts
-            if a.get("mt5_path") and str(a.get("login")) != old_login
-        }
-
-        found_terminals = get_installed_mt5_terminals()
-        terminal_options = ["Farklı Bir Yol (Manuel Gireceğim)"]
-        old_mt5_path = edit_acc.get("mt5_path", "")
-
-        for t_path in found_terminals:
-            norm_path = os.path.normpath(t_path).lower()
-            if norm_path in used_terminals:
-                terminal_options.append(
-                    f"🔴 Dolu ({used_terminals[norm_path]}) - {t_path}"
-                )
-            else:
-                terminal_options.append(f"🟢 Boşta - {t_path}")
-
-        if (
-            is_edit
-            and old_mt5_path
-            and not any(old_mt5_path in opt for opt in terminal_options)
-        ):
-            terminal_options.append(f"🟢 Mevcut Adres - {old_mt5_path}")
-
-        with st.container():
-            st.markdown(
-                f"#### {'✏️ Hesabı Düzenle' if is_edit else '➕ Yeni MT5 Hesabı Ekle'}"
-            )
-            with st.container():
-                col1, col2 = st.columns(2)
-
-                with col1:
-                    new_acc_name = st.text_input(
-                        "Hesap Adı *",
-                        value=edit_acc.get("account_name", ""),
-                        placeholder="Örn: Canlı Hesap - 1",
-                    )
-                    new_login = st.text_input(
-                        "Hesap No (Login) *",
-                        value=old_login if is_edit else "",
-                        placeholder="Örn: 12345678",
-                        help="Girdiğiniz bu numara aynı zamanda sistemde Hesap ID'si olarak kullanılacaktır.",
-                    )
-
-                    env_opts = ["DEMO", "LIVE"]
-                    def_env_idx = (
-                        env_opts.index(edit_acc.get("env_type", "DEMO"))
-                        if is_edit and edit_acc.get("env_type") in env_opts
-                        else 0
-                    )
-                    new_env = st.selectbox(
-                        "Çevre (Ortam) *", env_opts, index=def_env_idx
-                    )
-
-                with col2:
-                    new_password = st.text_input(
-                        "Şifre *",
-                        value=edit_acc.get("password", ""),
-                        type="password",
-                        placeholder="MT5 Şifresi",
-                    )
-                    new_server = st.text_input(
-                        "Sunucu *",
-                        value=edit_acc.get("server", ""),
-                        placeholder="Örn: Eightcap-Demo",
-                    )
-
-                    def_term_idx = 0
-                    if is_edit and old_mt5_path:
-                        for idx, opt in enumerate(terminal_options):
-                            if old_mt5_path in opt:
-                                def_term_idx = idx
-                                break
-
-                    selected_terminal = st.selectbox(
-                        "MT5 Yolu Seçimi *",
-                        terminal_options,
-                        index=def_term_idx,
-                        help="Listeden kurulu bir MT5 seçebilir veya en alttaki seçeneği işaretleyip özel bir adres girebilirsiniz.",
-                    )
-
-                    if "Farklı Bir Yol" in selected_terminal:
-                        new_mt5_path = st.text_input(
-                            "Özel MT5 Yolu *",
-                            value=old_mt5_path if is_edit else "",
-                            placeholder="C:/Program Files/MetaTrader 5/terminal64.exe",
-                        )
-                    else:
-                        parsed_path = selected_terminal.split(" - ")[-1].strip()
-                        new_mt5_path = parsed_path
-
-                        if selected_terminal.startswith("🔴 Dolu"):
-                            st.error(
-                                "⚠️ Seçtiğiniz bu MT5 klasörü başka bir hesap tarafından kullanılıyor!"
-                            )
-
-                        st.text_input(
-                            "Seçilen MT5 Yolu (Otomatik)",
-                            value=parsed_path,
-                            disabled=True,
-                            help="Listeden seçim yaptığınız için bu alan otomatik doldurulmuştur.",
-                        )
-
-                new_notes = st.text_area(
-                    "📝 Hesap Notu (İsteğe Bağlı)",
-                    value=edit_acc.get("notes", ""),
-                    max_chars=1000,
-                    placeholder="Bu hesapla ilgili stratejiniz, kısıtlamalarınız veya özel notlar... (Maks. 1000 karakter)",
-                    height=100,
-                )
-
-                btn_col1, btn_col2 = st.columns(2)
-
-                with btn_col1:
-                    submit_btn = st.button(
-                        "💾 Değişiklikleri Kaydet" if is_edit else "💾 Hesabı Ekle",
-                        width="stretch",
-                    )
-                with btn_col2:
-                    cancel_btn = st.button("❌ İptal", width="stretch")
-
-                if cancel_btn:
-                    st.session_state.show_add_form = False
-                    st.session_state.edit_account = None
-                    st.rerun()
-
-                if submit_btn:
-                    if (
-                        not new_login
-                        or not new_acc_name
-                        or not new_password
-                        or not new_server
-                        or not new_mt5_path
-                    ):
-                        st.error(
-                            "🚨 Lütfen yıldızlı tüm zorunlu alanları eksiksiz doldurun!"
-                        )
-                    else:
-                        other_logins = [x for x in login_ids if x != old_login]
-                        if str(new_login) in other_logins:
-                            st.error(
-                                f"🚫 Hata: '{new_login}' numaralı hesap zaten sisteme kayıtlı!"
-                            )
-                        else:
-                            norm_new_path = os.path.normpath(new_mt5_path).lower()
-                            if norm_new_path in used_terminals:
-                                st.error(
-                                    f"🚨 HATA: Bu MT5 terminali halihazırda '{used_terminals[norm_new_path]}' hesabı tarafından kullanılıyor!"
-                                )
-                            else:
-                                try:
-                                    login_val = int(new_login)
-                                except ValueError:
-                                    login_val = new_login
-
-                                new_account_data = {
-                                    "id": str(new_login),
-                                    "account_name": new_acc_name,
-                                    "env_type": new_env,
-                                    "login": login_val,
-                                    "password": new_password,
-                                    "server": new_server,
-                                    "mt5_path": new_mt5_path.replace("\\", "/"),
-                                    "notes": new_notes,
-                                }
-
-                                if is_edit:
-                                    for idx, a in enumerate(accounts):
-                                        if str(a.get("login")) == old_login:
-                                            accounts[idx] = new_account_data
-                                            break
-                                else:
-                                    accounts.append(new_account_data)
-
-                                try:
-                                    with open(
-                                        ACCOUNTS_FILE, "w", encoding="utf-8"
-                                    ) as f:
-                                        json.dump(
-                                            {"accounts": accounts},
-                                            f,
-                                            indent=4,
-                                            ensure_ascii=False,
-                                        )
-
-                                    st.session_state.selected_account = new_account_data
-                                    st.session_state.show_add_form = False
-                                    st.session_state.edit_account = None
-                                    st.session_state.close_popover = True
-                                    st.success(
-                                        f"✅ {new_acc_name} başarıyla kaydedildi!"
-                                    )
-                                    st.rerun()
-                                except Exception as e:
-                                    st.error(
-                                        f"Kayıt sırasında teknik bir hata oluştu: {e}"
-                                    )
-
-    # 🌟 DOĞRU YER: Form açık olsa da kapalı olsa da seçili hesabı her zaman döndür.
     return st.session_state.selected_account
