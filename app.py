@@ -184,55 +184,6 @@ def show_mt5_connect_dialog(account_info, acc_id):
         if col2.button("❌ İptal", use_container_width=True):
             st.rerun()
 
-
-# ==========================================
-# AKILLI SİSTEM YÖNETİCİSİ (POPOVER)
-# ==========================================
-# Bu bileşen buton gibi durur, tıklanınca açılır, boşluğa tıklanınca otomatik kapanır.
-with st.popover("⚙️ Sistem Ayarları"):
-    port_num = os.getenv("STREAMLIT_PORT", "8501")
-    local_ip = get_local_ip()
-
-    st.markdown("##### 💻 Sistem Bilgileri")
-    st.caption(f"**Host Makine:** {platform.node()}")
-    st.caption(f"**İşletim Sistemi:** {platform.system()} {platform.release()}")
-    st.caption(f"**Yerel IP (Ağ):** {local_ip}")
-
-    st.divider()
-
-    st.markdown("##### 🔗 Erişim Adresleri")
-    st.caption(
-        f"**Aynı Cihazdan (Local):** [http://localhost:{port_num}](http://localhost:{port_num})"
-    )
-    st.caption(
-        f"**Ağ Üzerinden (Mobil/PC):** [http://{local_ip}:{port_num}](http://{local_ip}:{port_num})"
-    )
-
-    st.divider()
-
-    st.markdown("##### 🌍 Çalışma Ortamı")
-    st.caption(
-        f"**Ortam:** {env} | **Port:** {port_num} | **Dal (Branch):** {'master' if env == 'LIVE' else 'test'}"
-    )
-
-    # Butona basılınca modalı (dialog) tetikler
-    if st.button("🔄 Güncellemeleri Denetle", use_container_width=True):
-        target_branch = "master" if env == "LIVE" else "test"
-        show_update_dialog(env, target_branch)
-
-# Eğer başarılı bir güncelleme yapıldıysa ana sayfada bildirim göster (Modal kapandıktan sonra)
-if "update_success_msg" in st.session_state:
-    st.toast("✅ Uygulama başarıyla güncellendi!", icon="🚀")
-    # Terminal çıktılarını ekranda göstermek yerine sessizce log'a kaydet
-    try:
-        os.makedirs("logs", exist_ok=True)
-        with open("logs/update.log", "a", encoding="utf-8") as f:
-            f.write(st.session_state["update_success_msg"] + "\n")
-    except Exception:
-        pass
-    del st.session_state["update_success_msg"]
-
-
 def get_live_metrics_from_file(account_id):
     """Liest die aktuellsten Metriken des Subprozesses aus der JSON-Datei."""
     metrics_file = get_metrics_path(account_id)
@@ -270,9 +221,56 @@ def get_live_metrics_from_file(account_id):
 # ==========================================
 apply_custom_css()
 
-# 🌟 YENİ: Başlık En Üste Geldi
-render_main_title()
-stage("CSS + başlık")
+# ==========================================
+# 🌟 YENİ: BAŞLIK VE SİSTEM YÖNETİCİSİ AYNI SATIRDA
+# ==========================================
+header_col1, header_col2 = st.columns([0.85, 0.15], vertical_alignment="center")
+
+with header_col1:
+    render_main_title()
+
+with header_col2:
+    with st.popover("⚙️ Sistem Ayarları", use_container_width=True):
+        port_num = os.getenv("STREAMLIT_PORT", "8501")
+        local_ip = get_local_ip()
+
+        st.markdown("##### 💻 Sistem Bilgileri")
+        st.caption(f"**Host Makine:** {platform.node()}")
+        st.caption(f"**İşletim Sistemi:** {platform.system()} {platform.release()}")
+        st.caption(f"**Yerel IP (Ağ):** {local_ip}")
+
+        st.divider()
+
+        st.markdown("##### 🔗 Erişim Adresleri")
+        st.caption(
+            f"**Aynı Cihazdan (Local):** [http://localhost:{port_num}](http://localhost:{port_num})"
+        )
+        st.caption(
+            f"**Ağ Üzerinden (Mobil/PC):** [http://{local_ip}:{port_num}](http://{local_ip}:{port_num})"
+        )
+
+        st.divider()
+
+        st.markdown("##### 🌍 Çalışma Ortamı")
+        st.caption(
+            f"**Ortam:** {env} | **Port:** {port_num} | **Dal (Branch):** {'master' if env == 'LIVE' else 'test'}"
+        )
+
+        if st.button("🔄 Güncellemeleri Denetle", use_container_width=True):
+            target_branch = "master" if env == "LIVE" else "test"
+            show_update_dialog(env, target_branch)
+
+if "update_success_msg" in st.session_state:
+    st.toast("✅ Uygulama başarıyla güncellendi!", icon="🚀")
+    try:
+        os.makedirs("logs", exist_ok=True)
+        with open("logs/update.log", "a", encoding="utf-8") as f:
+            f.write(st.session_state["update_success_msg"] + "\n")
+    except Exception:
+        pass
+    del st.session_state["update_success_msg"]
+
+stage("CSS + başlık ve sistem ayarları render edildi")
 
 # ==========================================
 # 2. ÖNCE HESABI SEÇ (TAM GENİŞLİKTE)
