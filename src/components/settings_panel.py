@@ -679,13 +679,13 @@ def render_model_2_settings(
 
                     # 1. SATIR: Çıkış Yönü, Kapatılacak Yön, Temizlik Kapsamı
                     cc1, cc2, cc3 = st.columns(3)
-                    
+
                     side_key = f"clear_side_{zone_id}_{account_id}"
                     target_key = f"target_side_{zone_id}_{account_id}"
-                    
+
                     side_opts = ["Farketmez", "BUY (Yukarı)", "SELL (Aşağı)"]
                     target_opts = ["Farketmez (Hepsi)", "Sadece BUY İşlemleri", "Sadece SELL İşlemleri"]
-                    
+
                     # --- ESNEK VE KULLANICIYA ÖZGÜR DOMİNO MANTIĞI ---
                     # Yön değiştiğinde tetiklenecek bayrak kontrolü
                     last_ord_type_key = f"last_ord_type_{zone_id}_{account_id}"
@@ -883,7 +883,9 @@ def render_model_2_settings(
             if active_account
             else "Demo"
         )
-        status_text = "🟢 Açık" if is_running else "🔴 Kapalı"
+        # Piyasa durumunu doğrudan arka plandan gelen güncel veriye (market_open) bağlıyoruz
+        m_open = live_data.get("market_open", False) if live_data else False
+        status_text = "🟢 Açık" if m_open else "🔴 Kapalı"
         current_price = live_data.get("current_price", 0.0) if live_data else 0.0
         profit_val = live_data.get("profit", 0.0) if live_data else 0.0
         profit_color = "#4ade80" if profit_val >= 0 else "#f87171"
