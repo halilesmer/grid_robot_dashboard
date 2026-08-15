@@ -321,11 +321,24 @@ def render_account_selector():
         btn_label = f"{btn_icon} {acc_login} - {acc_name}"
         is_active = str(acc.get("login", acc.get("id"))) == str(active_login)
 
+        # 🌟 TOOLTIP HAZIRLIĞI (Null Koruması + Markdown Alt Satır + Uzunluk Sınırı)
+        raw_note = str(acc.get("note", acc.get("notes", "")))
+        if raw_note and raw_note.strip() != "None":
+            # Ekranı kaplamasını önlemek için ilk 500 karakteri al
+            if len(raw_note) > 500:
+                raw_note = raw_note[:497] + "..."
+
+            # Windows ve Unix satır sonlarını Markdown alt satırına (iki boşluk + \n) çevir
+            formatted_tooltip = raw_note.replace("\r\n", "\n").replace("\n", "  \n")
+        else:
+            formatted_tooltip = "📌 Bu hesap için henüz bir not eklenmemiş."
+
         if cols[i].button(
             btn_label,
             key=f"btn_{i}_{acc_login}",
             type="primary" if is_active else "secondary",
-            width="stretch",
+            use_container_width=True,
+            help=formatted_tooltip,  # 👈 Tooltip entegrasyonu
         ):
             st.session_state.selected_account = acc
             st.rerun()
