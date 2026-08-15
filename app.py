@@ -6,8 +6,8 @@ import json
 from pathlib import Path
 import platform
 import time
+import socket
 import streamlit as st
-
 
 def get_current_version():
     """VERSION dosyasından en güncel sürüm numarasını okur."""
@@ -65,8 +65,12 @@ from src.utils.config import load_settings, save_settings
 
 # 🌟 YENİ: Merkezi yol yöneticisi
 from src.utils.paths import get_metrics_path, get_sim_price_path, get_ui_state_path
-from src.utils.self_updater import execute_git_pull, hard_restart_server
 from src.ui.pwa_installer import inject_pwa_code
+from src.utils.self_updater import (
+    execute_git_pull,
+    hard_restart_server,
+    check_for_updates,
+)
 
 import src.core.model_2 as model_2
 
@@ -79,28 +83,88 @@ run_start(os.getenv("ROBOT_ENV", "TEST"))
 # 🌟 PWA kodunu enjekte et (manifest + service worker)
 inject_pwa_code()
 
+
 # ==========================================
 # SİSTEM YÖNETİCİSİ (PWA + SELF-UPDATE) - ANA EKRAN
 # ==========================================
-with st.expander("⚙️ Sistem Yöneticisi & Güncelleme Merkezi", expanded=False):
-    st.info(
-        f"Geçerli Ortam: **{env}** | Dal (Branch): **{'master' if env == 'LIVE' else 'test'}**"
+# ==========================================
+# GÜNCELLEME MODALI (DİALOG)
+# ==========================================
+@st.dialog("🔄 Güncelleme Kontrolü")
+def show_update_dialog(env_name, target_branch):
+    with st.spinner("GitHub ile versiyon kimlikleri karşılaştırılıyor..."):
+        success, update_result = check_for_updates(branch=target_branch)
+
+    if not success:
+        st.error(f"Bağlantı Hatası: {update_result}")
+        if st.button("Kapat", use_container_width=True):
+            st.rerun()
+        return
+
+    # update_result boolean döner: True ise yeni kod var, False ise aynı sürüm.
+    if update_result:
+        st.info("🚀 **Yeni bir güncelleme mevcut!**")
+        col1, col2 = st.columns(2)
+        if col1.button("Şimdi Güncelle", type="primary", use_container_width=True):
+            with st.spinner("Güncelleme indiriliyor..."):
+                pull_success, message = execute_git_pull(branch=target_branch)
+                if pull_success:
+                    st.session_state["update_success_msg"] = message
+                    st.rerun()
+                else:
+                    st.error(message)
+        if col2.button("İptal", use_container_width=True):
+            st.rerun()
+    else:
+        st.warning("Aynı sürüm. Yine de güncellemek ister misiniz?")
+        col1, col2 = st.columns(2)
+        if col1.button("Evet", type="primary", use_container_width=True):
+            with st.spinner("Zorla güncelleniyor..."):
+                pull_success, message = execute_git_pull(branch=target_branch)
+                if pull_success:
+                    st.session_state["update_success_msg"] = message
+                    st.rerun()
+                else:
+                    st.error(message)
+        if col2.button("Hayır", use_container_width=True):
+            st.rerun()
+
+
+def get_local_ip():
+    """Makinenin yerel ağdaki IP adresini döndürür."""
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except Exception:
+        return "Bilinmiyor"
+
+
+# ==========================================
+# AKILLI SİSTEM YÖNETİCİSİ (POPOVER)
+# ==========================================
+# Bu bileşen buton gibi durur, tıklanınca açılır, boşluğa tıklanınca otomatik kapanır.
+with st.popover("⚙️ Sistem Ayarları"):
+    st.markdown("##### 💻 Sistem Bilgileri")
+    st.caption(f"**Host Makine:** {platform.node()}")
+    st.caption(f"**İşletim Sistemi:** {platform.system()} {platform.release()}")
+    st.caption(f"**Yerel IP (Ağ):** {get_local_ip()}")
+
+    st.divider()
+
+    st.markdown("##### 🌍 Çalışma Ortamı")
+    st.caption(
+        f"**Ortam:** {env} | **Dal (Branch):** {'master' if env == 'LIVE' else 'test'}"
     )
 
-    if st.button("🔄 Güncellemeleri Denetle ve Yükle", use_container_width=True):
+    # Butona basılınca modalı (dialog) tetikler
+    if st.button("🔄 Güncellemeleri Denetle", use_container_width=True):
         target_branch = "master" if env == "LIVE" else "test"
-        with st.spinner(
-            f"Güncellemeler GitHub ({target_branch}) dalından çekiliyor..."
-        ):
-            success, message = execute_git_pull(branch=target_branch)
-            if success:
-                st.session_state["update_success_msg"] = message
-                st.rerun()  # 🚀 Sunucuyu kapatmadan sayfayı anında yeni kodla yeniler!
-            else:
-                st.error("❌ Güncelleme Başarısız!")
-                st.error(message)
+        show_update_dialog(env, target_branch)
 
-# Güncelleme sonrası başarı mesajını ekrana bas
+# Eğer başarılı bir güncelleme yapıldıysa ana sayfada bildirim göster (Modal kapandıktan sonra)
 if "update_success_msg" in st.session_state:
     st.success("✅ Uygulama başarıyla güncellendi!")
     st.code(st.session_state["update_success_msg"], language="bash")
@@ -134,28 +198,6 @@ def get_live_metrics_from_file(account_id):
         "startup_error": None,
     }
 
-
-# ==========================================
-# SİSTEM YÖNETİCİSİ (PWA + SELF-UPDATE) - ANA EKRAN
-# ==========================================
-with st.expander("⚙️ Sistem Yöneticisi & Güncelleme Merkezi", expanded=False):
-    st.info(
-        f"Geçerli Ortam: **{env}** | Dal (Branch): **{'master' if env == 'LIVE' else 'test'}**"
-    )
-
-    if st.button("🔄 Güncellemeleri Denetle ve Yükle", use_container_width=True):
-        target_branch = "master" if env == "LIVE" else "test"
-        with st.spinner(
-            f"Güncellemeler GitHub ({target_branch}) dalından çekiliyor..."
-        ):
-            success, message = execute_git_pull(branch=target_branch)
-            if success:
-                st.session_state["git_pull_msg"] = message
-                st.session_state["pending_hard_restart"] = True
-                st.rerun()
-            else:
-                st.error("❌ Güncelleme Başarısız!")
-                st.error(message)
 
 # ==========================================
 # 1. STREAMLIT CONFIG & CSS

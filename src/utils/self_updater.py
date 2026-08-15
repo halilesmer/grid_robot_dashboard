@@ -38,3 +38,37 @@ def hard_restart_server():
     project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
     launcher_script = os.path.join(project_root, "scripts", "launcher.py")
     os.execl(sys.executable, sys.executable, launcher_script)
+
+
+def check_for_updates(branch="test"):
+    """
+    Yerel (local) depo ile GitHub (origin) deposu arasındaki Git commit hash'lerini
+    karşılaştırarak yeni bir güncelleme olup olmadığını %100 doğrulukla test eder.
+    """
+    try:
+        # Önce GitHub'daki son bilgileri fetch ile çek (dosyaları değiştirmez, sadece bilgi alır)
+        subprocess.run(
+            ["git", "fetch", "origin", branch],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+
+        # Yerel commit kimliği (hash)
+        local_hash = subprocess.run(
+            ["git", "rev-parse", "HEAD"], check=True, capture_output=True, text=True
+        ).stdout.strip()
+
+        # GitHub commit kimliği (hash)
+        remote_hash = subprocess.run(
+            ["git", "rev-parse", f"origin/{branch}"],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+
+        # Eğer hash'ler farklıysa yeni bir kod/güncelleme var demektir
+        has_update = local_hash != remote_hash
+        return True, has_update
+    except Exception as e:
+        return False, str(e)
