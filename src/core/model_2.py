@@ -314,8 +314,21 @@ def get_current_market_price(direction="BUY"):
 
 
 def is_market_open():
+    # Mac simülatörü çalışıyorsa (veri akmayacağı için) piyasayı açık kabul et
+    if IS_MAC_TEST_MODE:
+        return True
+
     info = mt5.symbol_info(SYMBOL)
-    return False if info is None else info.trade_mode == 4
+    if info is None or getattr(info, "trade_mode", 0) != 4:
+        return False
+
+    tick = mt5.symbol_info_tick(SYMBOL)
+    if tick is None or getattr(tick, "time_msc", 0) == 0:
+        return False
+
+    # time_msc her zaman UTC bazlı milisaniyedir. time.time() da UTC saniyesi verir.
+    # Bu sayede Broker'ın saat diliminden etkilenmeden KUSURSUZ ölçüm yapılır.
+    return (time.time() * 1000 - tick.time_msc) <= 180000
 
 
 def determine_fill_mode():
