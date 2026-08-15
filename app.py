@@ -331,9 +331,11 @@ if account_is_running:
         if is_live
         else "Senkronizasyon koptu!"
     )
-    market_badge = "🟢 **Piyasa Açık**" if m_open else "🌙 **Piyasa Kapalı**"
-
-    st.markdown(f"&nbsp; {market_badge} &nbsp;|&nbsp; {dot_color} *{sync_text}*")
+    
+    if m_open:
+        st.markdown(f"&nbsp; 🟢 **Piyasa Açık** &nbsp;|&nbsp; {dot_color} *{sync_text}*")
+    else:
+        st.markdown("&nbsp; 🔴 **Piyasa Kapalı** &nbsp;|&nbsp; ⏸️ *İşlemler duraklatıldı*")
 
 
 # ==========================================
