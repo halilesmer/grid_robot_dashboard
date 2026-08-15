@@ -114,33 +114,10 @@ def get_last_error_msg():
 
 def close_position(mt5_module, position, symbol, log_func=None):
     """
-    Kapatılacak açık pozisyonu (market price üzerinden) kapatır.
+    🛑 HARD SAFETY: Robot açık pozisyon kapatma yetkisine sahip değildir.
+    Açık pozisyon kapatma işlemleri %100 manuel olarak kullanıcıya aittir.
     """
-    tick = mt5_module.symbol_info_tick(symbol)
-    if tick is None:
-        if log_func:
-            log_func(f"Fiyat alınamadı, {position.ticket} kapatılamıyor.", "ERROR")
-        return False
-
-    # Buy ise Sell ile, Sell ise Buy ile kapat
-    if position.type == mt5_module.POSITION_TYPE_BUY:
-        trade_type = mt5_module.ORDER_TYPE_SELL
-        price = tick.bid
-    else:
-        trade_type = mt5_module.ORDER_TYPE_BUY
-        price = tick.ask
-
-    request = {
-        "action": mt5_module.TRADE_ACTION_DEAL,
-        "symbol": symbol,
-        "volume": position.volume,
-        "type": trade_type,
-        "position": position.ticket,
-        "price": price,
-        "deviation": 20,
-        "type_time": mt5_module.ORDER_TIME_GTC,
-        "type_filling": mt5_module.ORDER_FILLING_IOC, # Genelde IOC kapatmak için yeterlidir
-    }
-
-    return safe_send_order(mt5_module, request, log_func)
+    if log_func:
+        log_func(f"🛡️ Güvenlik Kuralı Engeli: {position.ticket} numaralı açık pozisyon robot tarafından kapatılamaz!", "WARN")
+    return False
 

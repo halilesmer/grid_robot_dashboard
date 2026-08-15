@@ -920,12 +920,7 @@ def manage_dynamic_grid():
                                 cancel_order(order)
                                 silinen_emir_sayisi += 1
 
-                    log_message(f"🧹 Toplam {silinen_emir_sayisi} adet bekleyen {target} emri temizlendi.")
-
-                    if scope == "Tüm İşlemler":
-                        log_message(
-                            "🧹 AÇIK POZİSYONLAR KORUNDU (güvenlik kuralı). Sadece bekleyen emirler temizlendi."
-                        )
+                    log_message(f"🧹 Toplam {silinen_emir_sayisi} adet bekleyen {target} emri temizlendi. (Açık pozisyonlar korundu)")
 
                 robot_orders = get_all_robot_orders()
                 robot_positions = get_all_robot_positions()
