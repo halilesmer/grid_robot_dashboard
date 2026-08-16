@@ -76,11 +76,15 @@ from src.utils.self_updater import (
 
 import src.core.model_2 as model_2
 
-# 🔍 DONMA TEŞHİSİ: Her script çalıştırmasının aşama sürelerini logs/run_profiler.log'a yazar
-from src.utils.profiler import run_start, stage
 
-# 🔍 Yeni script çalıştırması başladı (Gereksiz log şişmesini önlemek için kapatıldı)
-# run_start(os.getenv("ROBOT_ENV", "TEST"))
+# 🔍 DONMA TEŞHİSİ (Sistem performansını artırmak ve log şişmesini önlemek için tamamen susturuldu)
+def run_start(*args, **kwargs):
+    pass
+
+
+def stage(*args, **kwargs):
+    pass
+
 
 # 🌟 PWA kodunu enjekte et (manifest + service worker)
 inject_pwa_code()
