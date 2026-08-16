@@ -9,6 +9,8 @@ import time
 import socket
 import streamlit as st
 
+from src.components.dialogs import confirm_system_shutdown_dialog
+
 def get_current_version():
     """VERSION dosyasından en güncel sürüm numarasını okur."""
     version_file = Path(__file__).parent / "VERSION"
@@ -77,8 +79,8 @@ import src.core.model_2 as model_2
 # 🔍 DONMA TEŞHİSİ: Her script çalıştırmasının aşama sürelerini logs/run_profiler.log'a yazar
 from src.utils.profiler import run_start, stage
 
-# 🔍 Yeni script çalıştırması başladı (takılma anında son satır kalan aşamayı gösterir)
-run_start(os.getenv("ROBOT_ENV", "TEST"))
+# 🔍 Yeni script çalıştırması başladı (Gereksiz log şişmesini önlemek için kapatıldı)
+# run_start(os.getenv("ROBOT_ENV", "TEST"))
 
 # 🌟 PWA kodunu enjekte et (manifest + service worker)
 inject_pwa_code()
@@ -224,6 +226,10 @@ def get_live_metrics_from_file(account_id):
 # ==========================================
 # 1. STREAMLIT CONFIG & CSS
 # ==========================================
+st.sidebar.markdown("---")
+if st.sidebar.button("🔌 Sistemi Tamamen Kapat", use_container_width=True):
+    confirm_system_shutdown_dialog()
+
 apply_custom_css()
 
 # ==========================================

@@ -83,3 +83,45 @@ def confirm_stop_motor_dialog(account_id, on_stop_func):
         st.rerun()
     if col2.button("❌ İptal", width="stretch"):
         st.rerun()
+
+import os
+import time
+import psutil
+
+
+@st.dialog("🛑 Sistemi Tamamen Kapat")
+def confirm_system_shutdown_dialog():
+    """
+    Arka planda görünmez (VBS) olarak çalışan arayüzü ve ona bağlı
+    tüm zombi robot süreçlerini (bot_runner.py) güvenle kapatır.
+    """
+    st.error(
+        "Bu işlem arka planda çalışan **tüm robotları** ve **bu arayüzü** tamamen kapatacaktır. "
+        "Açık olan pozisyonlarınız broker tarafında güvende kalır."
+    )
+    st.write("Sistemi gerçekten kapatmak istiyor musunuz?")
+
+    col_yes, col_no = st.columns([1, 1])
+    if col_yes.button("🔴 Sistemi Kapat", type="primary", width="stretch"):
+        st.success(
+            "Zombi süreçler temizleniyor... Tarayıcı sekmesini kapatabilirsiniz."
+        )
+        time.sleep(2)  # Kullanıcının mesajı görebilmesi için kısa bir bekleme
+
+        # 1. Aşama: Sadece bize ait olan "bot_runner.py" zombilerini bul ve öldür
+        for proc in psutil.process_iter(["pid", "name", "cmdline"]):
+            try:
+                cmdline = proc.info.get("cmdline") or []
+                cmd_str = " ".join(cmdline).lower()
+
+                # Sadece bot_runner.py içeren python süreçlerini hedef al
+                if "bot_runner.py" in cmd_str:
+                    proc.kill()
+            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                continue
+
+        # 2. Aşama: VBS üzerinden başlatılan bu ana Streamlit sürecini intihar ettir (Kapat)
+        os._exit(0)
+
+    if col_no.button("Hayır, İptal", width="stretch"):
+        st.rerun()
