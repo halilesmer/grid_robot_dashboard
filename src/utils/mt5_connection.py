@@ -39,7 +39,7 @@ except ImportError:
     MT5_AVAILABLE = False
 
 
-def connect_to_mt5(account_config):
+def connect_to_mt5(account_config, timeout_sec=60):
     if not account_config:
         safe_log("Bağlanılacak hesap seçilmedi!")
         return False, "[CONFIG] Bağlanılacak hesap seçilmedi veya hesap bilgisi eksik."
@@ -63,32 +63,38 @@ def connect_to_mt5(account_config):
 
     def _kill_zombie_mt5(path):
         """Yardımcı Fonksiyon: Kilitlenmiş MT5'i işletim sistemi seviyesinde öldürür."""
-        if not path or not os.path.exists(path):
-            return
         try:
             import psutil
             import subprocess
 
-            target_exe = os.path.basename(path).lower()
+            target_exe = "terminal64.exe"
+            if path and os.path.exists(path):
+                target_exe = os.path.basename(path).lower()
+
             for proc in psutil.process_iter(["pid", "name", "exe"]):
                 try:
-                    if proc.info["name"] and proc.info["name"].lower() == target_exe:
-                        exe_path = proc.info.get("exe")
-                        if (
-                            exe_path
-                            and os.path.normpath(exe_path).lower()
-                            == os.path.normpath(path).lower()
-                        ):
-                            safe_log(
-                                f"Asılı kalan MT5 terminali tespit edildi. Öldürülüyor... PID: {proc.info['pid']}",
-                                type="warning",
-                            )
-                            subprocess.call(
-                                ["taskkill", "/F", "/PID", str(proc.info["pid"])],
-                                stdout=subprocess.DEVNULL,
-                                stderr=subprocess.DEVNULL,
-                            )
-                            time.sleep(2.0)
+                    p_name = proc.info.get("name")
+                    p_exe = proc.info.get("exe")
+
+                    if p_name and p_name.lower() == target_exe:
+                        # Eğer geçerli bir path varsa ve uyuşmuyorsa pas geç. Path yoksa ilk zombiyi vur.
+                        if path and os.path.exists(path) and p_exe:
+                            if (
+                                os.path.normpath(p_exe).lower()
+                                != os.path.normpath(path).lower()
+                            ):
+                                continue
+
+                        safe_log(
+                            f"Asılı kalan MT5 terminali tespit edildi. Öldürülüyor... PID: {proc.info['pid']}",
+                            type="warning",
+                        )
+                        subprocess.call(
+                            ["taskkill", "/F", "/PID", str(proc.info["pid"])],
+                            stdout=subprocess.DEVNULL,
+                            stderr=subprocess.DEVNULL,
+                        )
+                        time.sleep(2.0)
                 except (
                     psutil.NoSuchProcess,
                     psutil.AccessDenied,
@@ -122,7 +128,7 @@ def connect_to_mt5(account_config):
     # 🌟 AŞAMA 1: OTO-LOGIN İLE BAŞLATMA (mt5.initialize)
     # ==============================================================
     # PORTABLE=TRUE : Farklı Windows kullanıcıları (Admin vs Standart) arasındaki IPC ve AppData çakışmalarını önler!
-    init_kwargs = {"timeout": 120000, "portable": True}
+    init_kwargs = {"timeout": int(timeout_sec * 1000), "portable": True}
 
     if mt5_path and os.path.exists(mt5_path):
         init_kwargs["path"] = mt5_path
@@ -152,7 +158,7 @@ def connect_to_mt5(account_config):
             "Terminal sıfırdan başlatılıyor. Bu işlem VPS hızına bağlı olarak 1-2 dakika sürebilir...",
             type="warning",
         )
-        init_kwargs["timeout"] = 150000
+        init_kwargs["timeout"] = int((timeout_sec + 30) * 1000)
         init_success = mt5.initialize(**init_kwargs)
 
     if not init_success:
@@ -275,60 +281,50 @@ def shutdown_mt5():
 
 
 # ==========================================
-# 🌟 YENİ: ZAMAN AŞIMLI (TIMEOUT) MT5 BAĞLANTISI — Arayüz Kilitlenmesin!
+# 🌟 DÜZELTME: GÜVENLİ ZAMAN AŞIMLI BAĞLANTI (MİMARİ ÇÖZÜM)
 #
-# Streamlit script dosyası TAMAMEN tek iş parçacığında (thread) çalışır.
-# connect_to_mt5() doğrudan çağrıldığında, MT5 terminal açılışı veya sunucuya
-# giriş (initialize/login) ağ bağlantısı olmadığında ÇOK UZUN sürebilir ve bu
-# süre boyunca Tarayıcı ön yüzü donar (kullanıcı hiçbir şey yapamaz).
-#
-# Bu fonksiyon bağlantıyı ARKA PLANDAN dener ve en fazla 'timeout' saniye bekler.
-# Süre dolarsa hemen (False, True) döner → arayüz kilitlenmez, net hata gösterir.
-#
-# Dönüş: (başarı_bool, zaman_aşımı_bool)
+# MetaTrader5 kütüphanesi Thread-Safe (İş Parçacığı Korumalı) DEĞİLDİR!
+# MT5'in arka planda (Thread içinde) başlatılıp ana Thread'de kullanılması C-API'yi çökertir.
+# Bu nedenle Threading tamamen KALDIRILMIŞTIR. Yerine MT5'in doğal 'timeout' parametresi kullanılarak
+# ana süreçte (Main Thread) kilitlenmeler engellenmiştir.
 # ==========================================
-def connect_to_mt5_with_timeout(account_config, timeout=20):
-    """connect_to_mt5'i arka planda çalıştırır; UI'ı kilitlemeden sonuç döner.
-    
+def connect_to_mt5_with_timeout(account_config, timeout=60):
+    """
+    connect_to_mt5'i doğrudan çağırır ancak timeout değerini MT5'in kendi
+    C-seviyesi parametresine (initialize timeout) entegre eder.
+    Böylece Thread kaynaklı IPC (Inter-Process Communication) bozulmaları yaşanmaz.
+
     Dönüş: (başarı_bool, zaman_aşımı_bool, hata_detayı_str_or_None)
     """
     if not account_config:
         safe_log("Bağlanılacak hesap seçilmedi!")
         return False, False, "[CONFIG] Bağlanılacak hesap seçilmedi."
 
-    # Mac simülasyonu veya MT5 kütüphanesi yoksa zaten anında dönüyoruz (thread'e gerek yok)
     if not MT5_AVAILABLE or platform.system() != "Windows":
-        ok, detail = connect_to_mt5(account_config)
+        ok, detail = connect_to_mt5(account_config, timeout_sec=timeout)
         return ok, False, detail
 
-    result = {}
+    try:
+        ok, detail = connect_to_mt5(account_config, timeout_sec=timeout)
 
-    def _worker():
-        try:
-            result["ok"], result["detail"] = connect_to_mt5(account_config)
-        except Exception as e:
-            result["ok"] = False
-            result["detail"] = f"[CRITICAL] Bağlantı iş parçacığı çöktü: {e}"
-            result["err"] = str(e)
+        # Eğer hata mesajında zaman aşımı belirtisi varsa is_timeout=True döndür
+        is_timeout = False
+        if (
+            not ok
+            and detail
+            and ("Timeout" in detail or "-10005" in detail or "-10003" in detail)
+        ):
+            is_timeout = True
+            safe_log(
+                f"[TIMEOUT] MT5 bağlantısı {timeout} saniye içinde tamamlanamadı. "
+                "Terminal kapalı, sunucuya ulaşılamıyor veya açılışı çok yavaş."
+            )
 
-    worker = threading.Thread(target=_worker, daemon=True)
-    worker.start()
-    worker.join(timeout=timeout)
-
-    if worker.is_alive():
-        # ⚠️ Zaman aşımı: MT5 hâlâ açılmaya/bağlanmaya çalışıyor.
-        # Kullanıcıyı sonsuza dek bekleterek ön yüzü dondurmak YERİNE hata döndür.
-        timeout_msg = (
-            f"[TIMEOUT] MT5 bağlantısı {timeout} saniye içinde tamamlanamadı. "
-            "Terminal kapalı, sunucuya ulaşılamıyor veya ilk kez açılışta sembol listesi indiriliyor olabilir."
-        )
-        safe_log(timeout_msg)
-        return False, True, timeout_msg
-
-    if result.get("err"):
-        safe_log(f"MT5 bağlantı iş parçacığı hatası: {result['err']}")
-
-    return result.get("ok", False), False, result.get("detail")
+        return ok, is_timeout, detail
+    except Exception as e:
+        err_msg = f"[CRITICAL] Bağlantı fonksiyonu çöktü: {e}"
+        safe_log(err_msg)
+        return False, False, err_msg
 
 
 # ==========================================
