@@ -180,7 +180,7 @@ def render_model_2_settings(
         zone_states = list(st.session_state.get(ui_state_key, {}).values())
         any_zone_start = any(s == "START" for s in zone_states)
 
-        mt5_connected = live_data.get("mt5_connected", True) if live_data else True
+        mt5_connected = live_data.get("mt5_connected", False) if live_data else False
         if not is_running:
             motor_status = "stopped"
             btn_label = "🚀 MT5'e Bağlan"

@@ -111,8 +111,9 @@ def main():
 
     # 3. MT5'e bağlan
     print(f"\n🔌 MT5 Terminaline bağlanılıyor ({account_id})...")
-    if not connect_to_mt5(active_account):
-        print("❌ MT5 bağlantısı başarısız! Denetim iptal edildi.")
+    ok, error_detail = connect_to_mt5(active_account)
+    if not ok:
+        print(f"❌ MT5 bağlantısı başarısız! Denetim iptal edildi. Detay: {error_detail}")
         print("   (Mac'te simülasyon olarak 'geçer' sayılır)")
         sys.exit(1)
     print("✅ MT5 bağlantısı başarılı (veya simüle edildi).")

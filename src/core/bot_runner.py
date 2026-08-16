@@ -110,24 +110,23 @@ def main():
     # 4. SADECE bu hesaba özel MT5 Terminaline bağlan
     print(f"[{account_id}] MT5 Terminaline bağlanılıyor...")
     # 🌟 ZAMAN AŞIMI KORUMASI: MT5 açılamazsa alt süreç de sessizce asılı kalmasın!
-    connection_success, connection_timed_out = connect_to_mt5_with_timeout(
-        active_account
+    # 🌟 timeout=120sn: mt5.initialize iç timeout'u (120sn) ile eşleşir, ilk bağlantı sembol indirimi için yeterli
+    connection_success, connection_timed_out, connection_error = connect_to_mt5_with_timeout(
+        active_account, timeout=120
     )
     if not connection_success:
         print(
             f"Hata: {account_id} için MetaTrader 5'e bağlanılamadı. Süreç sonlandırılıyor."
         )
         if connection_timed_out:
-            startup_error_msg = (
-                "MetaTrader 5 terminali zaman aşımı içinde açılamadı veya sunucuya "
-                "ulaşılamadı. Lütfen MT5 terminalinin açık olduğundan ve ağ/internet "
-                "bağlantınızın aktif olduğundan emin olun."
+            startup_error_msg = connection_error if connection_error else (
+                "[ZAMAN AŞIMI] MT5 terminali 120 saniye içinde açılamadı veya sunucuya ulaşılamadı."
             )
+        elif connection_error:
+            startup_error_msg = connection_error
         else:
             startup_error_msg = (
-                "MetaTrader 5 terminaline giriş yapılamadı, sunucu/şifre bilgileri "
-                "hatalı veya Algo Trading kapalı. Lütfen MT5 hesap bilgilerinizi ve "
-                "terminal ayarlarını kontrol edin."
+                "[BİLİNMEYEN] MT5 terminaline giriş yapılamadı. Hesap bilgilerini ve terminal ayarlarını kontrol edin."
             )
         # 🔴 BAĞLANTI HATASINI ARAYÜZE İLET (Kalıcı hata afişi için)
         #    Süreç kapanıyor ama arayüz bu dosyayı okuyup net hata gösterebilecek.

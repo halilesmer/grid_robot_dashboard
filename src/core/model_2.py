@@ -3,11 +3,14 @@ import datetime
 import platform
 import json
 import os
+from pathlib import Path
 from src.utils.trade_utils import safe_send_order
 from src.utils.config import get_settings_file
 
 # 🌟 YENİ: Merkezi yol yöneticisi
 from src.utils.paths import get_err_log_path, get_ui_state_path, get_metrics_path
+
+project_root = Path(__file__).parent.parent.parent
 
 # ==========================================
 # TEMEL DEĞİŞKENLER VE AYARLAR
@@ -56,7 +59,7 @@ def get_live_metrics():
         "current_price": 0.0,
         "algo_trading_error": False,
         "remote_paused": REMOTE_PAUSED,
-        "mt5_connected": True,
+        "mt5_connected": False,
         "connection_lost": CONNECTION_LOST,
         "market_open": is_market_open(),
     }
@@ -1280,9 +1283,14 @@ def run_startup_checks():
 
         # 1. Hesap bilgilerini configs/accounts.json dosyasından bul
         try:
-            with open("configs/accounts.json", "r", encoding="utf-8") as f:
-                accounts = json.load(f)
-                for acc in accounts:
+            accounts_path = os.path.join(project_root, "configs", "accounts.json")
+            with open(accounts_path, "r", encoding="utf-8") as f:
+                accounts_data = json.load(f)
+                if isinstance(accounts_data, list):
+                    account_list = accounts_data
+                else:
+                    account_list = accounts_data.get("accounts", [])
+                for acc in account_list:
                     if str(acc.get("login")) == account_id:
                         acc_config = acc
                         break

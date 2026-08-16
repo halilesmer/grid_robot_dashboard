@@ -154,15 +154,16 @@ def get_local_ip():
 def show_mt5_connect_dialog(account_info, acc_id):
     st.info("MetaTrader 5 terminali açılıyor ve giriş yapılıyor...")
     with st.spinner(
-        "Otomatik giriş tamamlanıyor (Lütfen bekleyin, Zaman aşımı: 30sn)..."
+        "Otomatik giriş tamamlanıyor (Lütfen bekleyin, Zaman aşımı: 90sn)..."
     ):
-        connection_success, connection_timed_out = connect_to_mt5_with_timeout(
-            account_info, timeout=30
+        connection_success, connection_timed_out, connection_error = connect_to_mt5_with_timeout(
+            account_info, timeout=90
         )
 
     if connection_success:
         shutdown_mt5()
         if start_bot_process(acc_id, "Model 2"):
+            st.session_state[f"bot_started_at_{acc_id}"] = time.time()
             st.toast(
                 f"🚀 {account_info['account_name']} için robot başlatıldı!", icon="✅"
             )
@@ -172,12 +173,13 @@ def show_mt5_connect_dialog(account_info, acc_id):
     else:
         if connection_timed_out:
             st.error(
-                "🔴 **ZAMAN AŞIMI:** MT5 terminaline ulaşılamadı. Terminalin açık olduğundan emin olun."
+                f"🔴 **ZAMAN AŞIMI:** {connection_error if connection_error else 'MT5 terminaline 90 saniye içinde ulaşılamadı.'}"
             )
         else:
-            st.error(
+            error_display = connection_error if connection_error else (
                 "🔴 **BAĞLANTI HATASI:** Giriş bilgileri hatalı veya Algo Trading kapalı."
             )
+            st.error(error_display)
 
         col1, col2 = st.columns(2)
         if col1.button("🔄 Tekrar Bağlan", type="primary", use_container_width=True):
@@ -195,7 +197,7 @@ def get_live_metrics_from_file(account_id):
             with open(metrics_file, "r", encoding="utf-8") as f:
                 data = json.load(f)
             age = time.time() - os.path.getmtime(metrics_file)
-            data.setdefault("mt5_connected", True)
+            data.setdefault("mt5_connected", False)
             data.setdefault("startup_error", None)
             data.setdefault("market_open", False)
             data["data_age"] = age
@@ -212,7 +214,7 @@ def get_live_metrics_from_file(account_id):
         "current_price": 0.0,
         "algo_trading_error": False,
         "remote_paused": False,
-        "mt5_connected": True,
+        "mt5_connected": False,
         "startup_error": None,
         "market_open": False,
         "data_age": 999.0,
@@ -363,14 +365,26 @@ if live_data.get("startup_error"):
         f"🚨 **MT5 BAĞLANTI HATASI:** {live_data.get('startup_error')}",
         icon="🚫",
     )
-elif account_is_running and not live_data.get("mt5_connected", True):
-    st.error(
-        "🚨 **KRİTİK HATA:** MetaTrader 5 ile bağlantı KOPTU! "
-        "Robot çalışıyor ama MT5'e ulaşamıyor. "
-        "MT5 terminalinin açık ve ağ bağlantınızın aktif olduğunu kontrol edin. "
-        "Bağlantı geri gelince robot otomatik olarak devam edecek.",
-        icon="🚫",
-    )
+elif account_is_running and not live_data.get("mt5_connected", False):
+    bot_started_at = st.session_state.get(f"bot_started_at_{account_id}")
+    bot_just_started = bot_started_at and (time.time() - bot_started_at) < 130
+    elapsed_since_start = int(time.time() - bot_started_at) if bot_started_at else 0
+
+    if bot_just_started:
+        st.info(
+            f"⏳ **Bağlanıyor...** Subprocess {elapsed_since_start} saniye önce başlatıldı, "
+            "MT5 bağlantısı kuruluyor. İlk bağlantı sembol listesi indirimi nedeniyle 1-2 dakika sürebilir. "
+            "Lütfen bekleyin...",
+            icon="⏳",
+        )
+    else:
+        st.error(
+            "🚨 **KRİTİK HATA:** MetaTrader 5 ile bağlantı KOPTU! "
+            "Robot çalışıyor ama MT5'e ulaşamıyor. "
+            "MT5 terminalinin açık ve ağ bağlantınızın aktif olduğunu kontrol edin. "
+            "Bağlantı geri gelince robot otomatik olarak devam edecek.",
+            icon="🚫",
+        )
 
 
 # 📡 Mobil MT5'ten (Sinyal Emri ile) uzaktan durduruldu mu?
