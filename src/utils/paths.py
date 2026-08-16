@@ -59,28 +59,40 @@ def get_state_path(account_id: str) -> str:
 
 
 # ══════════════════════════════════════════════════════════
-# 3. LOGLAR VE CANLI KÖPRÜLER (logs/) — Hesap bazlı, port'suz
+# 3. LOGLAR VE CANLI KÖPRÜLER (logs/) — Her Hesap İçin İzole Klasör
 # ══════════════════════════════════════════════════════════
+def get_account_log_dir(account_id: str) -> str:
+    """Her hesabın kendine ait log klasörünü oluşturur (Örn: logs/7942034)"""
+    safe = safe_account_id(account_id)
+    path = os.path.join(LOGS_DIR, safe)
+    return _ensure_dir(path)
+
+
 def get_err_log_path(account_id: str) -> str:
     safe = safe_account_id(account_id)
-    return os.path.join(_ensure_logs_dir(), f"err_{safe}.log")
+    return os.path.join(get_account_log_dir(account_id), f"err_{safe}.log")
 
 
 def get_ui_state_path(account_id: str) -> str:
     safe = safe_account_id(account_id)
-    return os.path.join(_ensure_logs_dir(), f"ui_{safe}.json")
+    return os.path.join(get_account_log_dir(account_id), f"ui_{safe}.json")
 
 
 def get_metrics_path(account_id: str) -> str:
     safe = safe_account_id(account_id)
-    return os.path.join(_ensure_logs_dir(), f"met_{safe}.json")
+    return os.path.join(get_account_log_dir(account_id), f"met_{safe}.json")
 
 
 def get_sim_price_path(account_id: str) -> str:
     safe = safe_account_id(account_id)
-    return os.path.join(_ensure_logs_dir(), f"sim_{safe}.json")
+    return os.path.join(get_account_log_dir(account_id), f"sim_{safe}.json")
 
 
 def get_pid_path(account_id: str) -> str:
     safe = safe_account_id(account_id)
-    return os.path.join(_ensure_logs_dir(), f"pid_{safe}.txt")
+    return os.path.join(get_account_log_dir(account_id), f"pid_{safe}.txt")
+
+
+def get_mt5_backup_dir(account_id: str) -> str:
+    """MT5 terminal loglarının kopyalanacağı hesap içi alt klasör"""
+    return _ensure_dir(os.path.join(get_account_log_dir(account_id), "mt5_terminal"))

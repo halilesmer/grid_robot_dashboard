@@ -7,6 +7,8 @@ import threading  # 🌟 YENİ: Arayüzün kilitlenmemesi için zaman aşımlı 
 import shutil  # 🌟 YENİ EKLENDİ (Dosya kopyalamak için)
 import datetime  # 🌟 YENİ EKLENDİ (Tarih formatı için)
 
+from src.utils.paths import get_mt5_backup_dir  # 🌟 YENİ: Hesaba özel MT5 yedek klasörü
+
 # Streamlit sicher importieren, um Subprocess-Abstürze zu verhindern!
 try:
     import streamlit as st
@@ -252,8 +254,8 @@ def connect_to_mt5(account_config):
         mt5.shutdown()
         return False, "[SECURITY] Ortam uyuşmazlığı: Robot TEST modunda ama MT5 hesabı GERÇEK PARALI (LIVE)."
 
-    # 🌟 BAĞLANTI BAŞARILI OLDUKTAN SONRA LOGLARI YEDEKLE (Opsiyonel olarak buraya ekleyebilirsin)
-    # backup_mt5_logs()
+    # 🌟 BAĞLANTI BAŞARILI OLDUKTAN SONRA LOGLARI YEDEKLE
+    backup_mt5_logs(login_id)
 
     return True, None
 
@@ -332,19 +334,15 @@ def connect_to_mt5_with_timeout(account_config, timeout=20):
 # ==========================================
 # 🌟 YENİ: MT5 Terminal Loglarını Yedekleme Fonksiyonu
 # ==========================================
-def backup_mt5_logs(custom_log_dir="logs/mt5"):
+def backup_mt5_logs(account_id):
     """
-    MT5 Terminal loglarını okur ve projedeki logs/mt5 klasörüne kopyalar.
+    MT5 Terminal loglarını okur ve projedeki ilgili hesabın log klasörüne kopyalar.
     """
-    if not MT5_AVAILABLE or platform.system() != "Windows":
-        return  # Mac veya MT5 olmayan ortamlarda pas geç
+    if not MT5_AVAILABLE or platform.system() != "Windows" or not account_id:
+        return  # Mac, MT5 olmayan ortam veya eksik hesap ID'sinde pas geç
 
-    # 1. Klasör yoksa oluştur
-    if not os.path.exists(custom_log_dir):
-        try:
-            os.makedirs(custom_log_dir)
-        except Exception:
-            pass
+    # 1. Hesaba özel MT5 yedekleme klasörünü al
+    custom_log_dir = get_mt5_backup_dir(str(account_id))
 
     # 2. MT5 Terminal bilgilerini çek
     term_info = mt5.terminal_info()
