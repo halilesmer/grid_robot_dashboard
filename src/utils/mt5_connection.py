@@ -282,37 +282,30 @@ def shutdown_mt5():
 
 # ==========================================
 # 🌟 DÜZELTME: GÜVENLİ ZAMAN AŞIMLI BAĞLANTI (MİMARİ ÇÖZÜM)
-#
-# MetaTrader5 kütüphanesi Thread-Safe (İş Parçacığı Korumalı) DEĞİLDİR!
-# MT5'in arka planda (Thread içinde) başlatılıp ana Thread'de kullanılması C-API'yi çökertir.
-# Bu nedenle Threading tamamen KALDIRILMIŞTIR. Yerine MT5'in doğal 'timeout' parametresi kullanılarak
-# ana süreçte (Main Thread) kilitlenmeler engellenmiştir.
 # ==========================================
 def connect_to_mt5_with_timeout(account_config, timeout=60):
     """
-    connect_to_mt5'i doğrudan çağırır ancak timeout değerini MT5'in kendi
-    C-seviyesi parametresine (initialize timeout) entegre eder.
-    Böylece Thread kaynaklı IPC (Inter-Process Communication) bozulmaları yaşanmaz.
-
+    connect_to_mt5'i doğrudan çağırır.
     Dönüş: (başarı_bool, zaman_aşımı_bool, hata_detayı_str_or_None)
     """
     if not account_config:
         safe_log("Bağlanılacak hesap seçilmedi!")
         return False, False, "[CONFIG] Bağlanılacak hesap seçilmedi."
 
-    if not MT5_AVAILABLE or platform.system() != "Windows":
-        ok, detail = connect_to_mt5(account_config, timeout_sec=timeout)
-        return ok, False, detail
-
     try:
+        # Doğrudan ana iş parçacığında bağlantı fonksiyonunu çağır (Thread yok!)
         ok, detail = connect_to_mt5(account_config, timeout_sec=timeout)
 
-        # Eğer hata mesajında zaman aşımı belirtisi varsa is_timeout=True döndür
         is_timeout = False
+        # C-API'den dönen hatalarda "timeout" veya spesifik IPC (-10005) kodları varsa bunu yakala
         if (
             not ok
             and detail
-            and ("Timeout" in detail or "-10005" in detail or "-10003" in detail)
+            and (
+                "Timeout" in detail
+                or "-10005" in str(detail)
+                or "-10003" in str(detail)
+            )
         ):
             is_timeout = True
             safe_log(

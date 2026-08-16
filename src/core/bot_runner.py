@@ -118,6 +118,14 @@ def main():
         pass
 
     # 5. SADECE bu hesaba özel MT5 Terminaline bağlan
+    # Eski serbest logları bir kereye mahsus hesap klasörüne taşı
+    try:
+        from src.utils.paths import migrate_orphan_logs
+
+        migrate_orphan_logs(account_id)
+    except Exception:
+        pass
+
     print(f"[{account_id}] MT5 Terminaline bağlanılıyor...")
     # 🌟 ZAMAN AŞIMI KORUMASI: MT5 açılamazsa alt süreç de sessizce asılı kalmasın!
     # 🌟 timeout=120sn: mt5.initialize iç timeout'u (120sn) ile eşleşir, ilk bağlantı sembol indirimi için yeterli

@@ -65,7 +65,30 @@ def get_account_log_dir(account_id: str) -> str:
     """Her hesabın kendine ait log klasörünü oluşturur (Örn: logs/7942034)"""
     safe = safe_account_id(account_id)
     path = os.path.join(LOGS_DIR, safe)
-    return _ensure_dir(path)
+    _ensure_dir(path)
+    return path
+
+
+def migrate_orphan_logs(account_id: str):
+    """
+    Sadece sistem ilk açıldığında (startup) bir kez çalışır.
+    Ana logs/ klasöründe serbest duran ve bu hesaba ait olan eski log/json
+    dosyalarını ilgili hesap klasörünün içine güvenle taşır.
+    """
+    safe = safe_account_id(account_id)
+    target_dir = get_account_log_dir(safe)
+
+    if os.path.exists(LOGS_DIR):
+        try:
+            for file_name in os.listdir(LOGS_DIR):
+                file_path = os.path.join(LOGS_DIR, file_name)
+                # Sadece dosya olan ve adında hesap ID'si geçenleri hedef al (örnek: err_234234.log)
+                if os.path.isfile(file_path) and safe in file_name:
+                    dest_path = os.path.join(target_dir, file_name)
+                    if not os.path.exists(dest_path):
+                        os.replace(file_path, dest_path)
+        except Exception:
+            pass
 
 
 def get_err_log_path(account_id: str) -> str:
