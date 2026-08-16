@@ -152,10 +152,12 @@ def get_local_ip():
 # ==========================================
 @st.dialog("🔌 MT5 Bağlantı Asistanı")
 def show_mt5_connect_dialog(account_info, acc_id):
-    st.info("MetaTrader 5 terminali ile iletişim kuruluyor...")
-    with st.spinner("Bağlantı test ediliyor (Zaman aşımı: 5sn)..."):
+    st.info("MetaTrader 5 terminali açılıyor ve giriş yapılıyor...")
+    with st.spinner(
+        "Otomatik giriş tamamlanıyor (Lütfen bekleyin, Zaman aşımı: 30sn)..."
+    ):
         connection_success, connection_timed_out = connect_to_mt5_with_timeout(
-            account_info, timeout=5
+            account_info, timeout=30
         )
 
     if connection_success:
@@ -183,6 +185,7 @@ def show_mt5_connect_dialog(account_info, acc_id):
             st.rerun()
         if col2.button("❌ İptal", use_container_width=True):
             st.rerun()
+
 
 def get_live_metrics_from_file(account_id):
     """Liest die aktuellsten Metriken des Subprozesses aus der JSON-Datei."""
