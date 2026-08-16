@@ -59,7 +59,7 @@ def get_live_metrics():
         "current_price": 0.0,
         "algo_trading_error": False,
         "remote_paused": REMOTE_PAUSED,
-        "mt5_connected": False,
+        "mt5_connected": True,
         "connection_lost": CONNECTION_LOST,
         "market_open": is_market_open(),
     }
@@ -197,6 +197,7 @@ except ImportError:
         def terminal_info(self):
             class TerminalInfo:
                 trade_allowed = True
+                connected = True
 
             return TerminalInfo()
 
