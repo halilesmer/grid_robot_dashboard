@@ -77,6 +77,9 @@ def confirm_stop_motor_dialog(account_id, on_stop_func):
     col1, col2 = st.columns([1, 1])
     if col1.button("🟡 Evet, Bağlantıyı Kes", width="stretch"):
         on_stop_func(account_id)
+        cleanup_key = f"bot_started_at_{account_id}"
+        if cleanup_key in st.session_state:
+            del st.session_state[cleanup_key]
         st.rerun()
     if col2.button("❌ İptal", width="stretch"):
         st.rerun()

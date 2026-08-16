@@ -107,7 +107,17 @@ def main():
     else:
         import src.core.model_3 as bot_engine
 
-    # 4. SADECE bu hesaba özel MT5 Terminaline bağlan
+    # 4. Eski (önceki çalışmadan kalma) metrik dosyasını temizle.
+    #    Bayat startup_error veya mt5_connected=False verisi yeni bağlantıyı
+    #    yanıltmasın diye dosyayı baştan sıfırlıyoruz.
+    try:
+        metrics_file = get_metrics_path(account_id)
+        if os.path.exists(metrics_file):
+            os.remove(metrics_file)
+    except Exception:
+        pass
+
+    # 5. SADECE bu hesaba özel MT5 Terminaline bağlan
     print(f"[{account_id}] MT5 Terminaline bağlanılıyor...")
     # 🌟 ZAMAN AŞIMI KORUMASI: MT5 açılamazsa alt süreç de sessizce asılı kalmasın!
     # 🌟 timeout=120sn: mt5.initialize iç timeout'u (120sn) ile eşleşir, ilk bağlantı sembol indirimi için yeterli
@@ -153,6 +163,30 @@ def main():
         sys.exit(1)
 
     print(f"[{account_id}] MT5 Bağlantısı Başarılı! Robot döngüsü başlıyor...")
+
+    # 🌟 Bağlantı başarılı olur olmaz dashboard'a hemen bildir.
+    #    Metrik dosyasına mt5_connected=True yazarak "Bağlanıyor..." mesajının
+    #    hızlıca geçmesini ve yeşil "Bağlandı" durumuna dönülmesini sağlar.
+    try:
+        metrics_file = get_metrics_path(account_id)
+        tmp_metrics_file = metrics_file + ".tmp"
+        with open(tmp_metrics_file, "w", encoding="utf-8") as f:
+            json.dump(
+                {
+                    "profit": 0.0,
+                    "open_positions": 0,
+                    "pending_orders": 0,
+                    "current_price": 0.0,
+                    "algo_trading_error": False,
+                    "remote_paused": False,
+                    "mt5_connected": True,
+                    "startup_error": None,
+                },
+                f,
+            )
+        os.replace(tmp_metrics_file, metrics_file)
+    except Exception:
+        pass
 
     # 🚨 ESKİ PANİK MANTIĞI KALDIRILDI:
     #   Başlangıçta cancel_all_pending_orders(mt5) çağrısı artık YOK.

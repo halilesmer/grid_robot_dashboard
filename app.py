@@ -361,30 +361,57 @@ if live_data.get("algo_trading_error", False):
 
 # 🔴 MT5 BAĞLANTISI KOPTU/BULUNAMADI UYARISI (Subprocess'ten gelen canlı durum)
 if live_data.get("startup_error"):
-    st.error(
-        f"🚨 **MT5 BAĞLANTI HATASI:** {live_data.get('startup_error')}",
-        icon="🚫",
-    )
+    c_err, c_empty = st.columns([0.85, 0.15])
+    with c_err:
+        st.error(
+            f"🚨 **MT5 BAĞLANTI HATASI:** {live_data.get('startup_error')}",
+            icon="🚫",
+        )
+    with c_empty:
+        if st.button("🔄 Tekrar Bağlan", key=f"retry_from_error_{account_id}", use_container_width=True):
+            st.session_state[f"motor_toggle_{account_id}"] = True
+            st.rerun()
 elif account_is_running and not live_data.get("mt5_connected", False):
     bot_started_at = st.session_state.get(f"bot_started_at_{account_id}")
-    bot_just_started = bot_started_at and (time.time() - bot_started_at) < 130
+    bot_just_started = bot_started_at and (time.time() - bot_started_at) < 90
     elapsed_since_start = int(time.time() - bot_started_at) if bot_started_at else 0
 
     if bot_just_started:
-        st.info(
-            f"⏳ **Bağlanıyor...** Subprocess {elapsed_since_start} saniye önce başlatıldı, "
-            "MT5 bağlantısı kuruluyor. İlk bağlantı sembol listesi indirimi nedeniyle 1-2 dakika sürebilir. "
-            "Lütfen bekleyin...",
-            icon="⏳",
-        )
+        ci_col, cb_col = st.columns([0.85, 0.15])
+        with ci_col:
+            st.info(
+                f"⏳ **Bağlanıyor...** Subprocess {elapsed_since_start} saniye önce başlatıldı, "
+                "MT5 bağlantısı kuruluyor. İlk bağlantı sembol listesi indirimi nedeniyle 1-2 dakika sürebilir. "
+                "Lütfen bekleyin...",
+                icon="⏳",
+            )
+        with cb_col:
+            if st.button("❌ İptal", key=f"cancel_connect_{account_id}", use_container_width=True):
+                try:
+                    stop_bot_process(account_id)
+                except Exception:
+                    pass
+                if f"bot_started_at_{account_id}" in st.session_state:
+                    del st.session_state[f"bot_started_at_{account_id}"]
+                st.toast("🛑 Bağlantı denemesi iptal edildi.", icon="⏹️")
+                st.rerun()
     else:
-        st.error(
-            "🚨 **KRİTİK HATA:** MetaTrader 5 ile bağlantı KOPTU! "
-            "Robot çalışıyor ama MT5'e ulaşamıyor. "
-            "MT5 terminalinin açık ve ağ bağlantınızın aktif olduğunu kontrol edin. "
-            "Bağlantı geri gelince robot otomatik olarak devam edecek.",
-            icon="🚫",
-        )
+        ce_col, cs_col = st.columns([0.85, 0.15])
+        with ce_col:
+            st.error(
+                "🚨 **KRİTİK HATA:** MetaTrader 5 ile bağlantı KOPTU! "
+                "Robot çalışıyor ama MT5'e ulaşamıyor. "
+                "MT5 terminalinin açık ve ağ bağlantınızın aktif olduğunu kontrol edin. "
+                "Bağlantı geri gelince robot otomatik olarak devam edecek.",
+                icon="🚫",
+            )
+        with cs_col:
+            if st.button("🛑 Durdur", key=f"stop_disconnected_{account_id}", use_container_width=True):
+                stop_bot_process(account_id)
+                if f"bot_started_at_{account_id}" in st.session_state:
+                    del st.session_state[f"bot_started_at_{account_id}"]
+                st.toast("🛑 Robot durduruldu.", icon="⏹️")
+                st.rerun()
 
 
 # 📡 Mobil MT5'ten (Sinyal Emri ile) uzaktan durduruldu mu?

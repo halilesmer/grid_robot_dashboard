@@ -1275,63 +1275,31 @@ def run_startup_checks():
     log_message("=" * 60)
 
     # ==============================================================
-    # 🌟 YENİ: ROBOTUN (SUBPROCESS) BAĞIMSIZ OTO-LOGIN İŞLEMİ
+    # 🌟 GÜNCELLEME: MT5 BAĞLANTISI ZATEN bot_runner.py TARAFINDAN KURULDU.
+    # İkinci kez initialize()/login() yapmak IPC çakışmasına yol açar.
+    # Bunun yerine sadece mevcut bağlantının canlı olduğunu doğrula.
     # ==============================================================
     if not IS_MAC_TEST_MODE:
         account_id = os.environ.get("ACTIVE_ACCOUNT_ID", "default")
-        acc_config = None
-
-        # 1. Hesap bilgilerini configs/accounts.json dosyasından bul
-        try:
-            accounts_path = os.path.join(project_root, "configs", "accounts.json")
-            with open(accounts_path, "r", encoding="utf-8") as f:
-                accounts_data = json.load(f)
-                if isinstance(accounts_data, list):
-                    account_list = accounts_data
-                else:
-                    account_list = accounts_data.get("accounts", [])
-                for acc in account_list:
-                    if str(acc.get("login")) == account_id:
-                        acc_config = acc
-                        break
-        except Exception as e:
-            log_message(f"Hesap ayarları okunamadı: {e}", "ERROR")
-
-        # 2. Arka plan robotu için gerçek ve bağımsız login işlemini yap
-        if acc_config:
-            mt5_path = acc_config.get("mt5_path")
-            raw_login = acc_config.get("login")
-            password = str(acc_config.get("password", ""))
-            server = str(acc_config.get("server", ""))
-
-            try:
-                login_id = int(raw_login)
-                init_kwargs = {"timeout": 60000, "portable": True}
-                if mt5_path and os.path.exists(mt5_path):
-                    init_kwargs["path"] = mt5_path
-
-                init_kwargs.update(
-                    {"login": login_id, "password": password, "server": server}
-                )
-
-                if mt5.initialize(**init_kwargs):
-                    if mt5.login(login=login_id, password=password, server=server):
-                        log_message(
-                            f"✅ Robot MT5'e BAĞIMSIZ olarak bağlandı ve giriş yaptı (Hesap: {login_id})"
-                        )
-                        time.sleep(1.0)  # Senkronizasyon (fiyatların inmesi) için bekle
-                    else:
-                        log_message(
-                            f"🔴 Robot oto-login olamadı! Hata: {mt5.last_error()}",
-                            "ERROR",
-                        )
-                else:
-                    log_message(
-                        f"🔴 Robot MT5 terminalini başlatamadı! Hata: {mt5.last_error()}",
-                        "ERROR",
-                    )
-            except ValueError:
-                log_message("🔴 Oto-Login Hatası: Hesap numarası geçersiz.", "ERROR")
+        term_info = mt5.terminal_info()
+        if term_info is None or not getattr(term_info, "connected", False):
+            log_message(
+                "🔴 MT5 bağlantısı koptu! Terminal bilgisi alınamadı.",
+                "ERROR",
+            )
+            mt5.shutdown()
+            return False
+        account_info = mt5.account_info()
+        if account_info is not None:
+            log_message(
+                f"✅ MT5 bağlantısı canlı doğrulandı (Hesap: {account_info.login}, "
+                f"Sunucu: {account_info.server})"
+            )
+        else:
+            log_message(
+                "⚠️ Hesap bilgisi alınamadı ama terminal bağlı. Devam ediliyor...",
+                "WARN",
+            )
 
     SYMBOL_INFO = mt5.symbol_info(SYMBOL)
     if SYMBOL_INFO is None or not SYMBOL_INFO.visible:
