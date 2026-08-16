@@ -68,10 +68,11 @@ def get_live_metrics():
         return metrics
 
     terminal_info = mt5.terminal_info()
-    if terminal_info is None:
-        # 🔴 MT5'e ulaşılamıyor! (Terminal kapalı veya ağ bağlantısı kopuk)
+    if terminal_info is None or not getattr(terminal_info, "connected", False):
+        # 🔴 MT5'e ulaşılamıyor VEYA Broker/Sunucu bağlantısı koptu!
         CONNECTION_LOST = True
         metrics["mt5_connected"] = False
+        metrics["market_open"] = False
         return metrics
 
     # Bağlantı geri geldi
@@ -317,6 +318,10 @@ def is_market_open():
     # Mac simülatörü çalışıyorsa (veri akmayacağı için) piyasayı açık kabul et
     if IS_MAC_TEST_MODE:
         return True
+
+    term_info = mt5.terminal_info()
+    if term_info is None or not getattr(term_info, "connected", False):
+        return False
 
     info = mt5.symbol_info(SYMBOL)
     if info is None or getattr(info, "trade_mode", 0) != 4:
@@ -1266,6 +1271,60 @@ def run_startup_checks():
     log_message("USOUSD Çift Yönlü Grid Robot v3.0 (MODEL 2) Baslatiliyor...")
     log_message("=" * 60)
 
+    # ==============================================================
+    # 🌟 YENİ: ROBOTUN (SUBPROCESS) BAĞIMSIZ OTO-LOGIN İŞLEMİ
+    # ==============================================================
+    if not IS_MAC_TEST_MODE:
+        account_id = os.environ.get("ACTIVE_ACCOUNT_ID", "default")
+        acc_config = None
+
+        # 1. Hesap bilgilerini configs/accounts.json dosyasından bul
+        try:
+            with open("configs/accounts.json", "r", encoding="utf-8") as f:
+                accounts = json.load(f)
+                for acc in accounts:
+                    if str(acc.get("login")) == account_id:
+                        acc_config = acc
+                        break
+        except Exception as e:
+            log_message(f"Hesap ayarları okunamadı: {e}", "ERROR")
+
+        # 2. Arka plan robotu için gerçek ve bağımsız login işlemini yap
+        if acc_config:
+            mt5_path = acc_config.get("mt5_path")
+            raw_login = acc_config.get("login")
+            password = str(acc_config.get("password", ""))
+            server = str(acc_config.get("server", ""))
+
+            try:
+                login_id = int(raw_login)
+                init_kwargs = {"timeout": 60000, "portable": True}
+                if mt5_path and os.path.exists(mt5_path):
+                    init_kwargs["path"] = mt5_path
+
+                init_kwargs.update(
+                    {"login": login_id, "password": password, "server": server}
+                )
+
+                if mt5.initialize(**init_kwargs):
+                    if mt5.login(login=login_id, password=password, server=server):
+                        log_message(
+                            f"✅ Robot MT5'e BAĞIMSIZ olarak bağlandı ve giriş yaptı (Hesap: {login_id})"
+                        )
+                        time.sleep(1.0)  # Senkronizasyon (fiyatların inmesi) için bekle
+                    else:
+                        log_message(
+                            f"🔴 Robot oto-login olamadı! Hata: {mt5.last_error()}",
+                            "ERROR",
+                        )
+                else:
+                    log_message(
+                        f"🔴 Robot MT5 terminalini başlatamadı! Hata: {mt5.last_error()}",
+                        "ERROR",
+                    )
+            except ValueError:
+                log_message("🔴 Oto-Login Hatası: Hesap numarası geçersiz.", "ERROR")
+
     SYMBOL_INFO = mt5.symbol_info(SYMBOL)
     if SYMBOL_INFO is None or not SYMBOL_INFO.visible:
         # 🌟 İŞLEM ÖNCESİ SEMBOL (Pre-Flight) KONTROLÜ
@@ -1364,13 +1423,19 @@ def main_loop():
                 log_message(f"Uzaktan komut okuması başarısız: {e}", "ERROR")
 
             term_info = mt5.terminal_info()
-            if term_info is None or not term_info.trade_allowed:
-                if term_info is None and not CONNECTION_LOST:
+            if (
+                term_info is None
+                or not getattr(term_info, "connected", False)
+                or not getattr(term_info, "trade_allowed", False)
+            ):
+                if (
+                    term_info is None or not getattr(term_info, "connected", False)
+                ) and not CONNECTION_LOST:
                     # 🚨 MT5 ile BAĞLANTI KOPTU — arayüze bildir ve logla
                     CONNECTION_LOST = True
                     log_message(
                         "🚨 KRİTİK: MT5 BAĞLANTISI KOPTU! Terminal kapatıldı veya "
-                        "ağ/internet bağlantısı yok. Bağlantı geri gelene kadar işlem yapılmayacak.",
+                        "Broker sunucusuna bağlantı yok. Bağlantı geri gelene kadar işlem yapılmayacak.",
                         "ERROR",
                     )
                 time.sleep(10)
