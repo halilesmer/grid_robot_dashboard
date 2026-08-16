@@ -127,13 +127,23 @@ def account_management_dialog(edit_acc=None):
                     def_term_idx = idx
                     break
 
-        selected_terminal = st.selectbox(
-            "MT5 Yolu Seçimi *",
-            terminal_options,
-            index=def_term_idx,
-            help="Listeden kurulu bir MT5 seçebilir veya özel bir adres girebilirsiniz.",
-            key=f"term_sel{k_suf}",
-        )
+        t_col1, t_col2 = st.columns([0.85, 0.15], vertical_alignment="bottom")
+        with t_col1:
+            selected_terminal = st.selectbox(
+                "MT5 Yolu Seçimi *",
+                terminal_options,
+                index=def_term_idx,
+                help="Listeden kurulu bir MT5 seçebilir veya özel bir adres girebilirsiniz.",
+                key=f"term_sel{k_suf}",
+            )
+        with t_col2:
+            if st.button(
+                "🔄",
+                key=f"rescan_{k_suf}",
+                help="Listeyi Yenile (Kurulu terminalleri tekrar tarar)",
+            ):
+                get_installed_mt5_terminals.clear()
+                st.rerun()
 
         if "Farklı Bir Yol" in selected_terminal:
             new_mt5_path = st.text_input(
