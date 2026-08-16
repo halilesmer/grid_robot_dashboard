@@ -230,10 +230,6 @@ def get_live_metrics_from_file(account_id):
 # ==========================================
 # 1. STREAMLIT CONFIG & CSS
 # ==========================================
-st.sidebar.markdown("---")
-if st.sidebar.button("🔌 Sistemi Tamamen Kapat", use_container_width=True):
-    confirm_system_shutdown_dialog()
-
 apply_custom_css()
 
 # ==========================================
@@ -274,6 +270,13 @@ with header_col2:
         if st.button("🔄 Güncellemeleri Denetle", use_container_width=True):
             target_branch = "master" if env == "LIVE" else "test"
             show_update_dialog(env, target_branch)
+
+        st.divider()
+
+        if st.button(
+            "🔌 Sistemi Tamamen Kapat", type="primary", use_container_width=True
+        ):
+            confirm_system_shutdown_dialog()
 
 if "update_success_msg" in st.session_state:
     st.toast("✅ Uygulama başarıyla güncellendi!", icon="🚀")
