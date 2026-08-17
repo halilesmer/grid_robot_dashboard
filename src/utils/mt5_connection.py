@@ -44,8 +44,10 @@ def connect_to_mt5(account_config, timeout_sec=60):
         return False, "[CONFIG] Bağlanılacak hesap seçilmedi veya hesap bilgisi eksik."
 
     if not MT5_AVAILABLE or platform.system() != "Windows":
+        import sys
+
         safe_log(
-            "💻 Mac Ortamı Tespit Edildi: MT5 bağlantısı simüle ediliyor.",
+            f"⚠️ UYARI: MT5 bağlantısı simüle ediliyor! (MT5 kurulu değil veya ortam Windows değil) | Aktif Python Yolu: {sys.executable}",
             type="warning",
         )
         return True, None
