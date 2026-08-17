@@ -202,6 +202,7 @@ except ImportError:
         def terminal_info(self):
             class TerminalInfo:
                 trade_allowed = True
+                connected = True
 
             return TerminalInfo()
 

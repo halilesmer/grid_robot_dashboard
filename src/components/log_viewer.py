@@ -54,8 +54,8 @@ def get_recent_logs(account_id: str):
         return f"[HATA] Loglar okunamadı: {e}"
 
 
-def get_latest_mt5_log():
-    """MT5'in kendi orijinal günlük sistem logunu bulur ve okur."""
+def get_latest_mt5_log(account_id: str):
+    """MT5'in kendi orijinal günlük sistem logunu bulur ve hesaba (login) göre okur."""
     mt5_log_dir = os.path.expanduser(
         "~\\AppData\\Roaming\\MetaQuotes\\Terminal\\*\\Logs"
     )
@@ -64,11 +64,29 @@ def get_latest_mt5_log():
     if not log_files:
         return "Windows/MT5 orijinal log dosyası henüz bulunamadı."
 
-    latest_file = max(log_files, key=os.path.getmtime)
+    # Tüm log dosyalarını tarayarak, içinde account_id geçeni bul
+    # (En güncelden eskiye doğru sıralı)
+    log_files.sort(key=os.path.getmtime, reverse=True)
+
+    target_log_file = None
+    for file_path in log_files:
+        try:
+            # MT5 logları UTF-16 formatında tutar
+            with open(file_path, "r", encoding="utf-16", errors="ignore") as f:
+                # MT5 loglarında genellikle ilk birkaç satırda "login" veya "Account" geçer
+                # veya hesap işlemlerini logladığında account_id barındırır.
+                content = f.read()
+                if account_id in content:
+                    target_log_file = file_path
+                    break
+        except Exception:
+            continue
+
+    if not target_log_file:
+        return f"Orijinal MT5 loglarında {account_id} numaralı hesap ile eşleşen bir kayıt bulunamadı (Loglar karışmış olabilir)."
 
     try:
-        # MT5 logları UTF-16 formatında tutar
-        with open(latest_file, "r", encoding="utf-16", errors="ignore") as f:
+        with open(target_log_file, "r", encoding="utf-16", errors="ignore") as f:
             lines = deque(f, maxlen=15)
             return "".join(lines)
     except Exception as e:
@@ -95,6 +113,6 @@ def render_log_viewer(account_id: str = "default"):
         st.caption(
             "MetaTrader 5 terminalinin arka planda ürettiği orijinal sistem kayıtları."
         )
-        mt5_logs = get_latest_mt5_log()
+        mt5_logs = get_latest_mt5_log(account_id)
         st.code(mt5_logs, language="bash")
     stage("Frag: MT5 log okuma")
