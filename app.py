@@ -71,7 +71,6 @@ from src.utils.paths import get_metrics_path, get_sim_price_path, get_ui_state_p
 from src.ui.pwa_installer import inject_pwa_code
 from src.utils.self_updater import (
     execute_git_pull,
-    hard_restart_server,
     check_for_updates,
 )
 

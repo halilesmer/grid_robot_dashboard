@@ -201,32 +201,37 @@ def stop_bot_process(account_id: str) -> bool:
     🚀 PHASE 4: MT5'e bağlanıp emir silme / pozisyon kapatma mantığı KALDIRILDI.
     İşlemler broker'da olduğu gibi kalır; bot kapatılır, arkasında iz bırakılmaz.
     """
-    pid = _read_pid(account_id)
+    killed_any = False
 
-    # Güvenlik: Sadece GERÇEKTEN bu hesabın bot_runner sürecini öldür.
-    # Bayat PID dosyası başka bir sürece verilmişse ona dokunma.
-    if pid is not None and _is_our_runner(pid, account_id):
+    # Keskin Nişancı Mantığı: Sadece PID dosyasına güvenme, işletim sistemindeki tüm süreçleri tara!
+    # Böylece diğer Python uygulamaları (veya başka hesapların robotları) asla zarar görmez.
+    for proc in psutil.process_iter(["pid", "name", "cmdline"]):
         try:
-            if os.name == "nt":
-                # Windows işletim sistemi ise Taskkill ile tüm alt döngüleri sonlandır
-                subprocess.call(
-                    ["taskkill", "/F", "/T", "/PID", str(pid)],
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                )
-            else:
-                # Mac/Linux sistemleri için
-                process = psutil.Process(pid)
-                process.terminate()
-                try:
-                    process.wait(timeout=3)
-                except psutil.TimeoutExpired:
-                    process.kill()
+            cmdline = proc.info.get("cmdline") or []
+            cmdline_str = " ".join(cmdline)
 
-            # Subprocess'in gerçekten kapanması için işletim sistemine 1 saniye nefes payı ver
-            time.sleep(1.0)
-        except Exception as e:
-            st.error(f"⚠️ Robot durdurulurken pürüz çıktı: {str(e)}")
+            # SADECE bot_runner.py olan ve spesifik ACCOUNT_ID barındıran süreci avla
+            if "bot_runner.py" in cmdline_str and str(account_id) in cmdline_str:
+                if os.name == "nt":
+                    subprocess.call(
+                        ["taskkill", "/F", "/T", "/PID", str(proc.info["pid"])],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                    )
+                else:
+                    proc.terminate()
+                    try:
+                        proc.wait(timeout=3)
+                    except psutil.TimeoutExpired:
+                        proc.kill()
+
+                killed_any = True
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            continue
+
+    if killed_any:
+        # Subprocess'in gerçekten kapanması için işletim sistemine 1 saniye nefes payı ver
+        time.sleep(1.0)
 
     self_cleanup(account_id)
     return True
