@@ -264,7 +264,6 @@ def connect_to_mt5(account_config, timeout_sec=60):
 
     return True, None
 
-
 def shutdown_mt5():
     """MT5 bağlantı oturumunu serbest bırakır.
 
