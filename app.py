@@ -62,6 +62,7 @@ from src.utils.mt5_connection import (
 from src.components.header import render_main_title
 from src.components.settings_panel import render_settings_panel
 from src.components.log_viewer import render_log_viewer
+from src.components.metrics import render_global_metrics
 from src.styles.custom_css import apply_custom_css
 from src.utils.config import load_settings, save_settings
 
@@ -328,6 +329,13 @@ current_settings = load_settings("Model 2")
 # Dosya her zaman okunur: Başlangıç hatası (startup_error) afişi buradan beslenir.
 live_data = get_live_metrics_from_file(account_id)
 stage("Ayarlar + metrik yükleme")
+
+# 🌟 GÖRSEL ALARM KÖPRÜSÜ: Metrikleri ve Kritik Alarmları Ekrana Bas
+render_global_metrics(
+    profit=live_data.get("profit", 0.0),
+    current_price=live_data.get("current_price", 0.0),
+    metrics_data=live_data,
+)
 
 # ==========================================
 # PİYASA ROZETİ VE CANLILIK GÖSTERGESİ (HEARTBEAT)

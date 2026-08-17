@@ -36,6 +36,9 @@ SIMULATED_PRICE = 0.0
 # 🌟 YENİ: MT5 bağlantı durumu izleyici (Arayüze "bağlantı koptu" bilgisini iletir)
 CONNECTION_LOST = False
 
+# 🌟 Devre Kesici İçin Hata Takip Sayacı
+CONSECUTIVE_ERRORS = {}
+
 # 📡 Mobil MT5 Uzaktan Kumanda (Sinyal Emri) Değişkenleri
 REMOTE_PAUSED = False  # True ise motor uzaktan durdurulmuştur (ağ örmez)
 REMOTE_COMMAND_PREFIX = "GRID:"  # Emir yorumu bu önekle başlamalı (masaüstü MT5)
@@ -526,16 +529,14 @@ def send_pending_order(
     if sl_price is not None and sl_price > 0:
         request["sl"] = sl_price
 
-    # 🌟 HATA YAKALAMA (Back-off): Emri gönder ve sonucu kontrol et
-    success = safe_send_order(mt5, request, log_message)
-    if not success:
-        # 🚨 DEVRE KESİCİ: Hata koduna bakılmaksızın (Sessiz Ret dahil) başarısızlığı say
-        global CONSECUTIVE_ERRORS
-        if "CONSECUTIVE_ERRORS" not in globals():
-            CONSECUTIVE_ERRORS = {}
+        # 🌟 HATA YAKALAMA (Back-off): Emri gönder ve sonucu kontrol et
+        success = safe_send_order(mt5, request, log_message)
+        if not success:
+            # 🚨 DEVRE KESİCİ: Hata koduna bakılmaksızın (Sessiz Ret dahil) başarısızlığı say
+            global CONSECUTIVE_ERRORS
 
-        # Hata sayacını artır
-        CONSECUTIVE_ERRORS[zone_idx] = CONSECUTIVE_ERRORS.get(zone_idx, 0) + 1
+            # Hata sayacını artır
+            CONSECUTIVE_ERRORS[zone_idx] = CONSECUTIVE_ERRORS.get(zone_idx, 0) + 1
 
         if CONSECUTIVE_ERRORS[zone_idx] >= 3:
             last_err_msg = TradeState.last_error_message if TradeState.last_error_message else "Bilinmeyen Hata"

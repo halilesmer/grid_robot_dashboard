@@ -1,4 +1,5 @@
 # src/utils/trade_utils.py
+import time
 
 
 class TradeState:
@@ -96,8 +97,6 @@ def safe_send_order(mt5_module, request, log_func=None):
 
         # 🌟 ADIM 2: CIFT DIKIS DOGRULAMA (POST-TRADE CHECK) - SESSIZ RET KORUMASI
         if request.get("action") == mt5_module.TRADE_ACTION_PENDING and result.order:
-            import time
-
             time.sleep(0.1)  # Broker sunucusuna yansimasi icin mini tolerans
             tahta_kontrol = mt5_module.orders_get(ticket=result.order)
             if not tahta_kontrol or len(tahta_kontrol) == 0:
