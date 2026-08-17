@@ -237,6 +237,13 @@ def main():
         bot_engine.main_loop()
     except KeyboardInterrupt:
         print(f"[{account_id}] Süreç dışarıdan durduruldu (Graceful Shutdown).")
+    except Exception as e:
+        import traceback
+
+        print(f"[{account_id}] KRİTİK HATA: Çekirdek döngü çöktü! Hata: {e}")
+        traceback.print_exc()
+        # Zombi spam döngüsünü kırmak ve diski korumak için 10 saniye fren yapıyoruz
+        bot_engine.time.sleep(10)
     finally:
         bot_engine.IS_RUNNING = False
         # 🧠 Kapanış anında son durumu MT5'ten çekip state dosyasına yaz (boş da olsa)

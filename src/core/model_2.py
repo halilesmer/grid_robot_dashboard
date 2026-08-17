@@ -4,7 +4,7 @@ import platform
 import json
 import os
 from pathlib import Path
-from src.utils.trade_utils import safe_send_order
+from src.utils.trade_utils import safe_send_order, TradeState
 from src.utils.config import get_settings_file
 
 # 🌟 YENİ: Merkezi yol yöneticisi
@@ -57,7 +57,9 @@ def get_live_metrics():
         "open_positions": 0,
         "pending_orders": 0,
         "current_price": 0.0,
-        "algo_trading_error": False,
+        "algo_trading_error": TradeState.algo_trading_disabled,
+        "order_rejected_alarm": bool(TradeState.last_error_message),
+        "last_error": TradeState.last_error_message,
         "remote_paused": REMOTE_PAUSED,
         "mt5_connected": True,
         "connection_lost": CONNECTION_LOST,
@@ -197,7 +199,6 @@ except ImportError:
         def terminal_info(self):
             class TerminalInfo:
                 trade_allowed = True
-                connected = True
 
             return TerminalInfo()
 
@@ -528,49 +529,44 @@ def send_pending_order(
     # 🌟 HATA YAKALAMA (Back-off): Emri gönder ve sonucu kontrol et
     success = safe_send_order(mt5, request, log_message)
     if not success:
-        # Eğer emir başarısız olduysa, MT5'in son hata kodunu kontrol et
-        last_error = mt5.last_error()
-        if last_error[0] in [
-            10018,
-            10013,
-        ]:  # 10018: Market Closed, 10013: Invalid Request
-            global CONSECUTIVE_ERRORS
-            if "CONSECUTIVE_ERRORS" not in globals():
-                CONSECUTIVE_ERRORS = {}
+        # 🚨 DEVRE KESİCİ: Hata koduna bakılmaksızın (Sessiz Ret dahil) başarısızlığı say
+        global CONSECUTIVE_ERRORS
+        if "CONSECUTIVE_ERRORS" not in globals():
+            CONSECUTIVE_ERRORS = {}
 
-            # Hata sayacını artır
-            CONSECUTIVE_ERRORS[zone_idx] = CONSECUTIVE_ERRORS.get(zone_idx, 0) + 1
+        # Hata sayacını artır
+        CONSECUTIVE_ERRORS[zone_idx] = CONSECUTIVE_ERRORS.get(zone_idx, 0) + 1
 
-            if CONSECUTIVE_ERRORS[zone_idx] >= 3:
-                log_message(
-                    f"🚨 DİKKAT: Bölge {zone_idx+1} için üst üste {CONSECUTIVE_ERRORS[zone_idx]} işlem reddedildi! (Hata: {last_error[0]}). Bölge güvenliğe alınıyor.",
-                    "ERROR",
-                )
+        if CONSECUTIVE_ERRORS[zone_idx] >= 3:
+            last_err_msg = TradeState.last_error_message if TradeState.last_error_message else "Bilinmeyen Hata"
+            log_message(
+                f"🚨 DİKKAT: Bölge {zone_idx+1} için üst üste {CONSECUTIVE_ERRORS[zone_idx]} işlem reddedildi! (Detay: {last_err_msg}). Bölge güvenliğe alınıyor.",
+                "ERROR",
+            )
+            # 🛑 Bölgeyi PAUSE (Bekleme) durumuna çek!
+            account_id = os.environ.get("ACTIVE_ACCOUNT_ID", "default")
+            states_file = get_ui_state_path(account_id)
+            try:
+                bg_states = {}
+                if os.path.exists(states_file):
+                    with open(states_file, "r", encoding="utf-8") as f:
+                        bg_states = json.load(f)
 
-                # 🛑 Bölgeyi PAUSE (Bekleme) durumuna çek!
-                account_id = os.environ.get("ACTIVE_ACCOUNT_ID", "default")
-                states_file = get_ui_state_path(account_id)
-                try:
-                    bg_states = {}
-                    if os.path.exists(states_file):
-                        with open(states_file, "r", encoding="utf-8") as f:
-                            bg_states = json.load(f)
+                bg_states[str(zone_idx)] = "PAUSE"
 
-                    bg_states[str(zone_idx)] = "PAUSE"
+                tmp_states_file = states_file + ".tmp"
+                with open(tmp_states_file, "w", encoding="utf-8") as f:
+                    json.dump(bg_states, f)
+                os.replace(tmp_states_file, states_file)
+            except Exception as e:
+                pass
 
-                    tmp_states_file = states_file + ".tmp"
-                    with open(tmp_states_file, "w", encoding="utf-8") as f:
-                        json.dump(bg_states, f)
-                    os.replace(tmp_states_file, states_file)
-                except Exception as e:
-                    pass
+            # Arayüz güncellensin diye global state'i de değiştir
+            global active_zones_state
+            active_zones_state[zone_idx] = "PAUSE"
 
-                # Arayüz güncellensin diye global state'i de değiştir
-                global active_zones_state
-                active_zones_state[zone_idx] = "PAUSE"
-
-                # Sayacı sıfırla ki arayüzden tekrar başlatıldığında hemen patlamasın
-                CONSECUTIVE_ERRORS[zone_idx] = 0
+            # Sayacı sıfırla ki arayüzden tekrar başlatıldığında hemen patlamasın
+            CONSECUTIVE_ERRORS[zone_idx] = 0
 
         return False
     else:
@@ -1385,6 +1381,9 @@ def main_loop():
 
     if not run_startup_checks():
         log_message("Baslangic kontrolleri basarisiz. Robot durduruluyor.", "ERROR")
+        time.sleep(
+            10
+        )  # 🌟 KÖK NEDEN ÇÖZÜMÜ: Başlangıç hatasında spam restart döngüsünü kıran fren!
         return
 
     log_message("Robot calismaya basladi. (Durdurmak icin Ctrl+C)")

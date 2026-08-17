@@ -83,14 +83,33 @@ def safe_send_order(mt5_module, request, log_func=None):
         if result.retcode != 10009:
             if result.retcode == 10027:
                 TradeState.algo_trading_disabled = True
-                TradeState.last_error_message = "Algo Trading im MT5 deaktiviert!"
+                TradeState.last_error_message = "Algo Trading kapali!"
+            else:
+                TradeState.last_error_message = f"Reddedildi: {result.retcode}"
             if log_func:
                 last_err = mt5_module.last_error()
                 log_func(
-                    f"❌ MT5 Emir Hatası! Kodu: {result.retcode}, Hata: {last_err}",
+                    f"❌ MT5 Emir Hatasi! Kodu: {result.retcode}, Hata: {last_err}",
                     "ERROR",
                 )
             return False
+
+        # 🌟 ADIM 2: CIFT DIKIS DOGRULAMA (POST-TRADE CHECK) - SESSIZ RET KORUMASI
+        if request.get("action") == mt5_module.TRADE_ACTION_PENDING and result.order:
+            import time
+
+            time.sleep(0.1)  # Broker sunucusuna yansimasi icin mini tolerans
+            tahta_kontrol = mt5_module.orders_get(ticket=result.order)
+            if not tahta_kontrol or len(tahta_kontrol) == 0:
+                TradeState.last_error_message = (
+                    "SESSIZ RET: Emir gonderildi ama Broker tahtadan sildi!"
+                )
+                if log_func:
+                    log_func(
+                        f"🚨 ALARM: Broker emri (Bilet: {result.order}) sessizce iptal etti!",
+                        "ERROR",
+                    )
+                return False
 
         # İşlem başarılıysa hatayı sıfırla
         TradeState.algo_trading_disabled = False
@@ -120,4 +139,3 @@ def close_position(mt5_module, position, symbol, log_func=None):
     if log_func:
         log_func(f"🛡️ Güvenlik Kuralı Engeli: {position.ticket} numaralı açık pozisyon robot tarafından kapatılamaz!", "WARN")
     return False
-
