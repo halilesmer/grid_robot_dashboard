@@ -42,6 +42,22 @@ def ensure_venv_and_requirements():
             check=True,
         )
 
+    # 3. YENİ: Windows ortamı için MetaTrader5 oto-onarım garantisi
+    if os.name == "nt":
+        try:
+            subprocess.run(
+                [str(venv_python), "-c", "import MetaTrader5"],
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        except subprocess.CalledProcessError:
+            print("📦 MetaTrader5 Windows için eksik, otomatik kuruluyor...")
+            subprocess.run(
+                [str(venv_python), "-m", "pip", "install", "MetaTrader5"],
+                check=True,
+            )
+
     return venv_python
 
 
