@@ -34,8 +34,10 @@ try:
     import MetaTrader5 as mt5
 
     MT5_AVAILABLE = True
-except ImportError:
+    MT5_IMPORT_ERROR = None
+except ImportError as e:
     MT5_AVAILABLE = False
+    MT5_IMPORT_ERROR = str(e)
 
 
 def connect_to_mt5(account_config, timeout_sec=60):
@@ -46,8 +48,11 @@ def connect_to_mt5(account_config, timeout_sec=60):
     if not MT5_AVAILABLE or platform.system() != "Windows":
         import sys
 
+        reason = (
+            MT5_IMPORT_ERROR if platform.system() == "Windows" else "Mac/Linux Ortamı"
+        )
         safe_log(
-            f"⚠️ UYARI: MT5 bağlantısı simüle ediliyor! (MT5 kurulu değil veya ortam Windows değil) | Aktif Python Yolu: {sys.executable}",
+            f"⚠️ UYARI: MT5 bağlantısı simüle ediliyor! Sebep: {reason} | Aktif Python Yolu: {sys.executable}",
             type="warning",
         )
         return True, None

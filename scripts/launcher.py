@@ -23,10 +23,14 @@ def ensure_venv_and_requirements():
 
     venv_python = VENV_DIR / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
 
-    # 2. Kütüphaneler yüklü mü? (Streamlit kontrolü)
+    # 2. Kütüphaneler yüklü mü? (Streamlit ve MT5 Oto-Onarım Kontrolü)
     try:
+        # Sadece Windows'ta MT5 kütüphanesini zorunlu kıl (Mac'te hata vermesin diye ayırdık)
+        check_cmd = (
+            "import streamlit, MetaTrader5" if os.name == "nt" else "import streamlit"
+        )
         subprocess.run(
-            [str(venv_python), "-c", "import streamlit"],
+            [str(venv_python), "-c", check_cmd],
             check=True,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
