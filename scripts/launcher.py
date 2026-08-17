@@ -23,11 +23,14 @@ def ensure_venv_and_requirements():
 
     venv_python = VENV_DIR / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
 
-    # 2. Kütüphaneler yüklü mü? (Streamlit ve MT5 Oto-Onarım Kontrolü)
+    is_windows = os.name == "nt"
+
+    # 2. Kütüphaneler yüklü mü?
     try:
-        # Sadece Windows'ta MT5 kütüphanesini zorunlu kıl (Mac'te hata vermesin diye ayırdık)
         check_cmd = (
-            "import streamlit, MetaTrader5" if os.name == "nt" else "import streamlit"
+            "import streamlit, pandas, ccxt, psutil, MetaTrader5"
+            if is_windows
+            else "import streamlit, pandas, ccxt, psutil"
         )
         subprocess.run(
             [str(venv_python), "-c", check_cmd],
@@ -37,26 +40,25 @@ def ensure_venv_and_requirements():
         )
     except subprocess.CalledProcessError:
         print("📦 Kütüphaneler yükleniyor (requirements.txt)...")
-        subprocess.run(
-            [str(venv_python), "-m", "pip", "install", "-r", str(REQUIREMENTS_FILE)],
-            check=True,
-        )
-
-    # 3. YENİ: Windows ortamı için MetaTrader5 oto-onarım garantisi
-    if os.name == "nt":
-        try:
+        if is_windows:
             subprocess.run(
-                [str(venv_python), "-c", "import MetaTrader5"],
-                check=True,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-        except subprocess.CalledProcessError:
-            print("📦 MetaTrader5 Windows için eksik, otomatik kuruluyor...")
-            subprocess.run(
-                [str(venv_python), "-m", "pip", "install", "MetaTrader5"],
+                [str(venv_python), "-m", "pip", "install", "-r", str(REQUIREMENTS_FILE)],
                 check=True,
             )
+        else:
+            # MetaTrader5 macOS'te kurulamaz, hatayı yakala ve diğerlerini kur
+            result = subprocess.run(
+                [str(venv_python), "-m", "pip", "install", "-r", str(REQUIREMENTS_FILE)],
+                capture_output=True,
+                text=True,
+            )
+            combined_output = (result.stderr or "") + (result.stdout or "")
+            if result.returncode != 0 and "MetaTrader5" in combined_output:
+                print("⚠️ MetaTrader5 macOS'te bulunamadı, diğer kütüphaneler kuruluyor...")
+                subprocess.run(
+                    [str(venv_python), "-m", "pip", "install", "streamlit", "pandas", "ccxt", "psutil"],
+                    check=True,
+                )
 
     return venv_python
 
