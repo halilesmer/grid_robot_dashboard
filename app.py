@@ -58,6 +58,7 @@ from src.components.dialogs import confirm_stop_motor_dialog
 from src.utils.mt5_connection import (
     connect_to_mt5_with_timeout,
     shutdown_mt5,
+    get_algo_status,
 )
 from src.components.header import render_main_title
 from src.components.settings_panel import render_settings_panel

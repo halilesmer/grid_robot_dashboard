@@ -93,8 +93,7 @@ def get_latest_mt5_log(account_id: str):
         return f"MT5 Log okuma hatası: {e}"
 
 
-@st.fragment(run_every=3)
-
+@st.fragment(run_every=10)
 def render_log_viewer(account_id: str = "default"):
     """Canlı Log Ekranı Bileşeni (Sekmeli Görünüm)"""
     st.subheader("📟 Sistem ve Terminal Logları")

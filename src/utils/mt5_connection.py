@@ -3,7 +3,6 @@
 import platform
 import time
 import os
-import threading  # 🌟 YENİ: Arayüzün kilitlenmemesi için zaman aşımlı bağlantı
 import shutil  # 🌟 YENİ EKLENDİ (Dosya kopyalamak için)
 import datetime  # 🌟 YENİ EKLENDİ (Tarih formatı için)
 
@@ -127,8 +126,8 @@ def connect_to_mt5(account_config, timeout_sec=60):
     # ==============================================================
     # 🌟 AŞAMA 1: OTO-LOGIN İLE BAŞLATMA (mt5.initialize)
     # ==============================================================
-    # PORTABLE=TRUE : Farklı Windows kullanıcıları (Admin vs Standart) arasındaki IPC ve AppData çakışmalarını önler!
-    init_kwargs = {"timeout": int(timeout_sec * 1000), "portable": True}
+    # PORTABLE mod kaldırıldı! Terminal artık AppData'daki kullanıcı ayarlarını (Algo Trading izni) tanıyacak.
+    init_kwargs = {"timeout": int(timeout_sec * 1000)}
 
     if mt5_path and os.path.exists(mt5_path):
         init_kwargs["path"] = mt5_path
