@@ -82,15 +82,21 @@ def safe_send_order(mt5_module, request, log_func=None):
 
         # 10009 = TRADE_RETCODE_DONE
         if result.retcode != 10009:
+            err_code = result.retcode
+            err_comment = getattr(result, "comment", "Terminal Yanıt Vermedi")
+
             if result.retcode == 10027:
                 TradeState.algo_trading_disabled = True
                 TradeState.last_error_message = "Algo Trading kapali!"
             else:
-                TradeState.last_error_message = f"Reddedildi: {result.retcode}"
+                TradeState.last_error_message = (
+                    f"Reddedildi: {err_code} - {err_comment}"
+                )
+
             if log_func:
-                last_err = mt5_module.last_error()
+                # Senin tam olarak istediğin formatta detaylı hata logu
                 log_func(
-                    f"❌ MT5 Emir Hatasi! Kodu: {result.retcode}, Hata: {last_err}",
+                    f"🔴 MT5 EMİR REDDİ ({err_code}): {err_comment} | Seviye Fiyatı: {request.get('price', 'Bilinmiyor')}",
                     "ERROR",
                 )
             return False
