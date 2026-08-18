@@ -1300,15 +1300,18 @@ def run_startup_checks():
                 "WARN",
             )
 
+    # 2. Aşama: Sembolü doğrudan senin inputundan alır ve MT5'e otomatik ekleme emri verir
+    mt5.symbol_select(SYMBOL, True)
+
     SYMBOL_INFO = mt5.symbol_info(SYMBOL)
     if SYMBOL_INFO is None or not SYMBOL_INFO.visible:
         # 🌟 İŞLEM ÖNCESİ SEMBOL (Pre-Flight) KONTROLÜ
         log_message(
-            f"🚨 HATA: Sembol ({SYMBOL}) bulunamadı veya aracı kurum tarafından bu hesapta (Piyasa İzlemi'nde) gizlenmiş!",
+            f"🚨 HATA: Sembol ({SYMBOL}) aracı kurum sunucusunda bulunamadı!",
             "ERROR",
         )
         log_message(
-            "Lütfen MT5'i açıp bu sembolün işlem görüp görmediğini kontrol edin.",
+            "Lütfen arayüze girdiğiniz sembol adının (örn: XTIUSD) brokerınızla birebir aynı olduğundan emin olun.",
             "ERROR",
         )
 
@@ -1380,6 +1383,9 @@ def run_startup_checks():
 
 def main_loop():
     global IS_RUNNING, INITIAL_CLEANUP_DONE, CONNECTION_LOST
+
+    # 1. Aşama: Motor uyanır uyanmaz, MT5 kontrollerinden önce senin inputunu (XTIUSD vb.) okur
+    load_dynamic_settings()
 
     if not run_startup_checks():
         log_message("Baslangic kontrolleri basarisiz. Robot durduruluyor.", "ERROR")

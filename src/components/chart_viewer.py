@@ -143,8 +143,14 @@ def render_chart(
     # ==========================================
     # TRADINGVIEW STİLİ GRAFİK AYARLARI
     # ==========================================
+    display_symbol = "USOUSD"
+    if current_settings.get("ZONES") and len(current_settings["ZONES"]) > 0:
+        display_symbol = str(
+            current_settings["ZONES"][0].get("symbol", "USOUSD")
+        ).upper()
+
     fig.add_annotation(
-        text="USOUSD 30",
+        text=f"{display_symbol} 30",
         xref="paper",
         yref="paper",
         x=0.5,
@@ -154,7 +160,7 @@ def render_chart(
         align="center",
     )
     fig.add_annotation(
-        text="Spot WTI Crude Oil",
+        text="Auto Grid Market",
         xref="paper",
         yref="paper",
         x=0.5,
