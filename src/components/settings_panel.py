@@ -8,7 +8,7 @@ import os
 from src.components.dialogs import confirm_clear_dialog, confirm_delete_zone_dialog
 
 # 🌟 YENİ: Merkezi yol (path) yöneticisini içeri aktarıyoruz
-from src.utils.paths import get_ui_state_path
+from src.utils.paths import get_ui_state_path, get_symbols_path
 
 @st.dialog("⚠️ Kaydedilmemiş Ayarlar")
 def confirm_start_with_changes_dialog(account_id, zone_id, idx):
@@ -69,26 +69,31 @@ def _default_zone():
 
 def _handle_zone_action(account_id: str, zone_id: str, idx: int, state: str):
     """Buton tıklamalarında UI'ı çökertmeden durumu güncelleyen Callback fonksiyonu."""
-    # Anlık UI hafızasını GÜVENLİ (ID bazlı) güncelle
     ui_state_key = f"ui_zone_states_{account_id}"
-    if ui_state_key in st.session_state:
-        st.session_state[ui_state_key][zone_id] = state
+    if ui_state_key not in st.session_state:
+        st.session_state[ui_state_key] = {}
 
-        # 🌟 RACE CONDITION KORUMASI: Dosyaya SADECE kullanıcı butona bastığında yaz
-        zones_session_key = f"auto_grid_zones_{account_id}"
-        if zones_session_key in st.session_state:
-            backend_states = {}
-            for i, z in enumerate(st.session_state[zones_session_key]):
-                backend_states[str(i)] = st.session_state[ui_state_key].get(z["id"], "CLEAR")
+    st.session_state[ui_state_key][zone_id] = state
 
-            try:
-                ui_file = get_ui_state_path(account_id)
-                tmp_ui_file = ui_file + ".tmp"
-                with open(tmp_ui_file, "w", encoding="utf-8") as f:
-                    json.dump(backend_states, f)
-                os.replace(tmp_ui_file, ui_file)
-            except Exception:
-                pass
+    # 🌟 RACE CONDITION KORUMASI: Dosyaya SADECE kullanıcı butona bastığında yaz
+    zones_session_key = f"auto_grid_zones_{account_id}"
+    if zones_session_key in st.session_state:
+        backend_states = {}
+        for i, z in enumerate(st.session_state[zones_session_key]):
+            z_id = z.get("id")
+            if z_id:
+                backend_states[str(i)] = st.session_state[ui_state_key].get(
+                    z_id, "CLEAR"
+                )
+
+        try:
+            ui_file = get_ui_state_path(account_id)
+            tmp_ui_file = ui_file + ".tmp"
+            with open(tmp_ui_file, "w", encoding="utf-8") as f:
+                json.dump(backend_states, f)
+            os.replace(tmp_ui_file, ui_file)
+        except Exception:
+            pass
 
 
 def _force_upper_symbol(key: str):
@@ -133,6 +138,16 @@ def render_auto_grid_settings(
                         )
                     elif saved_states.get(str(i)) in ("AUTO_CLEAR", "PAUSE", "START"):
                         st.session_state[ui_state_key][zone_id] = saved_states.get(str(i))
+        except Exception:
+            pass
+
+    # 🌟 YENİ: Otomatik Tamamlama (Autocomplete) için MT5 sembollerini diskten oku
+    available_symbols = []
+    sym_file = get_symbols_path(account_id)
+    if os.path.exists(sym_file):
+        try:
+            with open(sym_file, "r", encoding="utf-8") as f:
+                available_symbols = json.load(f)
         except Exception:
             pass
 
@@ -341,14 +356,32 @@ def render_auto_grid_settings(
             zc1, zc2, zc3, zc4 = st.columns(4)
             with zc1:
                 sym_key = f"sym_{zone_id}_{account_id}"
-                z_symbol = st.text_input(
-                    "Sembol",
-                    key=sym_key,
-                    value=str(zone.get("symbol", "USOUSD")).upper(),
-                    on_change=_force_upper_symbol,
-                    args=(sym_key,),
-                    help="Bu bölgenin çalışacağı parite.",
-                )
+                current_sym = str(zone.get("symbol", "USOUSD")).upper()
+
+                # Eğer robot arka planda listeyi indirmişse Selectbox (Arama), yoksa standart Text Input
+                if available_symbols:
+                    display_symbols = available_symbols.copy()
+                    # KORUMA: Arayüz çökmesin diye mevcut sembolü zorla listeye ekle
+                    if current_sym not in display_symbols:
+                        display_symbols.insert(0, current_sym)
+
+                    z_symbol = st.selectbox(
+                        "Sembol (Ara)",
+                        options=display_symbols,
+                        index=display_symbols.index(current_sym),
+                        key=sym_key,
+                        help="Broker'ınızın sunduğu semboller. Yazarak arayabilirsiniz.",
+                    )
+                    z_symbol = str(z_symbol).upper().strip()
+                else:
+                    z_symbol = st.text_input(
+                        "Sembol",
+                        key=sym_key,
+                        value=current_sym,
+                        on_change=_force_upper_symbol,
+                        args=(sym_key,),
+                        help="Bu bölgenin çalışacağı parite. (Robot MT5'e bağlandığı an akıllı listeye dönüşecektir.)",
+                    )
             with zc2:
                 opts = ["BUY", "SELL", "BOTH"]
                 cur_val = zone.get("order_type", "BUY")

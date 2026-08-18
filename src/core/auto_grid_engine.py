@@ -7,7 +7,12 @@ from src.utils.trade_utils import safe_send_order, TradeState
 from src.utils.config import get_settings_file
 
 # 🌟 YENİ: Merkezi yol yöneticisi
-from src.utils.paths import get_err_log_path, get_ui_state_path, get_metrics_path
+from src.utils.paths import (
+    get_err_log_path,
+    get_ui_state_path,
+    get_metrics_path,
+    get_symbols_path,
+)
 
 project_root = Path(__file__).parent.parent.parent
 
@@ -687,7 +692,8 @@ def check_remote_commands():
                         with open(states_file, "r", encoding="utf-8") as f:
                             bg_states = json.load(f)
 
-                    for i in range(len(ZONES)):
+                    target_count = len(ZONES) if ZONES else len(bg_states)
+                    for i in range(max(1, target_count)):
                         if bg_states.get(str(i)) != "CLEAR":
                             bg_states[str(i)] = "PAUSE"
 
@@ -1299,6 +1305,25 @@ def run_startup_checks():
                 "⚠️ Hesap bilgisi alınamadı ama terminal bağlı. Devam ediliyor...",
                 "WARN",
             )
+
+        # 🌟 YENİ: Bütün sembolleri MT5'ten çek ve arayüz (Autocomplete) için JSON'a kaydet
+        try:
+            if hasattr(mt5, "symbols_get"):
+                all_symbols = mt5.symbols_get()
+                if all_symbols:
+                    sym_list = [
+                        getattr(s, "name", str(s))
+                        for s in all_symbols
+                        if hasattr(s, "name")
+                    ]
+                    if sym_list:
+                        sym_file = get_symbols_path(account_id)
+                        tmp_sym = sym_file + ".tmp"
+                        with open(tmp_sym, "w", encoding="utf-8") as f:
+                            json.dump(sym_list, f)
+                        os.replace(tmp_sym, sym_file)
+        except Exception as e:
+            log_message(f"Sembol listesi güncellenemedi: {e}", "WARN")
 
     # 2. Aşama: Sembolü doğrudan senin inputundan alır ve MT5'e otomatik ekleme emri verir
     mt5.symbol_select(SYMBOL, True)
