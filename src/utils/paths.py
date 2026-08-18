@@ -39,13 +39,12 @@ def safe_account_id(account_id) -> str:
 # ══════════════════════════════════════════════════════════
 # 1. HESAP AYARLARI (configs/) — Sadece MT5 Login ID'ye bağlı
 # ══════════════════════════════════════════════════════════
-def get_settings_path(account_id: str, model_name: str = "Model 2") -> str:
-    """Örn: configs/settings_7946558_Model_2.json
-    Model adı korundu çünkü Grid'de Model 1/2/3 farklı şablonlara sahip.
+def get_settings_path(account_id: str, engine_name: str = "Auto Grid") -> str:
+    """Örn: configs/settings_7946558_Auto_Grid.json
     Dosya adında port veya makine adı YOK."""
-    safe_model = model_name.replace(" ", "_")
+    safe_engine = engine_name.replace(" ", "_")
     safe = safe_account_id(account_id)
-    return os.path.join(_ensure_configs_dir(), f"settings_{safe}_{safe_model}.json")
+    return os.path.join(_ensure_configs_dir(), f"settings_{safe}_{safe_engine}.json")
 
 
 # ══════════════════════════════════════════════════════════

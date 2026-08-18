@@ -2,8 +2,6 @@
 import sys
 import os
 import json
-import time
-import threading
 import io
 from pathlib import Path
 
@@ -65,17 +63,17 @@ def export_metrics_step(bot_engine, account_id):
 def main():
     # 1. Yöneticiden (bot_manager) gelen argümanları al
     if len(sys.argv) < 3:
-        print("Kritik Hata: account_id veya model_name argümanları eksik.")
+        print("Kritik Hata: account_id veya engine_name argümanları eksik.")
         sys.exit(1)
 
     account_id = sys.argv[1]
-    model_name = sys.argv[2]
+    engine_name = sys.argv[2]
 
     # Kilit Nokta: config.py'nin Streamlit olmadan da hangi hesapta olduğunu bilmesi için
     # İşletim Sistemi ortam değişkenlerine hesap ID'sini kazıyoruz!
     os.environ["ACTIVE_ACCOUNT_ID"] = account_id
 
-    print(f"[{account_id}] Isci Surec (Subprocess) baslatiliyor. Motor: {model_name}")
+    print(f"[{account_id}] Isci Surec (Subprocess) baslatiliyor. Motor: {engine_name}")
 
     # 2. Hesabı JSON'dan bul (Tam izolasyon)
     accounts_path = os.path.join(project_root, "configs", "accounts.json")
@@ -99,13 +97,12 @@ def main():
         print(f"Hata: {account_id} ID'li hesap accounts.json içinde bulunamadı.")
         sys.exit(1)
 
-    # 3. İstenen ticaret motorunu (model) yükle
-    if model_name == "Model 1":
-        import src.core.model_1 as bot_engine
-    elif model_name == "Model 2":
-        import src.core.model_2 as bot_engine
+    # 3. İstenen ticaret motorunu yükle
+    if engine_name == "Auto Grid":
+        import src.core.auto_grid_engine as bot_engine
     else:
-        import src.core.model_3 as bot_engine
+        print(f"Hata: Bilinmeyen motor ismi ({engine_name})")
+        sys.exit(1)
 
     # 4. Eski (önceki çalışmadan kalma) metrik dosyasını temizle.
     #    Bayat startup_error veya mt5_connected=False verisi yeni bağlantıyı
@@ -197,7 +194,6 @@ def main():
         pass
 
     # 🚨 ESKİ PANİK MANTIĞI KALDIRILDI:
-    #   Başlangıçta cancel_all_pending_orders(mt5) çağrısı artık YOK.
     #   Port değişimi / arayüz restart'ı / bilgisayar taşınması sonrası
     #   açık pozisyonlar ve bekleyen emirler ASLA kapatılmaz.
 

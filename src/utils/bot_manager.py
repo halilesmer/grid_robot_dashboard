@@ -127,7 +127,7 @@ def _detached_popen(cmd, stdout, stderr, env):
     )
 
 
-def start_bot_process(account_id: str, model_name: str) -> bool:
+def start_bot_process(account_id: str, engine_name: str = "Auto Grid") -> bool:
     """Belirli bir hesap için izole bir Subprocess (alt süreç) başlatır."""
     if is_bot_running(account_id):
         return True  # Zaten çalışıyor
@@ -146,7 +146,7 @@ def start_bot_process(account_id: str, model_name: str) -> bool:
 
         # Ayrı bir Python programı olarak botu tetikle. (Detach edilmiş süreç)
         process = _detached_popen(
-            [sys.executable, "-u", "src/core/bot_runner.py", account_id, model_name],
+            [sys.executable, "-u", "src/core/bot_runner.py", account_id, engine_name],
             stdout=log_file,
             stderr=subprocess.STDOUT,
             env=env,
@@ -235,13 +235,3 @@ def stop_bot_process(account_id: str) -> bool:
 
     self_cleanup(account_id)
     return True
-
-
-def stop_and_close_all(account_id: str) -> bool:
-    """
-    🔴 GÜVENLİK GÜNCELLEMESİ: Bu fonksiyon artık AÇIK POZİSYONLARI KAPATMAZ.
-    
-    Sadece bot sürecini durdurur. Açık pozisyonları kapatma yetkisi 
-    %100 manuel olarak kullanıcıya aittir.
-    """
-    return stop_bot_process(account_id)

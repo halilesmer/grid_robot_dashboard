@@ -26,13 +26,13 @@ def confirm_start_with_changes_dialog(account_id, zone_id, idx):
 
 def render_settings_panel(
     current_settings,
-    model_name="Model 2",
+    engine_name="Auto Grid",
     account_id="default",
     live_data=None,
     active_account=None,
     is_running=False,
 ):
-    return render_model_2_settings(
+    return render_auto_grid_settings(
         current_settings, account_id, live_data, active_account, is_running
     )
 
@@ -73,14 +73,14 @@ def _handle_zone_action(account_id: str, zone_id: str, idx: int, state: str):
     ui_state_key = f"ui_zone_states_{account_id}"
     if ui_state_key in st.session_state:
         st.session_state[ui_state_key][zone_id] = state
-        
+
         # 🌟 RACE CONDITION KORUMASI: Dosyaya SADECE kullanıcı butona bastığında yaz
-        zones_session_key = f"model2_zones_{account_id}"
+        zones_session_key = f"auto_grid_zones_{account_id}"
         if zones_session_key in st.session_state:
             backend_states = {}
             for i, z in enumerate(st.session_state[zones_session_key]):
                 backend_states[str(i)] = st.session_state[ui_state_key].get(z["id"], "CLEAR")
-            
+
             try:
                 ui_file = get_ui_state_path(account_id)
                 tmp_ui_file = ui_file + ".tmp"
@@ -97,10 +97,10 @@ def _force_upper_symbol(key: str):
         st.session_state[key] = str(st.session_state[key]).upper().strip()
 
 
-def render_model_2_settings(
+def render_auto_grid_settings(
     current_settings, account_id, live_data, active_account, is_running=False
 ):
-    zones_session_key = f"model2_zones_{account_id}"
+    zones_session_key = f"auto_grid_zones_{account_id}"
     ui_state_key = f"ui_zone_states_{account_id}"
 
     # 1. İlk açılış: Kayıtlı bölgelere ID ataması yaparak güvenle yükle
@@ -234,7 +234,7 @@ def render_model_2_settings(
             "Kontrol Sıklığı",
             value=float(current_settings.get("LOOP_INTERVAL_SECONDS", 1.0)),
             step=0.1,
-            key=f"m2_loop_{account_id}",
+            key=f"ag_loop_{account_id}",
             label_visibility="collapsed",
         )
 

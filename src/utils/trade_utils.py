@@ -3,7 +3,7 @@ import time
 
 
 class TradeState:
-    """Tüm robot modelleri için ortak durum hafızası"""
+    """Auto Grid motoru için durum hafızası"""
 
     algo_trading_disabled = False
     last_error_message = ""
@@ -18,28 +18,6 @@ def normalize_volume(mt5_module, symbol, volume):
     # Adıma göre tam yuvarlama yap ve string üzerinden float'a çevirerek bozulmayı önle
     rounded_vol = round(volume / step) * step
     return float(f"{rounded_vol:.6f}")
-
-
-def cancel_all_pending_orders(mt5_module, magic=None, magic_prefix=200000):
-    """Sadece bekleyen emirleri (PENDING) siler. Manuel işlemleri (Magic: 0) korur."""
-    orders = mt5_module.orders_get()
-    if orders is None or len(orders) == 0:
-        return
-    for order in orders:
-        if magic is not None:
-            if order.magic != magic:
-                continue
-        else:
-            # 🚨 KORUMA: magic belirtilmemişse hesaptaki tüm emirleri SİLME!
-            # Yalnızca bu robotun serisine (200000 - 201000) ait olanları temizle.
-            if not (magic_prefix <= order.magic < magic_prefix + 1000):
-                continue
-                
-        request = {
-            "action": mt5_module.TRADE_ACTION_REMOVE,
-            "order": order.ticket,
-        }
-        mt5_module.order_send(request)
 
 
 def safe_send_order(mt5_module, request, log_func=None):
@@ -63,7 +41,7 @@ def safe_send_order(mt5_module, request, log_func=None):
                 retcode = check.retcode if check else -1
                 if retcode == 10027:
                     TradeState.algo_trading_disabled = True
-                    TradeState.last_error_message = "Algo Trading im MT5 deaktiviert!"
+                    TradeState.last_error_message = "Algo Trading kapali!"
                 if log_func:
                     log_func(f"❌ MT5 Check Hatası! Kodu: {retcode}", "ERROR")
                 return False
@@ -73,9 +51,7 @@ def safe_send_order(mt5_module, request, log_func=None):
 
         if result is None:
             last_err = mt5_module.last_error()
-            TradeState.last_error_message = (
-                f"Keine Antwort vom MT5 Terminal: {last_err}"
-            )
+            TradeState.last_error_message = f"MT5 Terminal Yanıt Vermedi: {last_err}"
             if log_func:
                 log_func(f"❌ MT5 Request başarısız (None): {last_err}", "ERROR")
             return False
@@ -126,21 +102,3 @@ def safe_send_order(mt5_module, request, log_func=None):
         if log_func:
             log_func(f"💥 MT5 Request Exception: {str(e)}", "ERROR")
         return False
-
-
-def get_algo_status():
-    return TradeState.algo_trading_disabled
-
-
-def get_last_error_msg():
-    return TradeState.last_error_message
-
-
-def close_position(mt5_module, position, symbol, log_func=None):
-    """
-    🛑 HARD SAFETY: Robot açık pozisyon kapatma yetkisine sahip değildir.
-    Açık pozisyon kapatma işlemleri %100 manuel olarak kullanıcıya aittir.
-    """
-    if log_func:
-        log_func(f"🛡️ Güvenlik Kuralı Engeli: {position.ticket} numaralı açık pozisyon robot tarafından kapatılamaz!", "WARN")
-    return False

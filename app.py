@@ -74,8 +74,7 @@ from src.utils.self_updater import (
     check_for_updates,
 )
 
-import src.core.model_2 as model_2
-
+import src.core.auto_grid_engine as bot_engine
 
 # 🔍 DONMA TEŞHİSİ (Sistem performansını artırmak ve log şişmesini önlemek için tamamen susturuldu)
 def run_start(*args, **kwargs):
@@ -168,7 +167,7 @@ def show_mt5_connect_dialog(account_info, acc_id):
 
     if connection_success:
         shutdown_mt5()
-        if start_bot_process(acc_id, "Model 2"):
+        if start_bot_process(acc_id, "Auto Grid"):
             st.session_state[f"bot_started_at_{acc_id}"] = time.time()
             st.toast(
                 f"🚀 {account_info['account_name']} için robot başlatıldı!", icon="✅"
@@ -304,9 +303,8 @@ if not active_account:
 account_id = str(active_account.get("login", "default"))
 
 # ==========================================
-# MOTOR SEÇİMİ (TEK KRAL: MODEL 2)
+# MOTOR SEÇİMİ (TEK KRAL: AUTO GRID)
 # ==========================================
-bot_engine = model_2
 
 
 st.markdown("---")
@@ -322,7 +320,7 @@ stage("Bot durumu sorgusu (is_bot_running)")
 # ==========================================
 # 4. AYARLARI VE METRİKLERİ YÜKLE
 # ==========================================
-current_settings = load_settings("Model 2")
+current_settings = load_settings("Auto Grid")
 
 # Canlı verileri JSON dosyasından çek (Çünkü robot artık Subprocess olarak çalışıyor)
 # Dosya her zaman okunur: Başlangıç hatası (startup_error) afişi buradan beslenir.
@@ -482,7 +480,7 @@ def remote_signal_watcher(acc_id, is_running):
             disk_states = json.load(f)
 
         ui_state_key = f"ui_zone_states_{acc_id}"
-        zones_session_key = f"model2_zones_{acc_id}"
+        zones_session_key = f"auto_grid_zones_{acc_id}"
 
         if zones_session_key in st.session_state and ui_state_key in st.session_state:
             memory_states = st.session_state[ui_state_key]
@@ -512,7 +510,7 @@ remote_signal_watcher(account_id, account_is_running)
 # ==========================================
 updated_settings = render_settings_panel(
     current_settings,
-    "Model 2",
+    "Auto Grid",
     account_id,
     live_data,
     active_account,
@@ -520,7 +518,7 @@ updated_settings = render_settings_panel(
 )
 
 if updated_settings:
-    save_settings(updated_settings, "Model 2")
+    save_settings(updated_settings, "Auto Grid")
     st.success(f"✅ Ayarlar başarıyla güncellendi ve {account_id} için kaydedildi!")
     st.rerun()
 
@@ -559,7 +557,7 @@ if platform.system() != "Windows":
     # Mac ortamında: Grafik ve Log yan yana (Grafik daha geniş)
     col_chart, col_log = st.columns([2, 1])
     with col_chart:
-        render_chart(current_active_price, current_settings, "Model 2")
+        render_chart(current_active_price, current_settings, "Auto Grid")
     with col_log:
         render_log_viewer(account_id)
 else:

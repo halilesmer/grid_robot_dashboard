@@ -3,23 +3,10 @@ import json
 import os
 import streamlit as st
 
-# 🌟 YENİ: Merkezi yol yöneticisi (hesap bazlı dosya yolları)
+# Merkezi yol yöneticisi
 from src.utils.paths import get_settings_path
 
-# Standardwerte bleiben erhalten
-DEFAULT_SETTINGS_MODEL1 = {
-    "GRID_STEP": 0.05,
-    "TAKE_PROFIT": 0.05,
-    "LEVELS_BELOW": 6,
-    "LEVELS_ABOVE": 6,
-    "DEFAULT_LOT": 0.01,
-    "MAX_OPEN_POSITIONS": 999,
-    "MAX_PRICE_LIMIT": 120.00,
-    "MIN_PRICE_LIMIT": 20.00,
-    "LOOP_INTERVAL_SECONDS": 1.9,
-}
-
-DEFAULT_SETTINGS_MODEL2 = {
+DEFAULT_SETTINGS_AUTO_GRID = {
     "GLOBAL_GRID_STEP": 0.05,
     "GLOBAL_TAKE_PROFIT": 0.05,
     "GLOBAL_DEFAULT_LOT": 0.01,
@@ -32,15 +19,13 @@ DEFAULT_SETTINGS_MODEL2 = {
 }
 
 
-def get_settings_file(model_name: str) -> str:
-    """Generiert einen einzigartigen Dateinamen basierend auf Konto-ID und Modell."""
+def get_settings_file(engine_name: str = "Auto Grid") -> str:
+    """Hesap ID ve motor adına göre benzersiz bir dosya adı üretir."""
     account_id = "default"
 
-    # 1. ÖNCE Çevresel Değişkene (Subprocess/Arka Plan) bak
     if "ACTIVE_ACCOUNT_ID" in os.environ:
         account_id = os.environ["ACTIVE_ACCOUNT_ID"]
     else:
-        # 2. YOKSA Streamlit arayüzünde (App.py) olduğumuzu varsay ve oradan çek
         try:
             if (
                 "selected_account" in st.session_state
@@ -52,34 +37,36 @@ def get_settings_file(model_name: str) -> str:
         except Exception:
             pass
 
-    # 🌟 YENİ: Yol üretimi tek merkezden (paths.py) — port bağımlılığı yok
-    return get_settings_path(account_id, model_name)
+    return get_settings_path(account_id, engine_name)
 
 
-def get_default_settings(model_name: str) -> dict:
-    return (
-        DEFAULT_SETTINGS_MODEL1 if model_name == "Model 1" else DEFAULT_SETTINGS_MODEL2
-    )
+def load_settings(engine_name: str = "Auto Grid"):
+    """JSON dosyasından ayarları okur. Eski Model 2 dosyası varsa otomatik göç (migration) yapar."""
+    file_path = get_settings_file(engine_name)
 
-
-def load_settings(model_name: str = "Model 1"):
-    """JSON dosyasından ayarları okur, dosya yoksa varsayılanları oluşturur."""
-    file_path = get_settings_file(model_name)
-    default_settings = get_default_settings(model_name)
+    # 🌟 VERİ GÖÇÜ (MIGRATION): Kullanıcıların eski ayarları kaybolmasın diye Model 2'yi Auto Grid'e taşı
+    if engine_name == "Auto Grid" and not os.path.exists(file_path):
+        old_file_path = get_settings_file("Model 2")
+        if os.path.exists(old_file_path):
+            try:
+                os.rename(old_file_path, file_path)
+            except Exception:
+                pass
 
     if not os.path.exists(file_path):
-        save_settings(default_settings, model_name)
-        return default_settings
+        save_settings(DEFAULT_SETTINGS_AUTO_GRID, engine_name)
+        return DEFAULT_SETTINGS_AUTO_GRID
+
     try:
         with open(file_path, "r", encoding="utf-8") as f:
             return json.load(f)
     except Exception:
-        return default_settings
+        return DEFAULT_SETTINGS_AUTO_GRID
 
 
-def save_settings(settings_dict, model_name: str = "Model 1"):
+def save_settings(settings_dict, engine_name: str = "Auto Grid"):
     """Yeni ayarları JSON dosyasına kaydeder."""
-    file_path = get_settings_file(model_name)
+    file_path = get_settings_file(engine_name)
 
     with open(file_path, "w", encoding="utf-8") as f:
         json.dump(settings_dict, f, indent=4)

@@ -122,10 +122,13 @@ def account_management_dialog(edit_acc=None):
 
         def_term_idx = 0
         if is_edit and old_mt5_path:
-            for idx, opt in enumerate(terminal_options):
-                if old_mt5_path in opt:
-                    def_term_idx = idx
-                    break
+            # Liste sonuna eklenen elemanın indeksini doğrudan bul
+            try:
+                def_term_idx = next(
+                    i for i, opt in enumerate(terminal_options) if old_mt5_path in opt
+                )
+            except StopIteration:
+                pass
 
         t_col1, t_col2 = st.columns([0.85, 0.15], vertical_alignment="bottom")
         with t_col1:

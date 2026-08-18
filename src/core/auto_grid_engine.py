@@ -1,6 +1,5 @@
 import time
 import datetime
-import platform
 import json
 import os
 from pathlib import Path
@@ -115,7 +114,7 @@ def load_dynamic_settings():
     global ZONES, LOOP_INTERVAL_SECONDS, SYMBOL
 
     try:
-        settings_file = get_settings_file("Model 2")
+        settings_file = get_settings_file("Auto Grid")
         with open(settings_file, "r", encoding="utf-8") as f:
             settings = json.load(f)
             ZONES = settings.get("ZONES", [])
@@ -521,7 +520,7 @@ def send_pending_order(
         "price": price,
         "deviation": MAX_DEVIATION,
         "magic": BASE_MAGIC_NUMBER + zone_idx + 1,
-        "comment": f"Model2_Zone{zone_idx + 1}",
+        "comment": f"AutoGrid_Z{zone_idx + 1}",
         "type_time": mt5.ORDER_TIME_GTC,
         "type_filling": mt5.ORDER_FILLING_RETURN,  # 🌟 KESİN ÇÖZÜM: Bekleyen emirlerin FOK(0) kabul edilip sunucu tarafından silinmemesi için RETURN(2) zorunludur.
         "tp": tp_price,
@@ -578,12 +577,9 @@ def send_pending_order(
 
     return True
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# ANA DİNAMİK YÖNETİM MOTORU (MODEL 2)
-
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# ANA DİNAMİK YÖNETİM MOTORU (MODEL 2)
+# ANA DİNAMİK YÖNETİM MOTORU (AUTO GRID)
 # ═══════════════════════════════════════════════════════════════════════════════
 def process_zone_commands():
     global active_zones_state
@@ -1270,7 +1266,7 @@ def run_startup_checks():
     CONSECUTIVE_ERRORS = {}  # Başlangıçta hata sayacını sıfırla
 
     log_message("=" * 60)
-    log_message("USOUSD Çift Yönlü Grid Robot v3.0 (MODEL 2) Baslatiliyor...")
+    log_message("USOUSD Çift Yönlü Grid Robot(AUTO GRID) Baslatiliyor...")
     log_message("=" * 60)
 
     # ==============================================================

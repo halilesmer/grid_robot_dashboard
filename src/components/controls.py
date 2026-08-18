@@ -12,12 +12,11 @@ def render_controls(is_running: bool, account_id: str = "default"):
     col_icon, col_btn = st.columns([0.15, 0.85], vertical_alignment="center")
 
     with col_icon:
-        # Tooltip metinleri artık doğrudan Model 2'ye sabitlendi.
         if is_running:
-            status_text = SETTINGS_TOOLTIPS["ROBOT_ACTIVE"].format(model="Model 2")
+            status_text = SETTINGS_TOOLTIPS["ROBOT_ACTIVE"]
             icon = "🟢"
         else:
-            status_text = SETTINGS_TOOLTIPS["ROBOT_PASSIVE"].format(model="Model 2")
+            status_text = SETTINGS_TOOLTIPS["ROBOT_PASSIVE"]
             icon = "🔴"
 
         st.markdown(
