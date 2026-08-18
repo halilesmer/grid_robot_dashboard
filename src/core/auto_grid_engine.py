@@ -529,17 +529,21 @@ def send_pending_order(
     if sl_price is not None and sl_price > 0:
         request["sl"] = sl_price
 
-        # 🌟 HATA YAKALAMA (Back-off): Emri gönder ve sonucu kontrol et
-        success = safe_send_order(mt5, request, log_message)
-        if not success:
-            # 🚨 DEVRE KESİCİ: Hata koduna bakılmaksızın (Sessiz Ret dahil) başarısızlığı say
-            global CONSECUTIVE_ERRORS
+    # 🌟 HATA YAKALAMA (Back-off): Emri gönder ve sonucu kontrol et
+    success = safe_send_order(mt5, request, log_message)
+    if not success:
+        # 🚨 DEVRE KESİCİ: Hata koduna bakılmaksızın (Sessiz Ret dahil) başarısızlığı say
+        global CONSECUTIVE_ERRORS
 
-            # Hata sayacını artır
-            CONSECUTIVE_ERRORS[zone_idx] = CONSECUTIVE_ERRORS.get(zone_idx, 0) + 1
+        # Hata sayacını artır
+        CONSECUTIVE_ERRORS[zone_idx] = CONSECUTIVE_ERRORS.get(zone_idx, 0) + 1
 
         if CONSECUTIVE_ERRORS[zone_idx] >= 3:
-            last_err_msg = TradeState.last_error_message if TradeState.last_error_message else "Bilinmeyen Hata"
+            last_err_msg = (
+                TradeState.last_error_message
+                if TradeState.last_error_message
+                else "Bilinmeyen Hata"
+            )
             log_message(
                 f"🚨 DİKKAT: Bölge {zone_idx+1} için üst üste {CONSECUTIVE_ERRORS[zone_idx]} işlem reddedildi! (Detay: {last_err_msg}). Bölge güvenliğe alınıyor.",
                 "ERROR",
