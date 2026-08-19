@@ -426,10 +426,10 @@ elif account_is_running and not live_data.get("mt5_connected", False):
     if bot_just_started:
         ci_col, cb_col = st.columns([0.85, 0.15])
         with ci_col:
-            st.info(
-                f"⏳ **Bağlanıyor...** Subprocess {elapsed_since_start} saniye önce başlatıldı, "
-                "MT5 bağlantısı kuruluyor. İlk bağlantı sembol listesi indirimi nedeniyle 1-2 dakika sürebilir. "
-                "Lütfen bekleyin...",
+            st.warning(
+                f"⚙️ **Sistem Hazırlanıyor ({elapsed_since_start} sn)...**\n\n"
+                "Robot arka planda başlatıldı ve MT5 terminaline bağlanıyor. "
+                "Bağlantı kurulana kadar menü butonları güvenlik amacıyla kilitlenmiştir. Lütfen bekleyin...",
                 icon="⏳",
             )
         with cb_col:
