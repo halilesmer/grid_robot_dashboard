@@ -1,4 +1,3 @@
-# Dosya: scripts/launcher.py
 import os
 import sys
 import socket
@@ -13,7 +12,7 @@ REQUIREMENTS_FILE = PROJECT_ROOT / "requirements.txt"
 
 
 def ensure_venv_and_requirements():
-    """Sanal ortam ve kütüphaneler eksikse otomatik kurar."""
+    """Sanal ortam ve kütüphaneler eksikse otomatik kurar ve onarır."""
     python_exe = sys.executable
 
     # 1. .venv var mı?
@@ -25,12 +24,29 @@ def ensure_venv_and_requirements():
 
     is_windows = os.name == "nt"
 
-    # 2. Kütüphaneler yüklü mü?
+    # 🌟 OTOMATİK DÜZELTME (SELF-HEALING): requirements.txt dosyasını kontrol et ve eksikleri tamamla
+    if REQUIREMENTS_FILE.exists():
+        try:
+            with open(REQUIREMENTS_FILE, "r", encoding="utf-8") as f:
+                req_content = f.read().lower()
+
+            missing_reqs = []
+            if "plotly" not in req_content:
+                missing_reqs.append("plotly")
+
+            if missing_reqs:
+                with open(REQUIREMENTS_FILE, "a", encoding="utf-8") as f:
+                    for req in missing_reqs:
+                        f.write(f"\n{req}\n")
+        except Exception:
+            pass
+
+    # 2. Kütüphaneler yüklü mü? (Akıllı Kontrol)
     try:
         check_cmd = (
-            "import streamlit, pandas, ccxt, psutil, MetaTrader5"
+            "import streamlit, pandas, ccxt, psutil, MetaTrader5, plotly"
             if is_windows
-            else "import streamlit, pandas, ccxt, psutil"
+            else "import streamlit, pandas, ccxt, psutil, plotly"
         )
         subprocess.run(
             [str(venv_python), "-c", check_cmd],
@@ -39,24 +55,50 @@ def ensure_venv_and_requirements():
             stderr=subprocess.DEVNULL,
         )
     except subprocess.CalledProcessError:
-        print("📦 Kütüphaneler yükleniyor (requirements.txt)...")
+        print("📦 Eksik kütüphaneler tespit edildi, arka planda otomatik yükleniyor...")
         if is_windows:
             subprocess.run(
-                [str(venv_python), "-m", "pip", "install", "-r", str(REQUIREMENTS_FILE)],
+                [
+                    str(venv_python),
+                    "-m",
+                    "pip",
+                    "install",
+                    "-r",
+                    str(REQUIREMENTS_FILE),
+                ],
                 check=True,
             )
         else:
             # MetaTrader5 macOS'te kurulamaz, hatayı yakala ve diğerlerini kur
             result = subprocess.run(
-                [str(venv_python), "-m", "pip", "install", "-r", str(REQUIREMENTS_FILE)],
+                [
+                    str(venv_python),
+                    "-m",
+                    "pip",
+                    "install",
+                    "-r",
+                    str(REQUIREMENTS_FILE),
+                ],
                 capture_output=True,
                 text=True,
             )
             combined_output = (result.stderr or "") + (result.stdout or "")
             if result.returncode != 0 and "MetaTrader5" in combined_output:
-                print("⚠️ MetaTrader5 macOS'te bulunamadı, diğer kütüphaneler kuruluyor...")
+                print(
+                    "⚠️ MetaTrader5 macOS'te bulunamadı, diğer kütüphaneler kuruluyor..."
+                )
                 subprocess.run(
-                    [str(venv_python), "-m", "pip", "install", "streamlit", "pandas", "ccxt", "psutil"],
+                    [
+                        str(venv_python),
+                        "-m",
+                        "pip",
+                        "install",
+                        "streamlit",
+                        "pandas",
+                        "ccxt",
+                        "psutil",
+                        "plotly",
+                    ],
                     check=True,
                 )
 
@@ -115,4 +157,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
