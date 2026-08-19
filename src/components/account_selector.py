@@ -7,22 +7,28 @@ from src.components.dialogs import confirm_delete_account_dialog
 ACCOUNTS_FILE = "configs/accounts.json"
 
 
-@st.cache_data(ttl=300)
-def get_installed_mt5_terminals():
-    """C:/Program Files içindeki MT5 terminal64.exe yollarını hızlıca tarar."""
-    terminals = []
-    base_path = "C:/Program Files"
-    if os.path.exists(base_path):
+@st.cache_data(ttl=3600)
+def auto_detect_mt5_paths():
+    """Sistemi dondurmadan C diskindeki olası MT5 yollarını bulur."""
+    base_dirs = [
+        os.environ.get("ProgramFiles", "C:\\Program Files"),
+        os.environ.get("ProgramFiles(x86)", "C:\\Program Files (x86)"),
+        "C:\\",
+    ]
+    found_paths = []
+    for base in base_dirs:
+        if not os.path.exists(base):
+            continue
         try:
-            for folder in os.listdir(base_path):
-                full_dir = os.path.join(base_path, folder)
-                if os.path.isdir(full_dir):
-                    exe_path = os.path.join(full_dir, "terminal64.exe")
-                    if os.path.exists(exe_path):
-                        terminals.append(exe_path.replace("\\", "/"))
-        except Exception:
+            for folder_name in os.listdir(base):
+                if "metatrader" in folder_name.lower() or "mt5" in folder_name.lower():
+                    exe_path = os.path.join(base, folder_name, "terminal64.exe")
+                    normalized_path = exe_path.replace("\\", "/")
+                    if os.path.exists(exe_path) and normalized_path not in found_paths:
+                        found_paths.append(normalized_path)
+        except PermissionError:
             pass
-    return terminals
+    return found_paths
 
 
 def load_accounts():
@@ -60,7 +66,7 @@ def account_management_dialog(edit_acc=None):
         if a.get("mt5_path") and str(a.get("login")) != old_login
     }
 
-    found_terminals = get_installed_mt5_terminals()
+    found_terminals = auto_detect_mt5_paths()
     terminal_options = ["Farklı Bir Yol (Manuel Gireceğim)"]
     old_mt5_path = edit_acc.get("mt5_path", "") if is_edit else ""
 
@@ -145,7 +151,7 @@ def account_management_dialog(edit_acc=None):
                 key=f"rescan_{k_suf}",
                 help="Listeyi Yenile (Kurulu terminalleri tekrar tarar)",
             ):
-                get_installed_mt5_terminals.clear()
+                auto_detect_mt5_paths.clear()
                 st.rerun()
 
         if "Farklı Bir Yol" in selected_terminal:
