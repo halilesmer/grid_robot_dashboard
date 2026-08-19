@@ -8,7 +8,7 @@ import os
 from src.components.dialogs import confirm_clear_dialog, confirm_delete_zone_dialog
 
 # 🌟 YENİ: Merkezi yol (path) yöneticisini içeri aktarıyoruz
-from src.utils.paths import get_ui_state_path
+from src.utils.paths import get_ui_state_path, get_symbols_path
 
 @st.dialog("⚠️ Kaydedilmemiş Ayarlar")
 def confirm_start_with_changes_dialog(account_id, zone_id, idx):
@@ -26,13 +26,13 @@ def confirm_start_with_changes_dialog(account_id, zone_id, idx):
 
 def render_settings_panel(
     current_settings,
-    model_name="Model 2",
+    engine_name="Auto Grid",
     account_id="default",
     live_data=None,
     active_account=None,
     is_running=False,
 ):
-    return render_model_2_settings(
+    return render_auto_grid_settings(
         current_settings, account_id, live_data, active_account, is_running
     )
 
@@ -69,26 +69,32 @@ def _default_zone():
 
 def _handle_zone_action(account_id: str, zone_id: str, idx: int, state: str):
     """Buton tıklamalarında UI'ı çökertmeden durumu güncelleyen Callback fonksiyonu."""
-    # Anlık UI hafızasını GÜVENLİ (ID bazlı) güncelle
     ui_state_key = f"ui_zone_states_{account_id}"
-    if ui_state_key in st.session_state:
-        st.session_state[ui_state_key][zone_id] = state
-        
-        # 🌟 RACE CONDITION KORUMASI: Dosyaya SADECE kullanıcı butona bastığında yaz
-        zones_session_key = f"model2_zones_{account_id}"
-        if zones_session_key in st.session_state:
-            backend_states = {}
-            for i, z in enumerate(st.session_state[zones_session_key]):
-                backend_states[str(i)] = st.session_state[ui_state_key].get(z["id"], "CLEAR")
-            
-            try:
-                ui_file = get_ui_state_path(account_id)
-                tmp_ui_file = ui_file + ".tmp"
-                with open(tmp_ui_file, "w", encoding="utf-8") as f:
-                    json.dump(backend_states, f)
-                os.replace(tmp_ui_file, ui_file)
-            except Exception:
-                pass
+    if ui_state_key not in st.session_state:
+        st.session_state[ui_state_key] = {}
+
+    st.session_state[ui_state_key][zone_id] = state
+
+    # 🌟 RACE CONDITION KORUMASI: Dosyaya SADECE kullanıcı butona bastığında yaz
+    zones_session_key = f"auto_grid_zones_{account_id}"
+    if zones_session_key in st.session_state:
+        backend_states = {}
+        for z in st.session_state[zones_session_key]:
+            z_id = z.get("id")
+            magic_key = str(z.get("magic_idx"))
+            if z_id and magic_key:
+                backend_states[magic_key] = st.session_state[ui_state_key].get(
+                    z_id, "CLEAR"
+                )
+
+        try:
+            ui_file = get_ui_state_path(account_id)
+            tmp_ui_file = ui_file + ".tmp"
+            with open(tmp_ui_file, "w", encoding="utf-8") as f:
+                json.dump(backend_states, f)
+            os.replace(tmp_ui_file, ui_file)
+        except Exception:
+            pass
 
 
 def _force_upper_symbol(key: str):
@@ -97,21 +103,27 @@ def _force_upper_symbol(key: str):
         st.session_state[key] = str(st.session_state[key]).upper().strip()
 
 
-def render_model_2_settings(
+def render_auto_grid_settings(
     current_settings, account_id, live_data, active_account, is_running=False
 ):
-    zones_session_key = f"model2_zones_{account_id}"
+    zones_session_key = f"auto_grid_zones_{account_id}"
     ui_state_key = f"ui_zone_states_{account_id}"
 
     # 1. İlk açılış: Kayıtlı bölgelere ID ataması yaparak güvenle yükle
     if zones_session_key not in st.session_state:
         saved_zones = current_settings.get("ZONES", [])
-        for z in saved_zones:
+        for i, z in enumerate(saved_zones):
             if "id" not in z:
                 z["id"] = str(uuid.uuid4())
+            # 🛡️ GÜVENLİK (Kıyamet Bug'ı Çözümü): Her bölgeye kalıcı bir Magic Kimliği ver
+            if "magic_idx" not in z:
+                z["magic_idx"] = i
 
         if not saved_zones:
-            saved_zones = [_default_zone()]
+            new_zone = _default_zone()
+            new_zone["magic_idx"] = 0
+            saved_zones = [new_zone]
+
         st.session_state[zones_session_key] = saved_zones
 
     # 2. Arayüz Kalıcı Hafızasını ve Bot'tan Gelen Bildirimleri Yükle
@@ -136,7 +148,23 @@ def render_model_2_settings(
         except Exception:
             pass
 
-    # 🌟 GÜNCELLENDİ: Ana Motor ve Kontrol Sıklığı yan yana
+    # 🌟 YENİ: Otomatik Tamamlama (Autocomplete) ve Lot Kuralları için diskten oku
+    available_symbols = []
+    symbols_dict = {}
+    sym_file = get_symbols_path(account_id)
+    if os.path.exists(sym_file):
+        try:
+            with open(sym_file, "r", encoding="utf-8") as f:
+                raw_data = json.load(f)
+                if isinstance(raw_data, dict):
+                    symbols_dict = raw_data
+                    available_symbols = list(raw_data.keys())
+                elif isinstance(raw_data, list):
+                    available_symbols = raw_data
+        except Exception:
+            pass
+
+    # 🌟 GÜNCELLENDİ: MT5 Bağlantısı ve Kontrol Sıklığı yan yana
     h_col1, h_col2, h_col3, h_col4, h_col5 = st.columns(
         [0.45, 0.20, 0.02, 0.20, 0.13], vertical_alignment="center"
     )
@@ -162,6 +190,11 @@ def render_model_2_settings(
             border-color: #eab308 !important;
             color: #1f2937 !important;font-weight:600;
         }
+        [data-testid='stColumn']:has(.motor-marker-disconnected) [data-testid='stBaseButton-secondary'] {
+            background: #ef4444 !important;
+            border-color: #dc2626 !important;
+            color: white !important;font-weight:600;
+        }
         </style>
         """,
         unsafe_allow_html=True,
@@ -175,12 +208,16 @@ def render_model_2_settings(
         zone_states = list(st.session_state.get(ui_state_key, {}).values())
         any_zone_start = any(s == "START" for s in zone_states)
 
+        mt5_connected = live_data.get("mt5_connected", False) if live_data else False
         if not is_running:
             motor_status = "stopped"
-            btn_label = "🚀 Ana Motoru Çalıştır"
+            btn_label = "🚀 MT5'e Bağlan"
+        elif not mt5_connected:
+            motor_status = "disconnected"
+            btn_label = "🔴 MT5'e bağlanmadı"
         else:
             motor_status = "running" if any_zone_start else "paused"
-            btn_label = "🟢 Ana Motor Çalışıyor"
+            btn_label = "🟢 MT5'e bağlandı"
 
         # Hangi durumda olduğumuzu CSS ile hedeflemek için bir işaretçi basıyoruz
         st.markdown(
@@ -200,7 +237,12 @@ def render_model_2_settings(
                 st.rerun()
         with i_col:
             if is_running:
-                emoji = "🟢" if motor_status == "running" else "🟡"
+                if motor_status == "disconnected":
+                    emoji = "🔴"
+                elif motor_status == "running":
+                    emoji = "🟢"
+                else:
+                    emoji = "🟡"
                 st.markdown(
                     f"<div style='text-align:center;font-size:20px;'>{emoji}</div>",
                     unsafe_allow_html=True,
@@ -220,7 +262,7 @@ def render_model_2_settings(
             "Kontrol Sıklığı",
             value=float(current_settings.get("LOOP_INTERVAL_SECONDS", 1.0)),
             step=0.1,
-            key=f"m2_loop_{account_id}",
+            key=f"ag_loop_{account_id}",
             label_visibility="collapsed",
         )
 
@@ -292,7 +334,7 @@ def render_model_2_settings(
                         key=f"clear_{zone_id}_{account_id}",
                         width="stretch",
                         type="secondary",
-                        help="Acil Durum: Bekleyen emirleri siler ve AÇIK POZİSYONLARI ayara göre kapatır.",
+                        help="Acil Durum: Bekleyen emirleri siler. AÇIK POZİSYONLARA ASLA DOKUNULMAZ.",
                     ):
                         # Lambda ile anlık değişkenleri (zone_id, idx) dondurarak modal'a gönderiyoruz
                         confirm_clear_dialog(
@@ -305,7 +347,18 @@ def render_model_2_settings(
                         key=f"add_{zone_id}_{account_id}",
                         width="stretch",
                     ):
-                        st.session_state[zones_session_key].append(_default_zone())
+                        highest_magic = max(
+                            [
+                                z.get("magic_idx", -1)
+                                for z in st.session_state[zones_session_key]
+                            ],
+                            default=-1,
+                        )
+                        new_zone = _default_zone()
+                        new_zone["magic_idx"] = (
+                            highest_magic + 1 if highest_magic >= 0 else 0
+                        )
+                        st.session_state[zones_session_key].append(new_zone)
                         st.rerun()
                     if st.button(
                         "🗑️ Bölgeyi Sil",
@@ -327,14 +380,32 @@ def render_model_2_settings(
             zc1, zc2, zc3, zc4 = st.columns(4)
             with zc1:
                 sym_key = f"sym_{zone_id}_{account_id}"
-                z_symbol = st.text_input(
-                    "Sembol",
-                    key=sym_key,
-                    value=str(zone.get("symbol", "USOUSD")).upper(),
-                    on_change=_force_upper_symbol,
-                    args=(sym_key,),
-                    help="Bu bölgenin çalışacağı parite.",
-                )
+                current_sym = str(zone.get("symbol", "USOUSD")).upper()
+
+                # Eğer robot arka planda listeyi indirmişse Selectbox (Arama), yoksa standart Text Input
+                if available_symbols:
+                    display_symbols = available_symbols.copy()
+                    # KORUMA: Arayüz çökmesin diye mevcut sembolü zorla listeye ekle
+                    if current_sym not in display_symbols:
+                        display_symbols.insert(0, current_sym)
+
+                    z_symbol = st.selectbox(
+                        "Sembol (Ara)",
+                        options=display_symbols,
+                        index=display_symbols.index(current_sym),
+                        key=sym_key,
+                        help="Broker'ınızın sunduğu semboller. Yazarak arayabilirsiniz.",
+                    )
+                    z_symbol = str(z_symbol).upper().strip()
+                else:
+                    z_symbol = st.text_input(
+                        "Sembol",
+                        key=sym_key,
+                        value=current_sym,
+                        on_change=_force_upper_symbol,
+                        args=(sym_key,),
+                        help="Bu bölgenin çalışacağı parite. (Robot MT5'e bağlandığı an akıllı listeye dönüşecektir.)",
+                    )
             with zc2:
                 opts = ["BUY", "SELL", "BOTH"]
                 cur_val = zone.get("order_type", "BUY")
@@ -424,6 +495,39 @@ def render_model_2_settings(
                     format="%.2f",
                     help="📏 Emirlerin kaç aralıkla dizileceği.",
                 )
+
+            # 🌟 YENİ: Seçili sembole ait Broker Lot Kurallarını (Akıllı Kalkan) Hazırla
+            sym_info = symbols_dict.get(str(z_symbol).upper().strip(), {})
+            b_min = float(sym_info.get("vol_min", 0.01))
+            b_max_broker = float(sym_info.get("vol_max", 50.0))
+            b_step = float(sym_info.get("vol_step", 0.01))
+            b_contract = float(sym_info.get("contract_size", 0.0))
+
+            # 🛡️ GÜVENLİ Fat-Finger Koruması: Broker'ın min değerine göre dinamik tavan.
+            # Asla min_value > max_value durumuna düşmez!
+            b_max_safe = min(b_max_broker, max(b_min * 100, 100.0))
+
+            # 🛡️ GÜVENLİ Dinamik Ondalık Hassasiyeti (Bilimsel gösterim 1e-05 vb. koruması)
+            step_str = str(b_step).lower()
+            if "e-" in step_str:
+                decimal_places = int(step_str.split("e-")[-1])
+            elif "." in step_str:
+                decimal_places = len(step_str.split(".")[-1].rstrip("0"))
+            else:
+                decimal_places = 2
+            decimal_places = max(1, decimal_places)  # Format hatasını önler
+            lot_format = f"%.{decimal_places}f"
+
+            lot_help_text = "📦 İşlem başına lot miktarı."
+            if sym_info:
+                lot_help_text = (
+                    f"🏢 Broker Kuralları ({str(z_symbol).upper().strip()}):\n"
+                    f"• Min Lot: {b_min}\n"
+                    f"• Max Lot: {b_max_broker} (Güvenlik Sınırı: {b_max_safe})\n"
+                    f"• Lot Adımı: {b_step}\n\n"
+                    f"ℹ️ Sözleşme Büyüklüğü: 1 Lot = {b_contract:g} Birim"
+                )
+
             with zc6:
                 z_lot = st.number_input(
                     (
@@ -432,12 +536,14 @@ def render_model_2_settings(
                         else "BUY Lot (📦)"
                     ),
                     key=f"lot_{zone_id}_{account_id}",
-                    min_value=0.01,
-                    max_value=5.0,
-                    value=max(0.01, min(5.0, float(zone.get("lot_size", 0.01)))),
-                    step=0.01,
-                    format="%.2f",
-                    help="📦 İşlem başına lot miktarı.",
+                    min_value=b_min,
+                    max_value=b_max_safe,
+                    value=max(
+                        b_min, min(b_max_safe, float(zone.get("lot_size", b_min)))
+                    ),
+                    step=b_step,
+                    format=lot_format,
+                    help=lot_help_text,
                 )
             with zc7:
                 z_tp = st.number_input(
@@ -499,21 +605,22 @@ def render_model_2_settings(
                     z_sell_lot = st.number_input(
                         "SELL Lot (📦)",
                         key=f"s_lot_{zone_id}_{account_id}",
-                        min_value=0.01,
-                        max_value=5.0,
+                        min_value=b_min,
+                        max_value=b_max_safe,
                         value=max(
-                            0.01,
+                            b_min,
                             min(
-                                5.0,
+                                b_max_safe,
                                 float(
                                     zone.get(
-                                        "sell_lot_size", zone.get("lot_size", 0.01)
+                                        "sell_lot_size", zone.get("lot_size", b_min)
                                     )
                                 ),
                             ),
                         ),
-                        step=0.01,
-                        format="%.2f",
+                        step=b_step,
+                        format=lot_format,
+                        help=lot_help_text,
                     )
                 with zs3:
                     z_sell_tp = st.number_input(
@@ -665,13 +772,13 @@ def render_model_2_settings(
 
                     # 1. SATIR: Çıkış Yönü, Kapatılacak Yön, Temizlik Kapsamı
                     cc1, cc2, cc3 = st.columns(3)
-                    
+
                     side_key = f"clear_side_{zone_id}_{account_id}"
                     target_key = f"target_side_{zone_id}_{account_id}"
-                    
+
                     side_opts = ["Farketmez", "BUY (Yukarı)", "SELL (Aşağı)"]
                     target_opts = ["Farketmez (Hepsi)", "Sadece BUY İşlemleri", "Sadece SELL İşlemleri"]
-                    
+
                     # --- ESNEK VE KULLANICIYA ÖZGÜR DOMİNO MANTIĞI ---
                     # Yön değiştiğinde tetiklenecek bayrak kontrolü
                     last_ord_type_key = f"last_ord_type_{zone_id}_{account_id}"
@@ -725,22 +832,10 @@ def render_model_2_settings(
                         )
 
                     with cc3:
-                        scope_opts = [
-                            "Sadece Bekleyen Emirler",
-                            "Tüm İşlemler (Emirler + Pozisyonlar)",
-                        ]
-                        cur_scope = zone.get("clear_scope", "Sadece Bekleyen Emirler")
-                        if cur_scope == "Sadece Emirler":
-                            cur_scope = "Sadece Bekleyen Emirler"
-                        if cur_scope not in scope_opts:
-                            cur_scope = "Sadece Bekleyen Emirler"
-
-                        z_clear_scope = st.selectbox(
-                            "Neler Temizlensin?",
-                            options=scope_opts,
-                            index=scope_opts.index(cur_scope),
-                            key=f"scope_{zone_id}_{account_id}",
-                            help="Sadece bekleyen emirler mi iptal edilsin, yoksa açık pozisyonlar da kapatılsın (SL) mı?"
+                        z_clear_scope = "Sadece Bekleyen Emirler"
+                        st.markdown(
+                            "<small style='color: gray;'>🧹 Temizlik kapsamı: Sadece Bekleyen Emirler</small>",
+                            unsafe_allow_html=True,
                         )
                     # 2. SATIR: Çıkış Tetikleyicisi ve Zaman Dilimi
                     cc4, cc5, cc6 = st.columns(3)
@@ -881,7 +976,9 @@ def render_model_2_settings(
             if active_account
             else "Demo"
         )
-        status_text = "🟢 Açık" if is_running else "🔴 Kapalı"
+        # Piyasa durumunu doğrudan arka plandan gelen güncel veriye (market_open) bağlıyoruz
+        m_open = live_data.get("market_open", False) if live_data else False
+        status_text = "🟢 Açık" if m_open else "🔴 Kapalı"
         current_price = live_data.get("current_price", 0.0) if live_data else 0.0
         profit_val = live_data.get("profit", 0.0) if live_data else 0.0
         profit_color = "#4ade80" if profit_val >= 0 else "#f87171"
@@ -906,6 +1003,7 @@ def render_model_2_settings(
         updated_zones.append(
             {
                 "id": zone_id,
+                "magic_idx": zone.get("magic_idx", 0),  # 🌟 Kalıcı Kimlik
                 "symbol": str(z_symbol).upper().strip() if z_symbol else "USOUSD",
                 "order_type": z_order_type,
                 "min_price": z_min,
@@ -926,7 +1024,7 @@ def render_model_2_settings(
                 "levels_above": z_levels_above,
                 "max_positions": z_max_pos,
                 "clear_on_exit": z_clear,
-                "clear_exit_side": z_clear_side,  # 🌟 YENİ
+                "clear_exit_side": z_clear_side,
                 "clear_scope": z_clear_scope,
                 "clear_target_side": z_clear_target,
                 "exit_condition": z_exit_cond,

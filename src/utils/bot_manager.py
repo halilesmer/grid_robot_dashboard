@@ -2,7 +2,6 @@
 import subprocess
 import sys
 import os
-import json
 import streamlit as st
 import time  # Bekleme (sleep) için eklendi
 from pathlib import Path
@@ -12,26 +11,12 @@ project_root = Path(__file__).parent.parent.parent
 sys.path.append(str(project_root))
 
 # Gerekli bağlantı ve temizlik fonksiyonlarını içeri aktar
-from src.utils.mt5_connection import connect_to_mt5_with_timeout
-from src.utils.trade_utils import cancel_all_pending_orders, close_position
+# Gereksiz importlar güvenlik temizliği kapsamında kaldırıldı
 
 import psutil  # 🌟 YENİ: İşletim sistemi süreçlerini okumak için
 
 # 🌟 YENİ: Merkezi yol yöneticisini içeri aktarıyoruz
 from src.utils.paths import get_err_log_path, get_pid_path
-
-# ==========================================
-# MAC KORUMASI (Crash Önleyici Zırh)
-# ==========================================
-try:
-    import MetaTrader5 as mt5
-except ImportError:
-    mt5 = None  # Mac ortamında çökmemesi için mt5 modülünü boş (None) atıyoruz
-
-# Robot emirlerinin magic aralığı (model_2.py BASE_MAGIC_NUMBER ile aynı)
-BOT_MAGIC_MIN = 200000
-BOT_MAGIC_MAX = 201000
-
 
 def _read_pid(account_id: str):
     """PID dosyasını okur. Yoksa veya bozuksa None döner."""
@@ -142,7 +127,7 @@ def _detached_popen(cmd, stdout, stderr, env):
     )
 
 
-def start_bot_process(account_id: str, model_name: str) -> bool:
+def start_bot_process(account_id: str, engine_name: str = "Auto Grid") -> bool:
     """Belirli bir hesap için izole bir Subprocess (alt süreç) başlatır."""
     if is_bot_running(account_id):
         return True  # Zaten çalışıyor
@@ -161,7 +146,7 @@ def start_bot_process(account_id: str, model_name: str) -> bool:
 
         # Ayrı bir Python programı olarak botu tetikle. (Detach edilmiş süreç)
         process = _detached_popen(
-            [sys.executable, "-u", "src/core/bot_runner.py", account_id, model_name],
+            [sys.executable, "-u", "src/core/bot_runner.py", account_id, engine_name],
             stdout=log_file,
             stderr=subprocess.STDOUT,
             env=env,
@@ -216,84 +201,37 @@ def stop_bot_process(account_id: str) -> bool:
     🚀 PHASE 4: MT5'e bağlanıp emir silme / pozisyon kapatma mantığı KALDIRILDI.
     İşlemler broker'da olduğu gibi kalır; bot kapatılır, arkasında iz bırakılmaz.
     """
-    pid = _read_pid(account_id)
+    killed_any = False
 
-    # Güvenlik: Sadece GERÇEKTEN bu hesabın bot_runner sürecini öldür.
-    # Bayat PID dosyası başka bir sürece verilmişse ona dokunma.
-    if pid is not None and _is_our_runner(pid, account_id):
+    # Keskin Nişancı Mantığı: Sadece PID dosyasına güvenme, işletim sistemindeki tüm süreçleri tara!
+    # Böylece diğer Python uygulamaları (veya başka hesapların robotları) asla zarar görmez.
+    for proc in psutil.process_iter(["pid", "name", "cmdline"]):
         try:
-            if os.name == "nt":
-                # Windows işletim sistemi ise Taskkill ile tüm alt döngüleri sonlandır
-                subprocess.call(
-                    ["taskkill", "/F", "/T", "/PID", str(pid)],
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                )
-            else:
-                # Mac/Linux sistemleri için
-                process = psutil.Process(pid)
-                process.terminate()
-                try:
-                    process.wait(timeout=3)
-                except psutil.TimeoutExpired:
-                    process.kill()
+            cmdline = proc.info.get("cmdline") or []
+            cmdline_str = " ".join(cmdline)
 
-            # Subprocess'in gerçekten kapanması için işletim sistemine 1 saniye nefes payı ver
-            time.sleep(1.0)
-        except Exception as e:
-            st.error(f"⚠️ Robot durdurulurken pürüz çıktı: {str(e)}")
+            # SADECE bot_runner.py olan ve spesifik ACCOUNT_ID barındıran süreci avla
+            if "bot_runner.py" in cmdline_str and str(account_id) in cmdline_str:
+                if os.name == "nt":
+                    subprocess.call(
+                        ["taskkill", "/F", "/T", "/PID", str(proc.info["pid"])],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                    )
+                else:
+                    proc.terminate()
+                    try:
+                        proc.wait(timeout=3)
+                    except psutil.TimeoutExpired:
+                        proc.kill()
+
+                killed_any = True
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            continue
+
+    if killed_any:
+        # Subprocess'in gerçekten kapanması için işletim sistemine 1 saniye nefes payı ver
+        time.sleep(1.0)
 
     self_cleanup(account_id)
-    return True
-
-
-def stop_and_close_all(account_id: str) -> bool:
-    """
-    🔴 YALNIZCA kullanıcı Streamlit'ten açıkça "Durdur ve Tümünü Kapat" butonuna
-    bastığında çağrılır.
-
-    Botu durdurur, ardından hesaptaki TÜM robot pozisyonlarını ve bekleyen emirleri
-    piyasa fiyatından kapatır. (Phase 4: Kapama yapabilen TEK otomatik aksiyon.)
-    """
-    stop_bot_process(account_id)
-
-    try:
-        accounts_path = os.path.join(project_root, "configs", "accounts.json")
-        if not os.path.exists(accounts_path):
-            return True
-        with open(accounts_path, "r", encoding="utf-8") as f:
-            accounts_data = json.load(f)
-            accounts = (
-                accounts_data
-                if isinstance(accounts_data, list)
-                else accounts_data.get("accounts", [])
-            )
-
-        active_account = next(
-            (acc for acc in accounts if str(acc.get("login")) == account_id), None
-        )
-        if not active_account or mt5 is None:
-            return True
-
-        # 🌟 ZAMAN AŞIMLI BAĞLANTI: MT5 ulaşılamıyorsa "Durdur & Kapat" da arayüzü dondurmasın!
-        connection_success, _timed_out = connect_to_mt5_with_timeout(active_account)
-
-        if connection_success:
-            try:
-                # 1. TÜM robot açık pozisyonları kapat
-                positions = mt5.positions_get()
-                if positions:
-                    for pos in positions:
-                        if BOT_MAGIC_MIN <= pos.magic < BOT_MAGIC_MAX:
-                            close_position(mt5, pos, pos.symbol)
-
-                # 2. Robotun bekleyen emirlerini sil
-                cancel_all_pending_orders(mt5)
-            finally:
-                mt5.shutdown()
-        else:
-            st.warning("⚠️ MT5'e bağlanılamadı, pozisyonlar kapatılamadı!")
-    except Exception as e:
-        st.warning(f"⚠️ Tümünü kapatma sırasında hata oluştu: {e}")
-
     return True

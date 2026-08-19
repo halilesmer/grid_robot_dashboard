@@ -12,12 +12,11 @@ def render_controls(is_running: bool, account_id: str = "default"):
     col_icon, col_btn = st.columns([0.15, 0.85], vertical_alignment="center")
 
     with col_icon:
-        # Tooltip metinleri artık doğrudan Model 2'ye sabitlendi.
         if is_running:
-            status_text = SETTINGS_TOOLTIPS["ROBOT_ACTIVE"].format(model="Model 2")
+            status_text = SETTINGS_TOOLTIPS["ROBOT_ACTIVE"]
             icon = "🟢"
         else:
-            status_text = SETTINGS_TOOLTIPS["ROBOT_PASSIVE"].format(model="Model 2")
+            status_text = SETTINGS_TOOLTIPS["ROBOT_PASSIVE"]
             icon = "🔴"
 
         st.markdown(
@@ -69,7 +68,7 @@ def render_controls(is_running: bool, account_id: str = "default"):
 
     with col_btn:
         button_label = (
-            "🛑 Ana Motoru Durdur" if is_running else "🔌 Ana Motoru Çalıştır"
+            "🛑 MT5 Bağlantısını Kes" if is_running else "🔌 MT5'e Bağlan"
         )
         # Motor çalışıyorsa yeşil (primary), duruyorsa gri (secondary) olsun
         button_type = "primary" if is_running else "secondary"
@@ -91,7 +90,7 @@ def render_controls(is_running: bool, account_id: str = "default"):
         if is_running:
             st.caption(
                 "📡 Unutma: Mobil MT5'te fiyatı **1$**, hacmi **0.01 lot** olan "
-                "**Buy Limit** emri koyun → motor uzaktan durur."
+                "**Buy Limit** emri koyun → sistem uzaktan durur."
             )
 
     action = "TOGGLE" if toggle_btn else None

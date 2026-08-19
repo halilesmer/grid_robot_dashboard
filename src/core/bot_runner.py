@@ -3,7 +3,6 @@ import sys
 import os
 import json
 import time
-import threading
 import io
 from pathlib import Path
 
@@ -38,53 +37,44 @@ from src.utils.paths import get_metrics_path, get_sim_price_path
 from src.utils.state_manager import build_synced_state, save_state, load_state
 
 
-def export_metrics_loop(bot_engine, account_id):
-    """
-    Bu fonksiyon arka planda sürekli çalışarak robotun metriklerini okur
-    ve Dashboard'un görebilmesi için bir JSON dosyasına yazar.
-    Aynı zamanda Mac Test Modunda arayüzden gelen sahte fiyatı okur.
-    """
+def export_metrics_step(bot_engine, account_id):
+    """Ana döngüye (main thread) entegre metrik dışa aktarıcı. Threading çökmesini engeller."""
     metrics_file = get_metrics_path(account_id)
     sim_file = get_sim_price_path(account_id)
 
-    while bot_engine.IS_RUNNING:
-        # 1. Metrikleri dışarı aktar (Arayüz görsün diye)
-        if hasattr(bot_engine, "get_live_metrics"):
-            try:
-                metrics = bot_engine.get_live_metrics()
-                tmp_metrics_file = metrics_file + ".tmp"
-                with open(tmp_metrics_file, "w", encoding="utf-8") as f:
-                    json.dump(metrics, f)
-                os.replace(tmp_metrics_file, metrics_file)
-            except Exception as e:
-                pass  # Okuma hatası anlık olabilir, devam et.
+    if hasattr(bot_engine, "get_live_metrics"):
+        try:
+            metrics = bot_engine.get_live_metrics()
+            tmp_metrics_file = metrics_file + ".tmp"
+            with open(tmp_metrics_file, "w", encoding="utf-8") as f:
+                json.dump(metrics, f)
+            os.replace(tmp_metrics_file, metrics_file)
+        except Exception:
+            pass
 
-        # 2. Arayüzden gelen sahte fiyatı (Simülatörü) içeri al
-        if sys.platform != "win32" and os.path.exists(sim_file):
-            try:
-                with open(sim_file, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                    bot_engine.SIMULATED_PRICE = data.get("price", 75.0)
-            except Exception:
-                pass
-
-        time.sleep(1)
+    if sys.platform != "win32" and os.path.exists(sim_file):
+        try:
+            with open(sim_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                bot_engine.SIMULATED_PRICE = data.get("price", 75.0)
+        except Exception:
+            pass
 
 
 def main():
     # 1. Yöneticiden (bot_manager) gelen argümanları al
     if len(sys.argv) < 3:
-        print("Kritik Hata: account_id veya model_name argümanları eksik.")
+        print("Kritik Hata: account_id veya engine_name argümanları eksik.")
         sys.exit(1)
 
     account_id = sys.argv[1]
-    model_name = sys.argv[2]
+    engine_name = sys.argv[2]
 
     # Kilit Nokta: config.py'nin Streamlit olmadan da hangi hesapta olduğunu bilmesi için
     # İşletim Sistemi ortam değişkenlerine hesap ID'sini kazıyoruz!
     os.environ["ACTIVE_ACCOUNT_ID"] = account_id
 
-    print(f"[{account_id}] Isci Surec (Subprocess) baslatiliyor. Motor: {model_name}")
+    print(f"[{account_id}] Isci Surec (Subprocess) baslatiliyor. Motor: {engine_name}")
 
     # 2. Hesabı JSON'dan bul (Tam izolasyon)
     accounts_path = os.path.join(project_root, "configs", "accounts.json")
@@ -108,35 +98,51 @@ def main():
         print(f"Hata: {account_id} ID'li hesap accounts.json içinde bulunamadı.")
         sys.exit(1)
 
-    # 3. İstenen ticaret motorunu (model) yükle
-    if model_name == "Model 1":
-        import src.core.model_1 as bot_engine
-    elif model_name == "Model 2":
-        import src.core.model_2 as bot_engine
+    # 3. İstenen ticaret motorunu yükle
+    if engine_name == "Auto Grid":
+        import src.core.auto_grid_engine as bot_engine
     else:
-        import src.core.model_3 as bot_engine
+        print(f"Hata: Bilinmeyen motor ismi ({engine_name})")
+        sys.exit(1)
 
-    # 4. SADECE bu hesaba özel MT5 Terminaline bağlan
+    # 4. Eski (önceki çalışmadan kalma) metrik dosyasını temizle.
+    #    Bayat startup_error veya mt5_connected=False verisi yeni bağlantıyı
+    #    yanıltmasın diye dosyayı baştan sıfırlıyoruz.
+    try:
+        metrics_file = get_metrics_path(account_id)
+        if os.path.exists(metrics_file):
+            os.remove(metrics_file)
+    except Exception:
+        pass
+
+    # 5. SADECE bu hesaba özel MT5 Terminaline bağlan
+    # Eski serbest logları bir kereye mahsus hesap klasörüne taşı
+    try:
+        from src.utils.paths import migrate_orphan_logs
+
+        migrate_orphan_logs(account_id)
+    except Exception:
+        pass
+
     print(f"[{account_id}] MT5 Terminaline bağlanılıyor...")
     # 🌟 ZAMAN AŞIMI KORUMASI: MT5 açılamazsa alt süreç de sessizce asılı kalmasın!
-    connection_success, connection_timed_out = connect_to_mt5_with_timeout(
-        active_account
+    # 🌟 timeout=120sn: mt5.initialize iç timeout'u (120sn) ile eşleşir, ilk bağlantı sembol indirimi için yeterli
+    connection_success, connection_timed_out, connection_error = connect_to_mt5_with_timeout(
+        active_account, timeout=120
     )
     if not connection_success:
         print(
             f"Hata: {account_id} için MetaTrader 5'e bağlanılamadı. Süreç sonlandırılıyor."
         )
         if connection_timed_out:
-            startup_error_msg = (
-                "MetaTrader 5 terminali zaman aşımı içinde açılamadı veya sunucuya "
-                "ulaşılamadı. Lütfen MT5 terminalinin açık olduğundan ve ağ/internet "
-                "bağlantınızın aktif olduğundan emin olun."
+            startup_error_msg = connection_error if connection_error else (
+                "[ZAMAN AŞIMI] MT5 terminali 120 saniye içinde açılamadı veya sunucuya ulaşılamadı."
             )
+        elif connection_error:
+            startup_error_msg = connection_error
         else:
             startup_error_msg = (
-                "MetaTrader 5 terminaline giriş yapılamadı, sunucu/şifre bilgileri "
-                "hatalı veya Algo Trading kapalı. Lütfen MT5 hesap bilgilerinizi ve "
-                "terminal ayarlarını kontrol edin."
+                "[BİLİNMEYEN] MT5 terminaline giriş yapılamadı. Hesap bilgilerini ve terminal ayarlarını kontrol edin."
             )
         # 🔴 BAĞLANTI HATASINI ARAYÜZE İLET (Kalıcı hata afişi için)
         #    Süreç kapanıyor ama arayüz bu dosyayı okuyup net hata gösterebilecek.
@@ -164,8 +170,31 @@ def main():
 
     print(f"[{account_id}] MT5 Bağlantısı Başarılı! Robot döngüsü başlıyor...")
 
+    # 🌟 Bağlantı başarılı olur olmaz dashboard'a hemen bildir.
+    #    Metrik dosyasına mt5_connected=True yazarak "Bağlanıyor..." mesajının
+    #    hızlıca geçmesini ve yeşil "Bağlandı" durumuna dönülmesini sağlar.
+    try:
+        metrics_file = get_metrics_path(account_id)
+        tmp_metrics_file = metrics_file + ".tmp"
+        with open(tmp_metrics_file, "w", encoding="utf-8") as f:
+            json.dump(
+                {
+                    "profit": 0.0,
+                    "open_positions": 0,
+                    "pending_orders": 0,
+                    "current_price": 0.0,
+                    "algo_trading_error": False,
+                    "remote_paused": False,
+                    "mt5_connected": True,
+                    "startup_error": None,
+                },
+                f,
+            )
+        os.replace(tmp_metrics_file, metrics_file)
+    except Exception:
+        pass
+
     # 🚨 ESKİ PANİK MANTIĞI KALDIRILDI:
-    #   Başlangıçta cancel_all_pending_orders(mt5) çağrısı artık YOK.
     #   Port değişimi / arayüz restart'ı / bilgisayar taşınması sonrası
     #   açık pozisyonlar ve bekleyen emirler ASLA kapatılmaz.
 
@@ -191,17 +220,27 @@ def main():
     if hasattr(bot_engine, "INITIAL_CLEANUP_DONE"):
         bot_engine.INITIAL_CLEANUP_DONE = False
 
-    # 5. Metrikleri dışarı aktaran arka plan dinleyicisini başlat
-    metrics_thread = threading.Thread(
-        target=export_metrics_loop, args=(bot_engine, account_id), daemon=True
-    )
-    metrics_thread.start()
+    # 5. Metrikleri ana döngüye (main thread) bağla (Threading MT5'i çökertir!)
+    original_sleep = bot_engine.time.sleep
+
+    def hooked_sleep(secs):
+        export_metrics_step(bot_engine, account_id)
+        original_sleep(secs)
+
+    bot_engine.time.sleep = hooked_sleep
 
     # 6. Asıl Robot Döngüsünü başlat (Bu fonksiyon sonsuz döngüdür, süreci hayatta tutar)
     try:
         bot_engine.main_loop()
     except KeyboardInterrupt:
         print(f"[{account_id}] Süreç dışarıdan durduruldu (Graceful Shutdown).")
+    except Exception as e:
+        import traceback
+
+        print(f"[{account_id}] KRİTİK HATA: Çekirdek döngü çöktü! Hata: {e}")
+        traceback.print_exc()
+        # Zombi spam döngüsünü kırmak ve diski korumak için 10 saniye fren yapıyoruz
+        bot_engine.time.sleep(10)
     finally:
         bot_engine.IS_RUNNING = False
         # 🧠 Kapanış anında son durumu MT5'ten çekip state dosyasına yaz (boş da olsa)

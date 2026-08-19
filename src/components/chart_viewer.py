@@ -4,12 +4,15 @@ import plotly.graph_objects as go
 import random
 
 
-def render_chart(current_price: float, current_settings: dict, model_name: str):
+def render_chart(
+    current_price: float, current_settings: dict, engine_name: str = "Auto Grid"
+):
     """
     Çizgi grafik ve grid bölgelerini doğrudan JSON ayarlarından (current_settings) okuyarak çizer.
     TradingView Dark Theme stili ve HAFIZALI (iz bırakan) gerçek zaman serisi mantığı uygulanmıştır.
-    Model 2 için BUY (Yeşil) ve SELL (Kırmızı) asimetrik grid çizgileri entegre edilmiştir.
+    Auto Grid için BUY (Yeşil) ve SELL (Kırmızı) asimetrik grid çizgileri entegre edilmiştir.
     """
+
     st.markdown("### 📈 Canlı Fiyat ve Grid Bölgeleri")
 
     fig = go.Figure()
@@ -64,29 +67,9 @@ def render_chart(current_price: float, current_settings: dict, model_name: str):
     )
 
     # ==========================================
-    # MODEL 1 ÇİZİMLERİ (Statik Grid Çizgileri)
+    # AUTO GRID ÇİZİMLERİ (Dinamik Bölgeler ve Asimetrik Gridler)
     # ==========================================
-    if model_name == "Model 1":
-        grid_step = float(current_settings.get("GRID_STEP", 0.05))
-        levels_above = int(current_settings.get("LEVELS_ABOVE", 5))
-        levels_below = int(current_settings.get("LEVELS_BELOW", 5))
-
-        for i in range(1, levels_above + 1):
-            level_price = current_price + (i * grid_step)
-            fig.add_hline(
-                y=level_price, line_dash="dot", line_color="#4ade80", opacity=0.4
-            )
-
-        for i in range(1, levels_below + 1):
-            level_price = current_price - (i * grid_step)
-            fig.add_hline(
-                y=level_price, line_dash="dot", line_color="#f87171", opacity=0.4
-            )
-
-    # ==========================================
-    # MODEL 2 ÇİZİMLERİ (Dinamik Bölgeler ve Asimetrik Gridler)
-    # ==========================================
-    elif model_name == "Model 2":
+    if engine_name == "Auto Grid":
         zones = current_settings.get("ZONES", [])
         for idx, zone in enumerate(zones):
             min_p = float(zone.get("min_price", 0.0))
@@ -160,8 +143,14 @@ def render_chart(current_price: float, current_settings: dict, model_name: str):
     # ==========================================
     # TRADINGVIEW STİLİ GRAFİK AYARLARI
     # ==========================================
+    display_symbol = "USOUSD"
+    if current_settings.get("ZONES") and len(current_settings["ZONES"]) > 0:
+        display_symbol = str(
+            current_settings["ZONES"][0].get("symbol", "USOUSD")
+        ).upper()
+
     fig.add_annotation(
-        text="USOUSD 30",
+        text=f"{display_symbol} 30",
         xref="paper",
         yref="paper",
         x=0.5,
@@ -171,7 +160,7 @@ def render_chart(current_price: float, current_settings: dict, model_name: str):
         align="center",
     )
     fig.add_annotation(
-        text="Spot WTI Crude Oil",
+        text="Auto Grid Market",
         xref="paper",
         yref="paper",
         x=0.5,

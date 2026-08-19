@@ -103,7 +103,7 @@ def main():
         sys.exit(1)
 
     # 2. Ayarlar dosyası uyumu (yeni sistemle)
-    settings_file = get_settings_file("Model 2")
+    settings_file = get_settings_file("Auto Grid")
     print(f"\n📄 Ayarlar dosyası (yeni sistem bekler): {settings_file}")
     print(
         f"   {'✅ Dosya mevcut + isim uyumlu' if os.path.exists(settings_file) else '❌ DOSYA YOK — yeni sistem ilk açılışta varsayılan oluşturur'}"
@@ -111,8 +111,9 @@ def main():
 
     # 3. MT5'e bağlan
     print(f"\n🔌 MT5 Terminaline bağlanılıyor ({account_id})...")
-    if not connect_to_mt5(active_account):
-        print("❌ MT5 bağlantısı başarısız! Denetim iptal edildi.")
+    ok, error_detail = connect_to_mt5(active_account)
+    if not ok:
+        print(f"❌ MT5 bağlantısı başarısız! Denetim iptal edildi. Detay: {error_detail}")
         print("   (Mac'te simülasyon olarak 'geçer' sayılır)")
         sys.exit(1)
     print("✅ MT5 bağlantısı başarılı (veya simüle edildi).")
@@ -123,8 +124,9 @@ def main():
         mt5_stub = _GET_MT5(None)
     else:
         # Mac test modu: DummyMT5'i motor modülünden al
-        import src.core.model_2 as _model2
-        mt5_stub = _model2.mt5
+        import core.auto_grid_engine as bot_engine
+
+        mt5_stub = bot_engine.mt5
     positions = mt5_stub.positions_get() if hasattr(mt5_stub, "positions_get") else None
     if not positions:
         print("   ℹ️  Açık pozisyon yok.")

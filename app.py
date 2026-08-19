@@ -6,8 +6,10 @@ import json
 from pathlib import Path
 import platform
 import time
+import socket
 import streamlit as st
 
+from src.components.dialogs import confirm_system_shutdown_dialog
 
 def get_current_version():
     """VERSION dosyasından en güncel sürüm numarasını okur."""
@@ -49,7 +51,6 @@ from src.utils.bot_manager import (
     is_bot_running,
     start_bot_process,
     stop_bot_process,
-    stop_and_close_all,
 )
 from src.components.account_selector import render_account_selector
 from src.components.chart_viewer import render_chart
@@ -61,19 +62,136 @@ from src.utils.mt5_connection import (
 from src.components.header import render_main_title
 from src.components.settings_panel import render_settings_panel
 from src.components.log_viewer import render_log_viewer
+from src.components.metrics import render_global_metrics
 from src.styles.custom_css import apply_custom_css
 from src.utils.config import load_settings, save_settings
 
 # 🌟 YENİ: Merkezi yol yöneticisi
 from src.utils.paths import get_metrics_path, get_sim_price_path, get_ui_state_path
+from src.ui.pwa_installer import inject_pwa_code
+from src.utils.self_updater import (
+    execute_git_pull,
+    check_for_updates,
+)
 
-import src.core.model_2 as model_2
+import src.core.auto_grid_engine as bot_engine
 
-# 🔍 DONMA TEŞHİSİ: Her script çalıştırmasının aşama sürelerini logs/run_profiler.log'a yazar
-from src.utils.profiler import run_start, stage
+# 🔍 DONMA TEŞHİSİ (Sistem performansını artırmak ve log şişmesini önlemek için tamamen susturuldu)
+def run_start(*args, **kwargs):
+    pass
 
-# 🔍 Yeni script çalıştırması başladı (takılma anında son satır kalan aşamayı gösterir)
-run_start(os.getenv("ROBOT_ENV", "TEST"))
+
+def stage(*args, **kwargs):
+    pass
+
+
+# 🌟 PWA kodunu enjekte et (manifest + service worker)
+inject_pwa_code()
+
+
+# ==========================================
+# SİSTEM YÖNETİCİSİ (PWA + SELF-UPDATE) - ANA EKRAN
+# ==========================================
+# ==========================================
+# GÜNCELLEME MODALI (DİALOG)
+# ==========================================
+@st.dialog("🔄 Güncelleme Kontrolü")
+def show_update_dialog(env_name, target_branch):
+    with st.spinner("GitHub ile versiyon kimlikleri karşılaştırılıyor..."):
+        success, update_data = check_for_updates(branch=target_branch)
+
+    if not success:
+        st.error(f"Bağlantı Hatası: {update_data}")
+        if st.button("Kapat", use_container_width=True):
+            st.rerun()
+        return
+
+    has_update, local_ver, remote_ver = update_data
+
+    if has_update:
+        st.info(
+            f"🚀 **Yeni bir güncelleme mevcut!**\n\n📌 **Lokal Sürüm:** `{local_ver}`\n🚀 **Yeni Sürüm:** `{remote_ver}`"
+        )
+        col1, col2 = st.columns(2)
+        if col1.button("Şimdi Güncelle", type="primary", use_container_width=True):
+            with st.spinner("Güncelleme indiriliyor..."):
+                pull_success, message = execute_git_pull(branch=target_branch)
+                if pull_success:
+                    st.session_state["update_success_msg"] = message
+                    st.rerun()
+                else:
+                    st.error(message)
+        if col2.button("İptal", use_container_width=True):
+            st.rerun()
+    else:
+        st.warning(
+            f"Sürümünüz Güncel!\n\n📌 **Lokal Sürüm:** `{local_ver}`\n🚀 **Sunucu Sürümü:** `{remote_ver}`\n\nYine de zorla güncellemek ister misiniz?"
+        )
+        col1, col2 = st.columns(2)
+        if col1.button("Evet", type="primary", use_container_width=True):
+            with st.spinner("Zorla güncelleniyor..."):
+                pull_success, message = execute_git_pull(branch=target_branch)
+                if pull_success:
+                    st.session_state["update_success_msg"] = message
+                    st.rerun()
+                else:
+                    st.error(message)
+        if col2.button("Hayır", use_container_width=True):
+            st.rerun()
+
+
+def get_local_ip():
+    """Makinenin yerel ağdaki IP adresini döndürür."""
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except Exception:
+        return "Bilinmiyor"
+
+
+# ==========================================
+# MT5 BAĞLANTI MODALI (DONMAYI ENGELLEYEN ASİSTAN)
+# ==========================================
+@st.dialog("🔌 MT5 Bağlantı Asistanı")
+def show_mt5_connect_dialog(account_info, acc_id):
+    st.info("MetaTrader 5 terminali açılıyor ve giriş yapılıyor...")
+    with st.spinner(
+        "Otomatik giriş tamamlanıyor (Lütfen bekleyin, Zaman aşımı: 90sn)..."
+    ):
+        connection_success, connection_timed_out, connection_error = connect_to_mt5_with_timeout(
+            account_info, timeout=90
+        )
+
+    if connection_success:
+        shutdown_mt5()
+        if start_bot_process(acc_id, "Auto Grid"):
+            st.session_state[f"bot_started_at_{acc_id}"] = time.time()
+            st.toast(
+                f"🚀 {account_info['account_name']} için robot başlatıldı!", icon="✅"
+            )
+            st.rerun()
+        else:
+            st.error("🔴 Robot başlatılamadı! Log kayıtlarını inceleyin.")
+    else:
+        if connection_timed_out:
+            st.error(
+                f"🔴 **ZAMAN AŞIMI:** {connection_error if connection_error else 'MT5 terminaline 90 saniye içinde ulaşılamadı.'}"
+            )
+        else:
+            error_display = connection_error if connection_error else (
+                "🔴 **BAĞLANTI HATASI:** Giriş bilgileri hatalı veya Algo Trading kapalı."
+            )
+            st.error(error_display)
+
+        col1, col2 = st.columns(2)
+        if col1.button("🔄 Tekrar Bağlan", type="primary", use_container_width=True):
+            st.session_state[f"motor_toggle_{acc_id}"] = True
+            st.rerun()
+        if col2.button("❌ İptal", use_container_width=True):
+            st.rerun()
 
 
 def get_live_metrics_from_file(account_id):
@@ -84,8 +202,10 @@ def get_live_metrics_from_file(account_id):
             with open(metrics_file, "r", encoding="utf-8") as f:
                 data = json.load(f)
             age = time.time() - os.path.getmtime(metrics_file)
-            data.setdefault("mt5_connected", True)
+            data.setdefault("mt5_connected", False)
             data.setdefault("startup_error", None)
+            data.setdefault("market_open", False)
+            data["data_age"] = age
             # Eski (bayat) bir başlangıç hatası afişi, 30 saniyeden eskiyse gösterilmez
             if data.get("startup_error") and age > 30:
                 data["startup_error"] = None
@@ -99,8 +219,10 @@ def get_live_metrics_from_file(account_id):
         "current_price": 0.0,
         "algo_trading_error": False,
         "remote_paused": False,
-        "mt5_connected": True,
+        "mt5_connected": False,
         "startup_error": None,
+        "market_open": False,
+        "data_age": 999.0,
     }
 
 
@@ -109,9 +231,63 @@ def get_live_metrics_from_file(account_id):
 # ==========================================
 apply_custom_css()
 
-# 🌟 YENİ: Başlık En Üste Geldi
-render_main_title()
-stage("CSS + başlık")
+# ==========================================
+# 🌟 YENİ: BAŞLIK VE SİSTEM YÖNETİCİSİ AYNI SATIRDA
+# ==========================================
+header_col1, header_col2 = st.columns([0.85, 0.15], vertical_alignment="center")
+
+with header_col1:
+    render_main_title()
+
+with header_col2:
+    with st.popover("⚙️ Sistem Ayarları", use_container_width=True):
+        port_num = os.getenv("STREAMLIT_PORT", "8501")
+        local_ip = get_local_ip()
+
+        st.markdown("##### 💻 Sistem Bilgileri")
+        st.caption(f"**Host Makine:** {platform.node()}")
+        st.caption(f"**İşletim Sistemi:** {platform.system()} {platform.release()}")
+        st.caption(f"**Yerel IP (Ağ):** {local_ip}")
+
+        st.divider()
+
+        st.markdown("##### 🔗 Erişim Adresleri")
+        st.caption(
+            f"**Aynı Cihazdan (Local):** [http://localhost:{port_num}](http://localhost:{port_num})"
+        )
+        st.caption(
+            f"**Ağ Üzerinden (Mobil/PC):** [http://{local_ip}:{port_num}](http://{local_ip}:{port_num})"
+        )
+
+        st.divider()
+
+        st.markdown("##### 🌍 Çalışma Ortamı")
+        st.caption(
+            f"**Ortam:** {env} | **Port:** {port_num} | **Dal (Branch):** {'master' if env == 'LIVE' else 'test'}"
+        )
+
+        if st.button("🔄 Güncellemeleri Denetle", use_container_width=True):
+            target_branch = "master" if env == "LIVE" else "test"
+            show_update_dialog(env, target_branch)
+
+        st.divider()
+
+        if st.button(
+            "🔌 Sistemi Tamamen Kapat", type="primary", use_container_width=True
+        ):
+            confirm_system_shutdown_dialog()
+
+if "update_success_msg" in st.session_state:
+    st.toast("✅ Uygulama başarıyla güncellendi!", icon="🚀")
+    try:
+        os.makedirs("logs", exist_ok=True)
+        with open("logs/update.log", "a", encoding="utf-8") as f:
+            f.write(st.session_state["update_success_msg"] + "\n")
+    except Exception:
+        pass
+    del st.session_state["update_success_msg"]
+
+stage("CSS + başlık ve sistem ayarları render edildi")
 
 # ==========================================
 # 2. ÖNCE HESABI SEÇ (TAM GENİŞLİKTE)
@@ -127,9 +303,8 @@ if not active_account:
 account_id = str(active_account.get("login", "default"))
 
 # ==========================================
-# MOTOR SEÇİMİ (TEK KRAL: MODEL 2)
+# MOTOR SEÇİMİ (TEK KRAL: AUTO GRID)
 # ==========================================
-bot_engine = model_2
 
 
 st.markdown("---")
@@ -145,12 +320,45 @@ stage("Bot durumu sorgusu (is_bot_running)")
 # ==========================================
 # 4. AYARLARI VE METRİKLERİ YÜKLE
 # ==========================================
-current_settings = load_settings("Model 2")
+current_settings = load_settings("Auto Grid")
 
 # Canlı verileri JSON dosyasından çek (Çünkü robot artık Subprocess olarak çalışıyor)
 # Dosya her zaman okunur: Başlangıç hatası (startup_error) afişi buradan beslenir.
 live_data = get_live_metrics_from_file(account_id)
 stage("Ayarlar + metrik yükleme")
+
+# 🌟 GÖRSEL ALARM KÖPRÜSÜ: Metrikleri ve Kritik Alarmları Ekrana Bas
+render_global_metrics(
+    profit=live_data.get("profit", 0.0),
+    current_price=live_data.get("current_price", 0.0),
+    metrics_data=live_data,
+)
+
+# ==========================================
+# PİYASA ROZETİ VE CANLILIK GÖSTERGESİ (HEARTBEAT)
+# ==========================================
+if not account_is_running or live_data.get("data_age", 999.0) > 10:
+    # 🌟 KRİTİK HATA ÇÖZÜMÜ: Robot durduysa veya senkronizasyon koptuysa,
+    # eski JSON'daki bayat veriler alt panellerde "Açık" görünmesin diye kaynağında temizle!
+    live_data["market_open"] = False
+    live_data["mt5_connected"] = False
+
+if account_is_running:
+    m_open = live_data.get("market_open", False)
+    d_age = live_data.get("data_age", 999.0)
+    is_live = d_age < 10
+
+    dot_color = "🟢" if is_live else "🔴"
+    sync_text = (
+        f"Son senkronizasyon: {int(d_age)} sn önce"
+        if is_live
+        else "Senkronizasyon koptu!"
+    )
+    
+    if m_open:
+        st.markdown(f"&nbsp; 🟢 **Piyasa Açık** &nbsp;|&nbsp; {dot_color} *{sync_text}*")
+    else:
+        st.markdown("&nbsp; 🔴 **Piyasa Kapalı** &nbsp;|&nbsp; ⏸️ *İşlemler duraklatıldı*")
 
 
 # ==========================================
@@ -165,39 +373,78 @@ if live_data.get("algo_trading_error", False):
 
     if account_is_running:
         stop_bot_process(account_id)
-        st.toast("🛑 Motor kilitlendi: Algo Trading kapalı!", icon="⚠️")
+        st.toast("🛑 Bağlantı kilitlendi: Algo Trading kapalı!", icon="⚠️")
         st.rerun()
 
 
 # 🔴 MT5 BAĞLANTISI KOPTU/BULUNAMADI UYARISI (Subprocess'ten gelen canlı durum)
 if live_data.get("startup_error"):
-    st.error(
-        f"🚨 **MT5 BAĞLANTI HATASI:** {live_data.get('startup_error')}",
-        icon="🚫",
-    )
-elif account_is_running and not live_data.get("mt5_connected", True):
-    st.error(
-        "🚨 **KRİTİK HATA:** MetaTrader 5 ile bağlantı KOPTU! "
-        "Robot çalışıyor ama MT5'e ulaşamıyor. "
-        "MT5 terminalinin açık ve ağ bağlantınızın aktif olduğunu kontrol edin. "
-        "Bağlantı geri gelince robot otomatik olarak devam edecek.",
-        icon="🚫",
-    )
+    c_err, c_empty = st.columns([0.85, 0.15])
+    with c_err:
+        st.error(
+            f"🚨 **MT5 BAĞLANTI HATASI:** {live_data.get('startup_error')}",
+            icon="🚫",
+        )
+    with c_empty:
+        if st.button("🔄 Tekrar Bağlan", key=f"retry_from_error_{account_id}", use_container_width=True):
+            st.session_state[f"motor_toggle_{account_id}"] = True
+            st.rerun()
+elif account_is_running and not live_data.get("mt5_connected", False):
+    bot_started_at = st.session_state.get(f"bot_started_at_{account_id}")
+    bot_just_started = bot_started_at and (time.time() - bot_started_at) < 90
+    elapsed_since_start = int(time.time() - bot_started_at) if bot_started_at else 0
+
+    if bot_just_started:
+        ci_col, cb_col = st.columns([0.85, 0.15])
+        with ci_col:
+            st.info(
+                f"⏳ **Bağlanıyor...** Subprocess {elapsed_since_start} saniye önce başlatıldı, "
+                "MT5 bağlantısı kuruluyor. İlk bağlantı sembol listesi indirimi nedeniyle 1-2 dakika sürebilir. "
+                "Lütfen bekleyin...",
+                icon="⏳",
+            )
+        with cb_col:
+            if st.button("❌ İptal", key=f"cancel_connect_{account_id}", use_container_width=True):
+                try:
+                    stop_bot_process(account_id)
+                except Exception:
+                    pass
+                if f"bot_started_at_{account_id}" in st.session_state:
+                    del st.session_state[f"bot_started_at_{account_id}"]
+                st.toast("🛑 Bağlantı denemesi iptal edildi.", icon="⏹️")
+                st.rerun()
+    else:
+        ce_col, cs_col = st.columns([0.85, 0.15])
+        with ce_col:
+            st.error(
+                "🚨 **KRİTİK HATA:** MetaTrader 5 ile bağlantı KOPTU! "
+                "Robot çalışıyor ama MT5'e ulaşamıyor. "
+                "MT5 terminalinin açık ve ağ bağlantınızın aktif olduğunu kontrol edin. "
+                "Bağlantı geri gelince robot otomatik olarak devam edecek.",
+                icon="🚫",
+            )
+        with cs_col:
+            if st.button("🛑 Durdur", key=f"stop_disconnected_{account_id}", use_container_width=True):
+                stop_bot_process(account_id)
+                if f"bot_started_at_{account_id}" in st.session_state:
+                    del st.session_state[f"bot_started_at_{account_id}"]
+                st.toast("🛑 Robot durduruldu.", icon="⏹️")
+                st.rerun()
 
 
 # 📡 Mobil MT5'ten (Sinyal Emri ile) uzaktan durduruldu mu?
 if live_data.get("remote_paused", False) and account_is_running:
     st.warning(
-        "📡 **Motor Mobil MT5'ten UZAKTAN DURDURULDU.** "
+        "📡 **Sistem Mobil MT5'ten UZAKTAN DURDURULDU.** "
         "Bekleyen emirler silindi, açık pozisyonlar korundu. "
-        "Tekrar başlatmak için yukarıdaki **MOTOR** butonunu kullanın "
+        "Tekrar bağlanmak için yukarıdaki **MT5'e Bağlan** butonunu kullanın "
         "(mobil MT5'te 1$ Buy Limit yalnızca durdurmak içindir).",
         icon="⏸️",
     )
 stage("Hata/uyarı afişleri")
 
 
-# 🌟 Ana Motor tetikleyicisi artık settings_panel üzerinden yönetiliyor
+# 🌟 MT5 bağlantı tetikleyicisi artık settings_panel üzerinden yönetiliyor
 action = None
 if st.session_state.get(f"motor_toggle_{account_id}"):
     action = "TOGGLE"
@@ -208,57 +455,15 @@ if st.session_state.get(f"motor_toggle_{account_id}"):
 # ==========================================
 if action == "TOGGLE":
     if not account_is_running:
-        # Önce MT5 bağlantısını test et.
-        # 🌟 YENİ: Zaman aşımlı bağlantı — MT5 açılamaz/ulaşılamazsa arayüz ASLA donmaz!
-        with st.spinner("🔄 MT5 terminaline bağlanılıyor..."):
-            connection_success, connection_timed_out = connect_to_mt5_with_timeout(
-                active_account
-            )
-        stage("MT5 bağlantı denemesi")
-
-        if connection_success:
-            # 🌟 CRİTİK: Test bağlantısını serbest bırak! Alt süreç (bot_runner) aynı
-            # terminale bağlanırken IPC timeout (-10005) yaşamamak için arayüz artık
-            # terminali meşgul etmemeli.
-            shutdown_mt5()
-            # Subprocess (Alt Süreç) başlat!
-            if start_bot_process(account_id, "Model 2"):
-                st.toast(
-                    f"🚀 {active_account['account_name']} için robot izole olarak başlatıldı!",
-                    icon="✅",
-                )
-                st.rerun()
-            else:
-                st.error(
-                    "🔴 **Robot Başlatılamadı!** Lütfen hata kayıtlarını (logs) inceleyin.",
-                    icon="❌",
-                )
-        else:
-            # 🌟 EKLENDİ: Bağlantı başarısız olursa KALICI ve net hata göster
-            if connection_timed_out:
-                st.error(
-                    "🔴 **MT5 BAĞLANTI ZAMAN AŞIMI!** Terminal açılamadı veya sunucuya "
-                    "ulaşılamadı. MT5 terminalinin açık olduğundan ve ağ/internet "
-                    "bağlantınızın aktif olduğundan emin olun, sonra tekrar deneyin.",
-                    icon="🚨",
-                )
-            else:
-                st.error(
-                    "🔴 **MT5 BAĞLANTI HATASI!** Terminal açılamadı veya hesap giriş "
-                    "bilgileri (sunucu/şifre) yanlış. Lütfen MT5 terminalinin açık "
-                    "olduğunu ve hesap bilgilerinizin doğruluğunu kontrol edin.",
-                    icon="🚨",
-                )
+        # MT5 bağlantı donmasını engelleyen modalı tetikle
+        show_mt5_connect_dialog(active_account, account_id)
+        stage("MT5 bağlantı denemesi (Modal tetiklendi)")
     else:
-        # 🚀 PHASE 4: Kapatma SADECE kullanıcının açık seçimiyle yapılır.
-        # "Durdur" -> süreç kapanır, pozisyonlar/emirler korunur.
-        # "Durdur ve Tümünü Kapat" -> süreç kapanır + tüm robot pozisyonları kapatılır.
+        # MT5 bağlantısı kesilir; AÇIK POZİSYONLARA ASLA DOKUNULMAZ.
         confirm_stop_motor_dialog(
             account_id,
             on_stop_func=stop_bot_process,
-            on_stop_close_func=stop_and_close_all,
         )
-
 
 # ==========================================
 # 🌟 GİZLİ BEKÇİ (EVENT-DRIVEN WATCHER)
@@ -275,7 +480,7 @@ def remote_signal_watcher(acc_id, is_running):
             disk_states = json.load(f)
 
         ui_state_key = f"ui_zone_states_{acc_id}"
-        zones_session_key = f"model2_zones_{acc_id}"
+        zones_session_key = f"auto_grid_zones_{acc_id}"
 
         if zones_session_key in st.session_state and ui_state_key in st.session_state:
             memory_states = st.session_state[ui_state_key]
@@ -305,7 +510,7 @@ remote_signal_watcher(account_id, account_is_running)
 # ==========================================
 updated_settings = render_settings_panel(
     current_settings,
-    "Model 2",
+    "Auto Grid",
     account_id,
     live_data,
     active_account,
@@ -313,7 +518,7 @@ updated_settings = render_settings_panel(
 )
 
 if updated_settings:
-    save_settings(updated_settings, "Model 2")
+    save_settings(updated_settings, "Auto Grid")
     st.success(f"✅ Ayarlar başarıyla güncellendi ve {account_id} için kaydedildi!")
     st.rerun()
 
@@ -352,7 +557,7 @@ if platform.system() != "Windows":
     # Mac ortamında: Grafik ve Log yan yana (Grafik daha geniş)
     col_chart, col_log = st.columns([2, 1])
     with col_chart:
-        render_chart(current_active_price, current_settings, "Model 2")
+        render_chart(current_active_price, current_settings, "Auto Grid")
     with col_log:
         render_log_viewer(account_id)
 else:

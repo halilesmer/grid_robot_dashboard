@@ -2,14 +2,16 @@
 import streamlit as st
 
 
-@st.dialog("⚠️ Tümünü Temizle")
+@st.dialog("⚠️ Bölgeyi Temizle")
 def confirm_clear_dialog(on_confirm_func):
     """
-    Tümünü temizleme işlemi için onay penceresi (Modal).
+    Bölge temizleme işlemi için onay penceresi (Modal).
+    SADECE bekleyen emirler (pending orders) silinir, AÇIK POZİSYONLARA DOKUNULMAZ.
     on_confirm_func: 'Evet' butonuna basıldığında çalıştırılacak fonksiyon.
     """
     st.write(
-        "Tüm kayıtları/verileri temizlemek istediğinize emin misiniz? Bu işlem geri alınamaz."
+        "Bu bölgedeki bekleyen emirleri silmek istediğinize emin misiniz? "
+        "AÇIK POZİSYONLAR KORUNUR. Bu işlem geri alınamaz."
     )
 
     col_yes, col_no = st.columns([1, 1])
@@ -58,29 +60,68 @@ def confirm_delete_account_dialog(account_name, on_confirm_func):
         st.rerun()
 
 
-@st.dialog("🛑 Motor Durdurma Seçimi")
-def confirm_stop_motor_dialog(account_id, on_stop_func, on_stop_close_func):
+@st.dialog("🛑 MT5 Bağlantısını Kes")
+def confirm_stop_motor_dialog(account_id, on_stop_func):
     """
-    Ana Motoru Durdurca açılan güvenlik seçim penceresi (Modal).
+    MT5 bağlantısını kesmek için onay penceresi (Modal).
 
-    🚀 PHASE 4 Kuralı: İşlemler SADECE kullanıcının açık seçimiyle kapatılır.
-    1) "Sadece Durdur": Bot kapanır, pozisyonlar ve emirler broker'da KALIR.
-    2) "Durdur ve Tümünü Kapat": Bot kapanır, tüm robot pozisyonları kapatılır.
+    Bot kapanır; AÇIK POZİSYONLARA ASLA DOKUNULMAZ.
+    Bekleyen emirler (pending orders) de olduğu gibi korunur.
     """
-    st.write("Robot motoru kapatılacak. Açık pozisyonlara ne yapılsın?")
-
+    st.write("MT5 bağlantısını kesmek istediğinize emin misiniz?")
     st.info(
-        "🟡 **Sadece Durdur**: Pozisyonlar ve bekleyen emirler olduğu gibi korunur.\n\n"
-        "🔴 **Durdur ve Tümünü Kapat**: Tüm robot pozisyonları piyasa fiyatından kapatılır.",
+        "Açık pozisyonlar ve bekleyen emirler broker'da olduğu gibi korunur.",
         icon="ℹ️",
     )
 
     col1, col2 = st.columns([1, 1])
-    if col1.button("🟡 Sadece Durdur", width="stretch"):
+    if col1.button("🟡 Evet, Bağlantıyı Kes", width="stretch"):
         on_stop_func(account_id)
+        cleanup_key = f"bot_started_at_{account_id}"
+        if cleanup_key in st.session_state:
+            del st.session_state[cleanup_key]
         st.rerun()
-    if col2.button("🔴 Durdur ve Tümünü Kapat", type="primary", width="stretch"):
-        on_stop_close_func(account_id)
+    if col2.button("❌ İptal", width="stretch"):
         st.rerun()
-    if st.button("❌ İptal", width="stretch"):
+
+import os
+import time
+import psutil
+
+
+@st.dialog("🛑 Sistemi Tamamen Kapat")
+def confirm_system_shutdown_dialog():
+    """
+    Arka planda görünmez (VBS) olarak çalışan arayüzü ve ona bağlı
+    tüm zombi robot süreçlerini (bot_runner.py) güvenle kapatır.
+    """
+    st.error(
+        "Bu işlem arka planda çalışan **tüm robotları** ve **bu arayüzü** tamamen kapatacaktır. "
+        "Açık olan pozisyonlarınız broker tarafında güvende kalır."
+    )
+    st.write("Sistemi gerçekten kapatmak istiyor musunuz?")
+
+    col_yes, col_no = st.columns([1, 1])
+    if col_yes.button("🔴 Sistemi Kapat", type="primary", width="stretch"):
+        st.success(
+            "Zombi süreçler temizleniyor... Tarayıcı sekmesini kapatabilirsiniz."
+        )
+        time.sleep(2)  # Kullanıcının mesajı görebilmesi için kısa bir bekleme
+
+        # 1. Aşama: Sadece bize ait olan "bot_runner.py" zombilerini bul ve öldür
+        for proc in psutil.process_iter(["pid", "name", "cmdline"]):
+            try:
+                cmdline = proc.info.get("cmdline") or []
+                cmd_str = " ".join(cmdline).lower()
+
+                # Sadece bot_runner.py içeren python süreçlerini hedef al
+                if "bot_runner.py" in cmd_str:
+                    proc.kill()
+            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                continue
+
+        # 2. Aşama: VBS üzerinden başlatılan bu ana Streamlit sürecini intihar ettir (Kapat)
+        os._exit(0)
+
+    if col_no.button("Hayır, İptal", width="stretch"):
         st.rerun()

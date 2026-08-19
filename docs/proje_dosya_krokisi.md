@@ -9,6 +9,7 @@ Bu sistem, MetaTrader 5 (MT5) entegrasyonuna sahip bir **Algoritmik Ticaret (Alg
 📦 PROJE_KOK_DIZINI
 ┣ 📜 app.py                     # Uygulamanın (Streamlit) ana giriş noktası
 ┣ 📜 requirements.txt           # Python bağımlılıkları
+┣ 📜 VERSION                    # Proje sürüm takip dosyası
 ┃
 ┣ 📂 src                        # Kaynak kodların bulunduğu ana dizin
 ┃ ┣ 📂 components               # Arayüz (UI) bileşenleri
@@ -19,33 +20,34 @@ Bu sistem, MetaTrader 5 (MT5) entegrasyonuna sahip bir **Algoritmik Ticaret (Alg
 ┃ ┃ ┣ 📜 header.py              # Üst bilgi alanı
 ┃ ┃ ┣ 📜 log_viewer.py          # Arayüzde logların gösterimi
 ┃ ┃ ┣ 📜 metrics.py             # Kâr/Zarar gibi canlı metriklerin gösterimi
-┃ ┃ ┣ 📜 model3_settings.py     # Model 3'e özel arayüz ayarları
-┃ ┃ ┗ 📜 settings_panel.py      # Genel ayar paneli
+┃ ┃ ┗ 📜 settings_panel.py      # Genel ayar paneli (Auto Grid arayüzü)
 ┃ ┃
 ┃ ┣ 📂 core                     # Çekirdek algoritma ve ticaret mantığı
 ┃ ┃ ┣ 📜 bot_runner.py          # Alt süreci (Subprocess) çalıştıran ana motor
-┃ ┃ ┣ 📜 model_1.py             # Ticaret stratejisi / Modeli 1
-┃ ┃ ┣ 📜 model_2.py             # Ticaret stratejisi / Modeli 2
-┃ ┃ ┗ 📜 model_3.py             # Ticaret stratejisi / Modeli 3
+┃ ┃ ┗ 📜 auto_grid_engine.py    # Ticaret stratejisi / Nihai Auto Grid Motoru
 ┃ ┃
 ┃ ┣ 📂 utils                    # Yardımcı araçlar ve bağlantılar
 ┃ ┃ ┣ 📜 bot_manager.py         # Subprocess (Alt süreç) başlatma ve durdurma yöneticisi
-┃ ┃ ┣ 📜 config.py              # Ayar dosyalarını (JSON) okuma/yazma işlemleri
+┃ ┃ ┣ 📜 config.py              # Ayar dosyalarını (JSON) okuma ve veri göçü (migration) işlemleri
 ┃ ┃ ┣ 📜 mt5_connection.py      # MetaTrader 5 (MT5) borsa/broker bağlantısı
 ┃ ┃ ┣ 📜 paths.py               # Merkezi yol (path) yöneticisi (Log ve Config yolları)
 ┃ ┃ ┣ 📜 state_manager.py       # MT5 "Source of Truth" bazlı durum eşitleme
 ┃ ┃ ┣ 📜 profiler.py            # Performans ve thread metrik ölçümleyici
-┃ ┃ ┗ 📜 trade_utils.py         # Alım-satım ve hesaplama yardımcı fonksiyonları
+┃ ┃ ┣ 📜 self_updater.py        # GitHub üzerinden kendi kendini güncelleme aracı
+┃ ┃ ┗ 📜 trade_utils.py         # Alım-satım, hata loglama ve hesaplama yardımcı fonksiyonları
 ┃ ┃
 ┃ ┣ 📂 constants                # Sabit değerler
 ┃ ┃ ┗ 📜 tooltips.py            # Arayüzdeki bilgilendirme/ipucu metinleri
+┃ ┃
+┃ ┣ 📂 ui                       # Arayüz araçları
+┃ ┃ ┗ 📜 pwa_installer.py       # Uygulamanın web app (PWA) kurulum altyapısı
 ┃ ┃
 ┃ ┗ 📂 styles                   # Arayüz tasarımları
 ┃   ┗ 📜 custom_css.py          # Streamlit arayüzünü özelleştiren CSS kodları
 ┃
 ┣ 📂 configs                    # Konfigürasyon dosyaları (JSON)
 ┃ ┣ 📜 accounts.json            # Borsa hesap bilgileri/kimlik bilgileri
-┃ ┗ 📜 settings_*.json          # Modeller için parametre ve ayar kayıtları (Hesap ID bazlı)
+┃ ┗ 📜 settings_*.json          # Parametre ve ayar kayıtları (Örn: settings_123_Auto_Grid.json)
 ┃
 ┣ 📂 data                       # Geçici durum ve hafıza dosyaları
 ┃ ┗ 📜 state_*.json             # İlgili hesabın açık pozisyon ve bekleyen emir hafızası
@@ -58,12 +60,15 @@ Bu sistem, MetaTrader 5 (MT5) entegrasyonuna sahip bir **Algoritmik Ticaret (Alg
 ┃ ┗ 📜 run_profiler.log         # Sistem ve okuma hızı (thread) performans logu
 ┃
 ┣ 📂 scripts                    # Bağımsız scriptler
-┃ ┗ 📜 audit_account.py         # Hesap denetleme aracı
+┃ ┣ 📜 audit_account.py         # Hesap denetleme aracı
+┃ ┣ 📜 launcher.py              # Python ortam yöneticisi ve uygulama başlatıcı
+┃ ┣ 📜 run_all_services.bat     # Windows hızlı başlatma betiği
+┃ ┗ 📜 start_invisible_app.vbs  # Uygulamayı CMD penceresi olmadan (gizli) başlatma betiği
 ┃
 ┗ 📂 docs                       # Dokümantasyon
-  ┣ 📜 proje_dosya_krokisi.md   # Proje genel yapısı (Ana rehber dosya)
+  ┣ 📜 proje_dosya_krokisi.md   # Proje genel yapısı (Güncellenmeli)
   ┣ 📜 my_notes.md              # Geliştirici notları
-  ┗ 📂 architecture             # Modellere ait teknik mimari belgeleri
+  ┗ 📂 architecture             # Teknik mimari belgeleri
 
 
 ---

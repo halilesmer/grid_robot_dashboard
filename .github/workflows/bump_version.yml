@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - master
+      - test
 
 jobs:
   bump-version:
@@ -17,18 +18,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-<<<<<<< Updated upstream
-      - name: Automated Version Bump
-        uses: phips28/gh-action-bump-version@v11.0.7
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          PACKAGEJSON_DIR: '.'
-          PACKAGEJSON_FILENAME: 'VERSION'
-          VERSION_TYPE: 'file'
-          COMMIT_MESSAGE: 'chore(release): {{version}} [skip ci]'
-=======
       - name: Bump Version and Tag
         run: |
           git config user.name "github-actions[bot]"
@@ -63,4 +52,4 @@ jobs:
           git commit -m "chore(release): bump version to $NEW_VERSION [skip ci]"
           git tag "$NEW_VERSION"
           git push origin HEAD:${{ github.ref_name }} --tags
->>>>>>> Stashed changes
+
