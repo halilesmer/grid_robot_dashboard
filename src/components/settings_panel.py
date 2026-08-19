@@ -79,10 +79,11 @@ def _handle_zone_action(account_id: str, zone_id: str, idx: int, state: str):
     zones_session_key = f"auto_grid_zones_{account_id}"
     if zones_session_key in st.session_state:
         backend_states = {}
-        for i, z in enumerate(st.session_state[zones_session_key]):
+        for z in st.session_state[zones_session_key]:
             z_id = z.get("id")
-            if z_id:
-                backend_states[str(i)] = st.session_state[ui_state_key].get(
+            magic_key = str(z.get("magic_idx"))
+            if z_id and magic_key:
+                backend_states[magic_key] = st.session_state[ui_state_key].get(
                     z_id, "CLEAR"
                 )
 
@@ -111,12 +112,18 @@ def render_auto_grid_settings(
     # 1. İlk açılış: Kayıtlı bölgelere ID ataması yaparak güvenle yükle
     if zones_session_key not in st.session_state:
         saved_zones = current_settings.get("ZONES", [])
-        for z in saved_zones:
+        for i, z in enumerate(saved_zones):
             if "id" not in z:
                 z["id"] = str(uuid.uuid4())
+            # 🛡️ GÜVENLİK (Kıyamet Bug'ı Çözümü): Her bölgeye kalıcı bir Magic Kimliği ver
+            if "magic_idx" not in z:
+                z["magic_idx"] = i
 
         if not saved_zones:
-            saved_zones = [_default_zone()]
+            new_zone = _default_zone()
+            new_zone["magic_idx"] = 0
+            saved_zones = [new_zone]
+
         st.session_state[zones_session_key] = saved_zones
 
     # 2. Arayüz Kalıcı Hafızasını ve Bot'tan Gelen Bildirimleri Yükle
@@ -141,13 +148,19 @@ def render_auto_grid_settings(
         except Exception:
             pass
 
-    # 🌟 YENİ: Otomatik Tamamlama (Autocomplete) için MT5 sembollerini diskten oku
+    # 🌟 YENİ: Otomatik Tamamlama (Autocomplete) ve Lot Kuralları için diskten oku
     available_symbols = []
+    symbols_dict = {}
     sym_file = get_symbols_path(account_id)
     if os.path.exists(sym_file):
         try:
             with open(sym_file, "r", encoding="utf-8") as f:
-                available_symbols = json.load(f)
+                raw_data = json.load(f)
+                if isinstance(raw_data, dict):
+                    symbols_dict = raw_data
+                    available_symbols = list(raw_data.keys())
+                elif isinstance(raw_data, list):
+                    available_symbols = raw_data
         except Exception:
             pass
 
@@ -334,7 +347,18 @@ def render_auto_grid_settings(
                         key=f"add_{zone_id}_{account_id}",
                         width="stretch",
                     ):
-                        st.session_state[zones_session_key].append(_default_zone())
+                        highest_magic = max(
+                            [
+                                z.get("magic_idx", -1)
+                                for z in st.session_state[zones_session_key]
+                            ],
+                            default=-1,
+                        )
+                        new_zone = _default_zone()
+                        new_zone["magic_idx"] = (
+                            highest_magic + 1 if highest_magic >= 0 else 0
+                        )
+                        st.session_state[zones_session_key].append(new_zone)
                         st.rerun()
                     if st.button(
                         "🗑️ Bölgeyi Sil",
@@ -471,6 +495,39 @@ def render_auto_grid_settings(
                     format="%.2f",
                     help="📏 Emirlerin kaç aralıkla dizileceği.",
                 )
+
+            # 🌟 YENİ: Seçili sembole ait Broker Lot Kurallarını (Akıllı Kalkan) Hazırla
+            sym_info = symbols_dict.get(str(z_symbol).upper().strip(), {})
+            b_min = float(sym_info.get("vol_min", 0.01))
+            b_max_broker = float(sym_info.get("vol_max", 50.0))
+            b_step = float(sym_info.get("vol_step", 0.01))
+            b_contract = float(sym_info.get("contract_size", 0.0))
+
+            # 🛡️ GÜVENLİ Fat-Finger Koruması: Broker'ın min değerine göre dinamik tavan.
+            # Asla min_value > max_value durumuna düşmez!
+            b_max_safe = min(b_max_broker, max(b_min * 100, 100.0))
+
+            # 🛡️ GÜVENLİ Dinamik Ondalık Hassasiyeti (Bilimsel gösterim 1e-05 vb. koruması)
+            step_str = str(b_step).lower()
+            if "e-" in step_str:
+                decimal_places = int(step_str.split("e-")[-1])
+            elif "." in step_str:
+                decimal_places = len(step_str.split(".")[-1].rstrip("0"))
+            else:
+                decimal_places = 2
+            decimal_places = max(1, decimal_places)  # Format hatasını önler
+            lot_format = f"%.{decimal_places}f"
+
+            lot_help_text = "📦 İşlem başına lot miktarı."
+            if sym_info:
+                lot_help_text = (
+                    f"🏢 Broker Kuralları ({str(z_symbol).upper().strip()}):\n"
+                    f"• Min Lot: {b_min}\n"
+                    f"• Max Lot: {b_max_broker} (Güvenlik Sınırı: {b_max_safe})\n"
+                    f"• Lot Adımı: {b_step}\n\n"
+                    f"ℹ️ Sözleşme Büyüklüğü: 1 Lot = {b_contract:g} Birim"
+                )
+
             with zc6:
                 z_lot = st.number_input(
                     (
@@ -479,12 +536,14 @@ def render_auto_grid_settings(
                         else "BUY Lot (📦)"
                     ),
                     key=f"lot_{zone_id}_{account_id}",
-                    min_value=0.01,
-                    max_value=5.0,
-                    value=max(0.01, min(5.0, float(zone.get("lot_size", 0.01)))),
-                    step=0.01,
-                    format="%.2f",
-                    help="📦 İşlem başına lot miktarı.",
+                    min_value=b_min,
+                    max_value=b_max_safe,
+                    value=max(
+                        b_min, min(b_max_safe, float(zone.get("lot_size", b_min)))
+                    ),
+                    step=b_step,
+                    format=lot_format,
+                    help=lot_help_text,
                 )
             with zc7:
                 z_tp = st.number_input(
@@ -546,21 +605,22 @@ def render_auto_grid_settings(
                     z_sell_lot = st.number_input(
                         "SELL Lot (📦)",
                         key=f"s_lot_{zone_id}_{account_id}",
-                        min_value=0.01,
-                        max_value=5.0,
+                        min_value=b_min,
+                        max_value=b_max_safe,
                         value=max(
-                            0.01,
+                            b_min,
                             min(
-                                5.0,
+                                b_max_safe,
                                 float(
                                     zone.get(
-                                        "sell_lot_size", zone.get("lot_size", 0.01)
+                                        "sell_lot_size", zone.get("lot_size", b_min)
                                     )
                                 ),
                             ),
                         ),
-                        step=0.01,
-                        format="%.2f",
+                        step=b_step,
+                        format=lot_format,
+                        help=lot_help_text,
                     )
                 with zs3:
                     z_sell_tp = st.number_input(
@@ -943,6 +1003,7 @@ def render_auto_grid_settings(
         updated_zones.append(
             {
                 "id": zone_id,
+                "magic_idx": zone.get("magic_idx", 0),  # 🌟 Kalıcı Kimlik
                 "symbol": str(z_symbol).upper().strip() if z_symbol else "USOUSD",
                 "order_type": z_order_type,
                 "min_price": z_min,
@@ -963,7 +1024,7 @@ def render_auto_grid_settings(
                 "levels_above": z_levels_above,
                 "max_positions": z_max_pos,
                 "clear_on_exit": z_clear,
-                "clear_exit_side": z_clear_side,  # 🌟 YENİ
+                "clear_exit_side": z_clear_side,
                 "clear_scope": z_clear_scope,
                 "clear_target_side": z_clear_target,
                 "exit_condition": z_exit_cond,

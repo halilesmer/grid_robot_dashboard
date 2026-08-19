@@ -458,7 +458,8 @@ def get_mt5_timeframe(tf_str):
 
 # 1. ESKİ get_active_zone FONKSİYONUNU BUNUNLA DEĞİŞTİR (Giriş/Çıkış Asimetrisi Çözümü)
 def get_active_zone(tick_price):
-    for i, zone in enumerate(ZONES):
+    for zone in ZONES:
+        i = zone.get("magic_idx", 0)
         z_min = float(zone.get("min_price", 0))
         z_max = float(zone.get("max_price", 0))
         cond = zone.get("exit_condition", "Anlık Fiyat")
@@ -594,14 +595,19 @@ def process_zone_commands():
     global active_zones_state
     account_id = os.environ.get("ACTIVE_ACCOUNT_ID", "default")
 
-    # Yalnızca Kalıcı UI Hafızasını Oku (Arayüz Köprüsüne Sadık Kalarak)
     ui_states_file = get_ui_state_path(account_id)
     if os.path.exists(ui_states_file):
         try:
             with open(ui_states_file, "r", encoding="utf-8") as f:
                 ui_states = json.load(f)
+
+                # 🛡️ GÜVENLİK: Eğer arayüzden bir bölge silinmişse (JSON'da yoksa),
+                # RAM'de asılı kalan o bölgeyi Zombi olmaması için "CLEAR" (Temizle) yap!
+                for k in list(active_zones_state.keys()):
+                    if str(k) not in ui_states:
+                        active_zones_state[k] = "CLEAR"
+
                 for zone_idx_str, state in ui_states.items():
-                    # 🚨 DİKKAT: MT5 Magic eşleşmesi için burası KESİNLİKLE 'int' kalmalı!
                     active_zones_state[int(zone_idx_str)] = state
         except Exception:
             pass
@@ -767,8 +773,15 @@ def manage_dynamic_grid():
         return True
 
     # CANLI AYAR GÜNCELLEMESİ (Stale Reference Koruması)
-    if ACTIVE_ZONE_IDX is not None and ACTIVE_ZONE_IDX < len(ZONES):
-        ACTIVE_ZONE = ZONES[ACTIVE_ZONE_IDX]
+    if ACTIVE_ZONE_IDX is not None:
+        found_zone = next(
+            (z for z in ZONES if z.get("magic_idx") == ACTIVE_ZONE_IDX), None
+        )
+        if found_zone:
+            ACTIVE_ZONE = found_zone
+        else:
+            ACTIVE_ZONE = None
+            ACTIVE_ZONE_IDX = None
 
     robot_positions = get_all_robot_positions()
     robot_orders = get_all_robot_orders()
@@ -786,9 +799,10 @@ def manage_dynamic_grid():
     # 1. ZOMBİ EMİR TEMİZLİĞİ VE BÖLGE KAPATMA
     for order in robot_orders:
         order_zone_idx = order.magic - BASE_MAGIC_NUMBER - 1
-        if active_zones_state.get(order_zone_idx, "START") != "START":
+        # 🛡️ GÜVENLİK: Bölge arayüzden tamamen silinmişse (bulunamazsa) varsayılan olarak "CLEAR" döner ve zombiler temizlenir!
+        if active_zones_state.get(order_zone_idx, "CLEAR") != "START":
             log_message(
-                f"🧹 Bölge {order_zone_idx+1} pasif, emir siliniyor. (Bilet: {order.ticket})"
+                f"🧹 Bölge {order_zone_idx+1} pasif (veya silinmiş), emir siliniyor. (Bilet: {order.ticket})"
             )
             cancel_order(order)
 
@@ -1306,21 +1320,27 @@ def run_startup_checks():
                 "WARN",
             )
 
-        # 🌟 YENİ: Bütün sembolleri MT5'ten çek ve arayüz (Autocomplete) için JSON'a kaydet
+        # 🌟 YENİ: Bütün sembolleri MT5'ten çek ve arayüz (Autocomplete + Lot Kuralları) için JSON'a kaydet
         try:
             if hasattr(mt5, "symbols_get"):
                 all_symbols = mt5.symbols_get()
                 if all_symbols:
-                    sym_list = [
-                        getattr(s, "name", str(s))
-                        for s in all_symbols
-                        if hasattr(s, "name")
-                    ]
-                    if sym_list:
+                    sym_data = {}
+                    for s in all_symbols:
+                        if hasattr(s, "name"):
+                            sym_data[s.name] = {
+                                "vol_min": getattr(s, "volume_min", 0.01),
+                                "vol_max": getattr(s, "volume_max", 100.0),
+                                "vol_step": getattr(s, "volume_step", 0.01),
+                                "contract_size": getattr(
+                                    s, "trade_contract_size", 100000.0
+                                ),
+                            }
+                    if sym_data:
                         sym_file = get_symbols_path(account_id)
                         tmp_sym = sym_file + ".tmp"
                         with open(tmp_sym, "w", encoding="utf-8") as f:
-                            json.dump(sym_list, f)
+                            json.dump(sym_data, f)
                         os.replace(tmp_sym, sym_file)
         except Exception as e:
             log_message(f"Sembol listesi güncellenemedi: {e}", "WARN")
