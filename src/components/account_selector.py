@@ -280,7 +280,9 @@ def render_account_selector():
     # ==========================================
     # ÇİFT LOGİN (DUPLICATE) KONTROLÜ
     # ==========================================
-    login_ids = [str(acc.get("login")) for acc in accounts if acc.get("login")]
+    login_ids = [
+        str(acc.get("login")) for acc in accounts if acc.get("login") is not None
+    ]
     duplicate_logins = set([x for x in login_ids if login_ids.count(x) > 1])
 
     if duplicate_logins:
