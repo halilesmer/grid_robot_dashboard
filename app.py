@@ -118,6 +118,9 @@ def show_update_dialog(env_name, target_branch):
                 pull_success, message = execute_git_pull(branch=target_branch)
                 if pull_success:
                     st.session_state["update_success_msg"] = message
+                    # 🛡️ Sürüm hafızasını sil ki rerun sonrası yeni sürümü okusun!
+                    if "initial_update_check" in st.session_state:
+                        del st.session_state["initial_update_check"]
                     st.rerun()
                 else:
                     st.error(message)
@@ -133,6 +136,9 @@ def show_update_dialog(env_name, target_branch):
                 pull_success, message = execute_git_pull(branch=target_branch)
                 if pull_success:
                     st.session_state["update_success_msg"] = message
+                    # 🛡️ Sürüm hafızasını sil ki rerun sonrası yeni sürümü okusun!
+                    if "initial_update_check" in st.session_state:
+                        del st.session_state["initial_update_check"]
                     st.rerun()
                 else:
                     st.error(message)
@@ -306,8 +312,31 @@ account_id = str(active_account.get("login", "default"))
 # MOTOR SEÇİMİ (TEK KRAL: AUTO GRID)
 # ==========================================
 
-
 st.markdown("---")
+
+
+# ==========================================
+# 🌟 YENİ: SESSİZ BAŞLANGIÇ GÜNCELLEME KONTROLÜ (Arayüzü Dondurmaz)
+# ==========================================
+@st.fragment
+def run_silent_update_check():
+    if "initial_update_check" not in st.session_state:
+        st.session_state["initial_update_check"] = True
+        target_branch = "master" if env == "LIVE" else "test"
+
+        success, update_data = check_for_updates(branch=target_branch)
+        if success:
+            has_update, local_ver, remote_ver = update_data
+            if has_update:
+                st.error(
+                    f"🚀 **Yeni Güncelleme Mevcut!** (Mevcut: `{local_ver}` ➡️ Yeni: `{remote_ver}`). Sağ üstteki ayarlar menüsünden hemen güncelleyin!",
+                    icon="🚀",
+                )
+            else:
+                st.toast(f"✅ En son sürümde kullanıyorsunuz ({local_ver})", icon="✨")
+
+
+run_silent_update_check()
 
 # ==========================================
 # 3. GÜNCEL ÇALIŞMA DURUMUNU SORGULA (CRASH DETECTION)

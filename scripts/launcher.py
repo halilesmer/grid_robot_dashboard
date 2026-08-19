@@ -100,7 +100,9 @@ def main():
         "true",
     ]
 
-    process = subprocess.Popen(cmd, cwd=str(PROJECT_ROOT))
+    # 🛡️ GÜVENLİK: Windows'ta cmd penceresinin açılmasını KESİN OLARAK engeller (CREATE_NO_WINDOW = 0x08000000)
+    creation_flags = 0x08000000 if os.name == "nt" else 0
+    process = subprocess.Popen(cmd, cwd=str(PROJECT_ROOT), creationflags=creation_flags)
 
     if open_browser:
         wait_for_server_and_open_browser(int(port))
@@ -113,3 +115,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
