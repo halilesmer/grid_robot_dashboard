@@ -266,6 +266,9 @@ def render_auto_grid_settings(
             label_visibility="collapsed",
         )
 
+    # 🛡️ GÜVENLİK KİLİDİ: Motor çalışıyorsa ama MT5'e henüz bağlanmadıysa tüm işlem butonlarını kitle!
+    disable_action_buttons = is_running and not mt5_connected
+
     updated_zones = []
 
     # Bölgeleri Ekrana Çiz
@@ -315,37 +318,27 @@ def render_auto_grid_settings(
             with bc1:
                 start_btn_placeholder = st.empty()
             with bc2:
-                st.button(
+                # 🌟 PAUSE (BEKLET) MANTIĞI: Doğrudan çalışır, motor arka planda mutlak temizlik yapar.
+                if st.button(
                     pause_label,
                     key=f"pause_{zone_id}_{account_id}",
                     width="stretch",
                     type="primary" if current_state == "PAUSE" else "secondary",
+                    disabled=disable_action_buttons,
                     help="Yeni emir göndermeyi durdurur ve bekleyen emirleri siler. Açık işlemlere dokunmaz.",
-                    on_click=_handle_zone_action,
-                    args=(account_id, zone_id, idx, "PAUSE"),
-                )
+                ):
+                    # Zaten PAUSE değilse durdur ve anında arayüzü yenile
+                    if current_state != "PAUSE":
+                        _handle_zone_action(account_id, zone_id, idx, "PAUSE")
+                        st.rerun()
             with bc3:
-                # 🌟 3 Noktalı Açılır Menü (Dropdown): Temizle, Yeni Bölge, Bölgeyi Sil
+                # 🌟 3 Noktalı Açılır Menü (Kafa karıştıran Temizle butonu silindi!)
                 with st.popover("⋮", width="stretch"):
-                    # 🗑️ Temizle — HER ZAMAN nötr görünür; motor AUTO_CLEAR ile
-                    # bu butonu asla aktif (primary) hale getiremez.
-                    if st.button(
-                        "🗑️ Temizle",
-                        key=f"clear_{zone_id}_{account_id}",
-                        width="stretch",
-                        type="secondary",
-                        help="Acil Durum: Bekleyen emirleri siler. AÇIK POZİSYONLARA ASLA DOKUNULMAZ.",
-                    ):
-                        # Lambda ile anlık değişkenleri (zone_id, idx) dondurarak modal'a gönderiyoruz
-                        confirm_clear_dialog(
-                            lambda acc=account_id, z_id=zone_id, i=idx: _handle_zone_action(
-                                acc, z_id, i, "CLEAR"
-                            )
-                        )
                     if st.button(
                         "➕ Yeni Bölge Ekle",
                         key=f"add_{zone_id}_{account_id}",
                         width="stretch",
+                        disabled=disable_action_buttons,
                     ):
                         highest_magic = max(
                             [
@@ -953,6 +946,7 @@ def render_auto_grid_settings(
             key=f"upd_{zone_id}_{account_id}",
             width="stretch",
             type="primary" if is_modified else "secondary",
+            disabled=disable_action_buttons,
         ):
             st.session_state[f"save_req_{account_id}"] = True
 
@@ -962,6 +956,7 @@ def render_auto_grid_settings(
             key=f"start_{zone_id}_{account_id}",
             width="stretch",
             type="primary" if current_state == "START" else "secondary",
+            disabled=disable_action_buttons,
             help="Bu bölgedeki ağ örme işlemini başlatır ve güncel fiyatı takip eder.",
         ):
             if is_modified:

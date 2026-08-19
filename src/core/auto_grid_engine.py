@@ -796,13 +796,21 @@ def manage_dynamic_grid():
 
     current_avg_price = (current_price_buy + current_price_sell) / 2.0
 
-    # 1. ZOMBİ EMİR TEMİZLİĞİ VE BÖLGE KAPATMA
+    # 1. ZOMBİ EMİR TEMİZLİĞİ VE BÖLGE KAPATMA (MUTLAK TEMİZLİK KURALI)
     for order in robot_orders:
         order_zone_idx = order.magic - BASE_MAGIC_NUMBER - 1
-        # 🛡️ GÜVENLİK: Bölge arayüzden tamamen silinmişse (bulunamazsa) varsayılan olarak "CLEAR" döner ve zombiler temizlenir!
-        if active_zones_state.get(order_zone_idx, "CLEAR") != "START":
+        zone_state = active_zones_state.get(order_zone_idx, "CLEAR")
+
+        # 🛡️ GÜVENLİK: Bölge "START" değilse (PAUSE veya CLEAR ise), ayardaki BUY/SELL ayrımını
+        # tamamen yok sayar ve ACIK POZİSYONLAR HARİÇ tüm bekleyen emirleri acımasızca çöpe atar.
+        if zone_state != "START":
+            dir_str = (
+                "BUY"
+                if order.type in [mt5.ORDER_TYPE_BUY_LIMIT, mt5.ORDER_TYPE_BUY_STOP]
+                else "SELL"
+            )
             log_message(
-                f"🧹 Bölge {order_zone_idx+1} pasif (veya silinmiş), emir siliniyor. (Bilet: {order.ticket})"
+                f"🧹 Mutlak Temizlik (Durum: {zone_state}): Bölge {order_zone_idx+1} için {dir_str} emri iptal ediliyor. (Bilet: {order.ticket})"
             )
             cancel_order(order)
 
