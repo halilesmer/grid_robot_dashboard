@@ -137,7 +137,8 @@ def connect_to_mt5(account_config, timeout_sec=60):
     init_kwargs = {"timeout": int(timeout_sec * 1000)}
 
     if mt5_path and os.path.exists(mt5_path):
-        init_kwargs["path"] = mt5_path
+        # MT5 kütüphanesinin (C-API) dosya yolu huysuzluğunu gidermek için saf Windows formatına çeviriyoruz
+        init_kwargs["path"] = os.path.normpath(mt5_path)
     elif mt5_path:
         safe_log(
             f"UYARI: Belirtilen MT5 yolu bulunamadı ({mt5_path}). Standart terminal açılıyor...",
