@@ -54,7 +54,7 @@ from src.utils.bot_manager import (
 )
 from src.components.account_selector import render_account_selector
 from src.components.chart_viewer import render_chart
-from src.components.dialogs import confirm_stop_motor_dialog
+from src.components.dialogs import confirm_stop_motor_dialog, symbol_error_dialog
 from src.utils.mt5_connection import (
     connect_to_mt5_with_timeout,
     shutdown_mt5,
@@ -67,7 +67,12 @@ from src.styles.custom_css import apply_custom_css
 from src.utils.config import load_settings, save_settings
 
 # 🌟 YENİ: Merkezi yol yöneticisi
-from src.utils.paths import get_metrics_path, get_sim_price_path, get_ui_state_path
+from src.utils.paths import (
+    get_metrics_path,
+    get_sim_price_path,
+    get_ui_state_path,
+    get_symbols_path,
+)
 from src.ui.pwa_installer import inject_pwa_code
 from src.utils.self_updater import (
     execute_git_pull,
@@ -473,26 +478,89 @@ if live_data.get("remote_paused", False) and account_is_running:
 stage("Hata/uyarı afişleri")
 
 
-# 🌟 MT5 bağlantı tetikleyicisi artık settings_panel üzerinden yönetiliyor
-action = None
-if st.session_state.get(f"motor_toggle_{account_id}"):
-    action = "TOGGLE"
-    st.session_state[f"motor_toggle_{account_id}"] = False
+# ==========================================
+# YARDIMCI FONKSİYON: BÖLGE DURUMLARINI DEĞİŞTİR (START/PAUSE)
+# ==========================================
+def set_all_zones_state(acc_id, new_state):
+    ui_key = f"ui_zone_states_{acc_id}"
+    zones_key = f"auto_grid_zones_{acc_id}"
+
+    if ui_key in st.session_state and zones_key in st.session_state:
+        backend_states = {}
+        for z in st.session_state[zones_key]:
+            z_id = z.get("id")
+            magic_idx = str(z.get("magic_idx"))
+            if z_id and magic_idx:
+                st.session_state[ui_key][z_id] = new_state
+                backend_states[magic_idx] = new_state
+
+        try:
+            # Durumu arka plan motorunun (Subprocess) okuması için diske yazıyoruz
+            ui_file = get_ui_state_path(acc_id)
+            tmp_ui_file = ui_file + ".tmp"
+            with open(tmp_ui_file, "w", encoding="utf-8") as f:
+                json.dump(backend_states, f)
+            os.replace(tmp_ui_file, ui_file)
+        except Exception:
+            pass
+
 
 # ==========================================
-# BAŞLAT / DURDUR MANTIĞI (SUBPROCESS İLE)
+# 🌟 YENİ BAŞLAT / BEKLET / BAĞLAN MANTIĞI
 # ==========================================
-if action == "TOGGLE":
+# 1. BAĞLAN / KES
+if st.session_state.get(f"motor_toggle_{account_id}"):
+    st.session_state[f"motor_toggle_{account_id}"] = False
     if not account_is_running:
-        # MT5 bağlantı donmasını engelleyen modalı tetikle
         show_mt5_connect_dialog(active_account, account_id)
         stage("MT5 bağlantı denemesi (Modal tetiklendi)")
     else:
-        # MT5 bağlantısı kesilir; AÇIK POZİSYONLARA ASLA DOKUNULMAZ.
         confirm_stop_motor_dialog(
             account_id,
             on_stop_func=stop_bot_process,
         )
+
+# 2. BEKLET
+if st.session_state.get(f"motor_pause_{account_id}"):
+    st.session_state[f"motor_pause_{account_id}"] = False
+    set_all_zones_state(account_id, "PAUSE")
+    st.rerun()
+
+# 3. BAŞLAT (VE SEMBOL KONTROLÜ)
+if st.session_state.get(f"motor_start_{account_id}"):
+    st.session_state[f"motor_start_{account_id}"] = False
+
+    # Bot'un arka planda kaydettiği sembol listesini diskten oku
+    available_symbols = []
+    sym_file = get_symbols_path(account_id)
+    if os.path.exists(sym_file):
+        try:
+            with open(sym_file, "r", encoding="utf-8") as f:
+                raw_data = json.load(f)
+                if isinstance(raw_data, dict):
+                    available_symbols = list(raw_data.keys())
+                elif isinstance(raw_data, list):
+                    available_symbols = raw_data
+        except Exception:
+            pass
+
+    # 🚨 BUG 2 DÜZELTMESİ: Sadece 1. bölgeyi değil, TÜM bölgelerdeki sembolleri sırayla kontrol et
+    invalid_symbol = None
+    if current_settings and "ZONES" in current_settings:
+        for zone in current_settings["ZONES"]:
+            z_sym = zone.get("symbol", "USOUSD").upper()
+            if available_symbols and z_sym not in available_symbols:
+                invalid_symbol = z_sym
+                break  # İlk hatalı sembolü bulduğumuzda döngüyü kırarız
+
+    if invalid_symbol:
+        # Hatalı sembol tespit edildi, sistemi anında Beklet moduna (PAUSE) zorla
+        set_all_zones_state(account_id, "PAUSE")
+        symbol_error_dialog(invalid_symbol)
+    else:
+        # Tüm semboller geçerli, tüm bölgeleri güvenle başlat!
+        set_all_zones_state(account_id, "START")
+        st.rerun()
 
 # ==========================================
 # 🌟 GİZLİ BEKÇİ (EVENT-DRIVEN WATCHER)

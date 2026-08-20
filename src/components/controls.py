@@ -1,22 +1,27 @@
-# components/controls.py
+# src/components/controls.py
 import streamlit as st
 from src.constants.tooltips import SETTINGS_TOOLTIPS
 
 
-def render_controls(is_running: bool, account_id: str = "default"):
+def render_controls(is_running: bool, is_connected: bool, account_id: str = "default"):
     """
-    Dinamik Tek Butonlu Kontrol Paneli ve Anında Açılan Tooltip (%100 Multi-Account Uyumlu)
+    MT5 Bağlantısı ve Robot Başlatma/Bekletme Kontrol Paneli
     """
     st.markdown("### 🎮 Robot Kontrol Paneli")
 
-    col_icon, col_btn = st.columns([0.15, 0.85], vertical_alignment="center")
+    col_icon, col_btn_connect, col_btn_start, col_btn_pause = st.columns(
+        [0.10, 0.30, 0.30, 0.30], vertical_alignment="center"
+    )
 
     with col_icon:
         if is_running:
-            status_text = SETTINGS_TOOLTIPS["ROBOT_ACTIVE"]
+            status_text = "Robot İşlemde"
             icon = "🟢"
+        elif is_connected:
+            status_text = "Bağlı - Bekliyor"
+            icon = "🟡"
         else:
-            status_text = SETTINGS_TOOLTIPS["ROBOT_PASSIVE"]
+            status_text = "Bağlantı Yok"
             icon = "🔴"
 
         st.markdown(
@@ -66,32 +71,53 @@ def render_controls(is_running: bool, account_id: str = "default"):
             unsafe_allow_html=True,
         )
 
-    with col_btn:
-        button_label = (
-            "🛑 MT5 Bağlantısını Kes" if is_running else "🔌 MT5'e Bağlan"
-        )
-        # Motor çalışıyorsa yeşil (primary), duruyorsa gri (secondary) olsun
-        button_type = "primary" if is_running else "secondary"
-        button_help = (
-            SETTINGS_TOOLTIPS["REMOTE_STOP_SIGNAL"]
-            if is_running
-            else "MT5 ile iletişim kuran arka plan ticaret motorunu başlatır. "
-            + SETTINGS_TOOLTIPS["REMOTE_STOP_SIGNAL"]
-        )
+    action = None
 
-        toggle_btn = st.button(
-            button_label,
-            type=button_type,
+    # --- 1. Bağlan / Kes Butonu ---
+    with col_btn_connect:
+        connect_label = "🛑 Bağlantıyı Kes" if is_connected else "🔌 MT5'e Bağlan"
+        connect_type = "primary" if is_connected else "secondary"
+
+        # Bağlan butonuna basıldığında aksiyon olarak TOGGLE_CONNECT döndür
+        if st.button(
+            connect_label,
+            type=connect_type,
             width="stretch",
-            help=button_help,
-            key=f"toggle_btn_{account_id}",
+            key=f"btn_conn_{account_id}",
+        ):
+            action = "TOGGLE_CONNECT"
+
+    # --- 2. Başlat Butonu ---
+    with col_btn_start:
+        # Başlat butonu, MT5'e bağlı değilse veya halihazırda çalışıyorsa inaktif (disabled) olur
+        start_disabled = not is_connected or is_running
+
+        if st.button(
+            "▶️ Başlat",
+            type="primary",
+            disabled=start_disabled,
+            width="stretch",
+            key=f"btn_start_{account_id}",
+        ):
+            action = "START_ROBOT"
+
+    # --- 3. Beklet Butonu ---
+    with col_btn_pause:
+        # Beklet butonu, MT5'e bağlı olduğu sürece aktif kalır (robot çalışsa da çalışmasa da)
+        pause_disabled = not is_connected
+
+        if st.button(
+            "⏸️ Beklet",
+            disabled=pause_disabled,
+            width="stretch",
+            key=f"btn_pause_{account_id}",
+        ):
+            action = "PAUSE_ROBOT"
+
+    if is_running:
+        st.caption(
+            "📡 Unutma: Mobil MT5'te fiyatı **1$**, hacmi **0.01 lot** olan "
+            "**Buy Limit** emri koyun → sistem uzaktan durur."
         )
 
-        if is_running:
-            st.caption(
-                "📡 Unutma: Mobil MT5'te fiyatı **1$**, hacmi **0.01 lot** olan "
-                "**Buy Limit** emri koyun → sistem uzaktan durur."
-            )
-
-    action = "TOGGLE" if toggle_btn else None
     return action

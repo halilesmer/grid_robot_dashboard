@@ -125,3 +125,22 @@ def confirm_system_shutdown_dialog():
 
     if col_no.button("Hayır, İptal", width="stretch"):
         st.rerun()
+
+
+@st.dialog("🚨 Sembol Hatası")
+def symbol_error_dialog(symbol_name: str, on_close_func=None):
+    """
+    Aracı kurum sunucusunda sembol bulunamadığında ekrana çıkan sadece uyarı amaçlı modal.
+    """
+    st.error(f"**HATA:** Sembol ({symbol_name}) aracı kurum sunucusunda bulunamadı!")
+    st.write(
+        f"Lütfen arayüze girdiğiniz sembol adının (örn: XTIUSD) brokerınızla birebir aynı olduğundan emin olun."
+    )
+    st.info(
+        "Robot güvenlik amacıyla 'Bekliyor' moduna alındı. Lütfen ayarlarınızı düzeltip tekrar başlatın."
+    )
+
+    if st.button("Tamam", type="primary", width="stretch"):
+        if on_close_func:
+            on_close_func()
+        st.rerun()

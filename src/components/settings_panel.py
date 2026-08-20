@@ -5,7 +5,7 @@ import json
 import os
 
 # Modal (Dialog) pencerelerimizi içeri alıyoruz:
-from src.components.dialogs import confirm_clear_dialog, confirm_delete_zone_dialog
+from src.components.dialogs import confirm_clear_dialog, confirm_delete_zone_dialog, symbol_error_dialog
 
 # 🌟 YENİ: Merkezi yol (path) yöneticisini içeri aktarıyoruz
 from src.utils.paths import get_ui_state_path, get_symbols_path
@@ -171,82 +171,70 @@ def render_auto_grid_settings(
     with h_col1:
         st.markdown("###### 🎯 Dinamik Bölgeler (Zones)")
 
-    # 🎨 Motor Butonu Renk CSS'i (Durum Temelli):
-    #   stopped -> beyaz, running -> yeşil, paused -> sarı
-    #   İşaretçi div (.motor-marker-stop-X) içinde bulunduğu sütunu yakalar.
-    st.markdown(
-        """
-        <style>
-        [data-testid='stColumn']:has(.motor-marker) [data-testid='stBaseButton-secondary'] {
-            border: 2px solid #ddd !important;
-        }
-        [data-testid='stColumn']:has(.motor-marker-running) [data-testid='stBaseButton-secondary'] {
-            background: #22c55e !important;
-            border-color: #16a34a !important;
-            color: white !important;font-weight:600;
-        }
-        [data-testid='stColumn']:has(.motor-marker-paused) [data-testid='stBaseButton-secondary'] {
-            background: #facc15 !important;
-            border-color: #eab308 !important;
-            color: #1f2937 !important;font-weight:600;
-        }
-        [data-testid='stColumn']:has(.motor-marker-disconnected) [data-testid='stBaseButton-secondary'] {
-            background: #ef4444 !important;
-            border-color: #dc2626 !important;
-            color: white !important;font-weight:600;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
-
     with h_col2:
-        # 🎨 DURUM RENKLERİ:
-        #   Duruyor  -> beyaz (secondary)
-        #   Çalışıyor -> yeşil (en az 1 bölge START)
-        #   Beklemede -> sarı (çalışıyor ama hiçbir bölge aktif değil)
         zone_states = list(st.session_state.get(ui_state_key, {}).values())
         any_zone_start = any(s == "START" for s in zone_states)
 
         mt5_connected = live_data.get("mt5_connected", False) if live_data else False
+
+        # 🌟 DURUM HESAPLAMA (Bağlantı ve Motor Durumu)
         if not is_running:
             motor_status = "stopped"
-            btn_label = "🚀 MT5'e Bağlan"
+            emoji = "🔴"
         elif not mt5_connected:
             motor_status = "disconnected"
-            btn_label = "🔴 MT5'e bağlanmadı"
+            emoji = "🔴"
         else:
             motor_status = "running" if any_zone_start else "paused"
-            btn_label = "🟢 MT5'e bağlandı"
+            emoji = "🟢" if any_zone_start else "🟡"
 
-        # Hangi durumda olduğumuzu CSS ile hedeflemek için bir işaretçi basıyoruz
         st.markdown(
-            f'<div class="motor-marker motor-marker-{motor_status}" style="display:none;"></div>',
+            f"<div style='text-align:center;font-size:16px; margin-bottom: -5px;'>Durum: {emoji}</div>",
             unsafe_allow_html=True,
         )
 
-        b_col, i_col = st.columns([1, 0.18], vertical_alignment="center")
-        with b_col:
+        # 🌟 YENİ AKIŞ: Bağlan/Kes , Başlat , Beklet Butonları Yan Yana
+        c_conn, c_start, c_pause = st.columns([1.1, 1, 1])
+
+        with c_conn:
+            # Sadece Bağlan / Kes Butonu
+            conn_label = "🔌 Kes" if is_running else "🔌 Bağlan"
+            conn_type = "primary" if not is_running else "secondary"
             if st.button(
-                btn_label,
-                type="secondary",
+                conn_label,
+                type=conn_type,
                 width="stretch",
-                key=f"motor_main_{account_id}",
+                key=f"btn_conn_{account_id}",
             ):
                 st.session_state[f"motor_toggle_{account_id}"] = True
                 st.rerun()
-        with i_col:
-            if is_running:
-                if motor_status == "disconnected":
-                    emoji = "🔴"
-                elif motor_status == "running":
-                    emoji = "🟢"
-                else:
-                    emoji = "🟡"
-                st.markdown(
-                    f"<div style='text-align:center;font-size:20px;'>{emoji}</div>",
-                    unsafe_allow_html=True,
-                )
+
+        with c_start:
+            # Başlat butonu (Sadece bağlıysa ve beklemedeyse tıklanabilir)
+            start_disabled = not (is_running and mt5_connected and not any_zone_start)
+            if st.button(
+                "▶️ Başlat",
+                type="primary",
+                disabled=start_disabled,
+                width="stretch",
+                key=f"btn_start_{account_id}",
+            ):
+                # App.py'nin duyabilmesi için session_state bayrağı kaldırıyoruz
+                st.session_state[f"motor_start_{account_id}"] = True
+                st.rerun()
+
+        with c_pause:
+            # Beklet butonu (Sadece bağlıysa tıklanabilir)
+            pause_disabled = not (is_running and mt5_connected)
+            if st.button(
+                "⏸️ Beklet",
+                disabled=pause_disabled,
+                width="stretch",
+                key=f"btn_pause_{account_id}",
+            ):
+                # App.py'nin duyabilmesi için session_state bayrağı kaldırıyoruz
+                st.session_state[f"motor_pause_{account_id}"] = True
+                st.rerun()
     with h_col3:
         st.markdown(
             "<div style='text-align: center; font-size: 20px; color: #555;'>|</div>",
@@ -962,8 +950,14 @@ def render_auto_grid_settings(
             if is_modified:
                 confirm_start_with_changes_dialog(account_id, zone_id, idx)
             else:
-                _handle_zone_action(account_id, zone_id, idx, "START")
-                st.rerun()
+                # 🚨 BUG 1 DÜZELTMESİ: Bireysel butona da Sembol Güvenlik Duvarı eklendi
+                z_sym_upper = str(z_symbol).upper().strip()
+                if available_symbols and z_sym_upper not in available_symbols:
+                    st.session_state[f"motor_pause_{account_id}"] = True
+                    symbol_error_dialog(z_sym_upper)
+                else:
+                    _handle_zone_action(account_id, zone_id, idx, "START")
+                    st.rerun()
 
         # 🌟 GÜNCELLENDİ: Tüm metrikler alt satıra sağa dayalı ve sırayla eklendi
         broker_name = (
