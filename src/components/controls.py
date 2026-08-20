@@ -71,26 +71,25 @@ def render_controls(is_running: bool, is_connected: bool, account_id: str = "def
             unsafe_allow_html=True,
         )
 
-    action = None
-
     # --- 1. Bağlan / Kes Butonu ---
     with col_btn_connect:
         connect_label = "🛑 Bağlantıyı Kes" if is_connected else "🔌 MT5'e Bağlan"
         connect_type = "primary" if is_connected else "secondary"
 
-        # Bağlan butonuna basıldığında aksiyon olarak TOGGLE_CONNECT döndür
         if st.button(
             connect_label,
             type=connect_type,
             width="stretch",
             key=f"btn_conn_{account_id}",
         ):
-            action = "TOGGLE_CONNECT"
+            st.session_state[f"motor_toggle_{account_id}"] = True
+            st.rerun()
 
     # --- 2. Başlat Butonu ---
     with col_btn_start:
-        # Başlat butonu, MT5'e bağlı değilse veya halihazırda çalışıyorsa inaktif (disabled) olur
-        start_disabled = not is_connected or is_running
+        # 🚨 HATA DÜZELTİLDİ: Sadece bağlantı yoksa inaktif olmalı. 
+        # Robot arka planda PAUSE olarak uyanacağı için Başlat'a basılabilmeli.
+        start_disabled = not is_connected
 
         if st.button(
             "▶️ Başlat",
@@ -99,11 +98,11 @@ def render_controls(is_running: bool, is_connected: bool, account_id: str = "def
             width="stretch",
             key=f"btn_start_{account_id}",
         ):
-            action = "START_ROBOT"
+            st.session_state[f"motor_start_{account_id}"] = True
+            st.rerun()
 
     # --- 3. Beklet Butonu ---
     with col_btn_pause:
-        # Beklet butonu, MT5'e bağlı olduğu sürece aktif kalır (robot çalışsa da çalışmasa da)
         pause_disabled = not is_connected
 
         if st.button(
@@ -112,7 +111,8 @@ def render_controls(is_running: bool, is_connected: bool, account_id: str = "def
             width="stretch",
             key=f"btn_pause_{account_id}",
         ):
-            action = "PAUSE_ROBOT"
+            st.session_state[f"motor_pause_{account_id}"] = True
+            st.rerun()
 
     if is_running:
         st.caption(
@@ -120,4 +120,5 @@ def render_controls(is_running: bool, is_connected: bool, account_id: str = "def
             "**Buy Limit** emri koyun → sistem uzaktan durur."
         )
 
-    return action
+    # action return etmeye artık gerek yok
+    return None

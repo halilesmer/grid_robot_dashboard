@@ -1,26 +1,8 @@
 # src/components/dialogs.py
 import streamlit as st
-
-
-@st.dialog("⚠️ Bölgeyi Temizle")
-def confirm_clear_dialog(on_confirm_func):
-    """
-    Bölge temizleme işlemi için onay penceresi (Modal).
-    SADECE bekleyen emirler (pending orders) silinir, AÇIK POZİSYONLARA DOKUNULMAZ.
-    on_confirm_func: 'Evet' butonuna basıldığında çalıştırılacak fonksiyon.
-    """
-    st.write(
-        "Bu bölgedeki bekleyen emirleri silmek istediğinize emin misiniz? "
-        "AÇIK POZİSYONLAR KORUNUR. Bu işlem geri alınamaz."
-    )
-
-    col_yes, col_no = st.columns([1, 1])
-    if col_yes.button("Evet, Temizle", type="primary", width="stretch"):
-        on_confirm_func()  # Asıl temizleme işlemini yapan fonksiyonu tetikle
-        st.rerun()
-
-    if col_no.button("Hayır, İptal", width="stretch"):
-        st.rerun()
+import os
+import time
+import psutil
 
 
 @st.dialog("🗑️ Bölgeyi Sil")
@@ -83,10 +65,6 @@ def confirm_stop_motor_dialog(account_id, on_stop_func):
         st.rerun()
     if col2.button("❌ İptal", width="stretch"):
         st.rerun()
-
-import os
-import time
-import psutil
 
 
 @st.dialog("🛑 Sistemi Tamamen Kapat")

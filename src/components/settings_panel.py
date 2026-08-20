@@ -5,7 +5,7 @@ import json
 import os
 
 # Modal (Dialog) pencerelerimizi içeri alıyoruz:
-from src.components.dialogs import confirm_clear_dialog, confirm_delete_zone_dialog, symbol_error_dialog
+from src.components.dialogs import confirm_delete_zone_dialog, symbol_error_dialog
 
 # 🌟 YENİ: Merkezi yol (path) yöneticisini içeri aktarıyoruz
 from src.utils.paths import get_ui_state_path, get_symbols_path
@@ -139,12 +139,13 @@ def render_auto_grid_settings(
                 for i, z in enumerate(st.session_state[zones_session_key]):
                     zone_id = z["id"]
                     # Eğer bölge durum hafızasında yoksa veya Bot arka planda durum değiştirdiyse diskten yükle
+                    magic_idx_str = str(z.get("magic_idx", i))
                     if zone_id not in st.session_state[ui_state_key]:
                         st.session_state[ui_state_key][zone_id] = saved_states.get(
-                            str(i), "CLEAR"
+                            magic_idx_str, "CLEAR"
                         )
-                    elif saved_states.get(str(i)) in ("AUTO_CLEAR", "PAUSE", "START"):
-                        st.session_state[ui_state_key][zone_id] = saved_states.get(str(i))
+                    elif saved_states.get(magic_idx_str) in ("AUTO_CLEAR", "PAUSE", "START"):
+                        st.session_state[ui_state_key][zone_id] = saved_states.get(magic_idx_str)
         except Exception:
             pass
 
@@ -193,48 +194,22 @@ def render_auto_grid_settings(
             unsafe_allow_html=True,
         )
 
-        # 🌟 YENİ AKIŞ: Bağlan/Kes , Başlat , Beklet Butonları Yan Yana
-        c_conn, c_start, c_pause = st.columns([1.1, 1, 1])
+        # Sadece Tek Buton: Bağlan / Bağlandı
+        if not is_running or not mt5_connected:
+            btn_label = "🚀 MT5'e Bağlan"
+            btn_type = "primary"
+        else:
+            btn_label = "🟢 Bağlandı"
+            btn_type = "secondary"
 
-        with c_conn:
-            # Sadece Bağlan / Kes Butonu
-            conn_label = "🔌 Kes" if is_running else "🔌 Bağlan"
-            conn_type = "primary" if not is_running else "secondary"
-            if st.button(
-                conn_label,
-                type=conn_type,
-                width="stretch",
-                key=f"btn_conn_{account_id}",
-            ):
-                st.session_state[f"motor_toggle_{account_id}"] = True
-                st.rerun()
-
-        with c_start:
-            # Başlat butonu (Sadece bağlıysa ve beklemedeyse tıklanabilir)
-            start_disabled = not (is_running and mt5_connected and not any_zone_start)
-            if st.button(
-                "▶️ Başlat",
-                type="primary",
-                disabled=start_disabled,
-                width="stretch",
-                key=f"btn_start_{account_id}",
-            ):
-                # App.py'nin duyabilmesi için session_state bayrağı kaldırıyoruz
-                st.session_state[f"motor_start_{account_id}"] = True
-                st.rerun()
-
-        with c_pause:
-            # Beklet butonu (Sadece bağlıysa tıklanabilir)
-            pause_disabled = not (is_running and mt5_connected)
-            if st.button(
-                "⏸️ Beklet",
-                disabled=pause_disabled,
-                width="stretch",
-                key=f"btn_pause_{account_id}",
-            ):
-                # App.py'nin duyabilmesi için session_state bayrağı kaldırıyoruz
-                st.session_state[f"motor_pause_{account_id}"] = True
-                st.rerun()
+        if st.button(
+            btn_label,
+            type=btn_type,
+            width="stretch",
+            key=f"motor_main_{account_id}",
+        ):
+            st.session_state[f"motor_toggle_{account_id}"] = True
+            st.rerun()
     with h_col3:
         st.markdown(
             "<div style='text-align: center; font-size: 20px; color: #555;'>|</div>",
@@ -934,7 +909,7 @@ def render_auto_grid_settings(
             key=f"upd_{zone_id}_{account_id}",
             width="stretch",
             type="primary" if is_modified else "secondary",
-            disabled=disable_action_buttons,
+            # 🚨 KİLİT KALDIRILDI: Bağlantı kopsa veya hazırlansa bile ayarlar her zaman güncellenebilir!
         ):
             st.session_state[f"save_req_{account_id}"] = True
 

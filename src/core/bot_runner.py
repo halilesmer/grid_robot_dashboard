@@ -34,7 +34,7 @@ from src.utils.mt5_connection import connect_to_mt5_with_timeout
 from src.utils.paths import get_metrics_path, get_sim_price_path
 
 # 🌟 YENİ: MT5 "Source of Truth" senkronizasyonu ve kalıcı state dosyası
-from src.utils.state_manager import build_synced_state, save_state, load_state
+from src.utils.state_manager import build_synced_state, save_state
 
 
 def export_metrics_step(bot_engine, account_id):
@@ -198,21 +198,35 @@ def main():
     #   Port değişimi / arayüz restart'ı / bilgisayar taşınması sonrası
     #   açık pozisyonlar ve bekleyen emirler ASLA kapatılmaz.
 
-    # 🧠 PHASE 2: MT5 "Source of Truth" senkronizasyonu.
-    #   Yerel dosyalara körü körüne güvenilmez; MT5'ten Account ID + Magic
-    #   üzerinden canlı pozisyonlar/emirler sorgulanır, yerel config ile
-    #   birleştirilir ve data/state_{account_id}.json yeniden inşa edilir.
+    # 🧠 PHASE 2: MT5 "Source of Truth" senkronizasyonu ve SAKİN BAŞLANGIÇ
+    # YENİ AKIŞ: Bot arka planda çalışmaya başlarken varsayılan olarak PAUSE (Beklet) moduna geçer.
+    # Arayüz (app.py) "Başlat" diyene kadar sembol kontrolü veya işlem yapmaz.
     try:
+        # Arayüze "Ben PAUSE durumundayım" bilgisini yaz (motor_start gelene kadar beklesin)
+        ui_file = get_ui_state_path(account_id)
+        if os.path.exists(ui_file):
+            with open(ui_file, "r", encoding="utf-8") as f:
+                ui_states = json.load(f)
+            # Tüm bölgeleri beklemeye zorla
+            for k in ui_states:
+                ui_states[k] = "PAUSE"
+            tmp_ui_file = ui_file + ".tmp"
+            with open(tmp_ui_file, "w", encoding="utf-8") as f:
+                json.dump(ui_states, f)
+            os.replace(tmp_ui_file, ui_file)
+
+        # Synced state inşası (sembol hatalıysa çökmeyi önlemek için güvenli sarmalayıcı ile)
         synced_state = build_synced_state(bot_engine, account_id, log_func=print)
         save_state(account_id, synced_state)
         print(
-            f"[{account_id}] Kalıcı state dosyası yeniden inşa edildi: "
+            f"[{account_id}] Kalıcı state dosyası yeniden inşa edildi (Bekleme Modunda): "
             f"data/state_{account_id}.json"
         )
     except Exception as e:
+        # Sembol hatalı olduğu için build_synced_state patlasa bile backend'i canlı tutuyoruz!
         print(
-            f"[{account_id}] State senkronizasyonu başarısız oldu "
-            f"(kritik değil, bot yine de başlatılıyor): {e}"
+            f"[{account_id}] Başlangıç senkronizasyonu atlandı "
+            f"(Arayüz sembolleri güncelleyene kadar bot uykuda kalacak): {e}"
         )
 
     # İşlem öncesi motorun hafızasının tamamen temiz olduğundan emin ol
