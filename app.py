@@ -569,6 +569,13 @@ if st.session_state.get(f"motor_start_{account_id}"):
 def remote_signal_watcher(acc_id, is_running):
     if not is_running:
         return
+
+    # 🚨 AFİŞİ OTOMATİK KAPATMA: MT5 bağlantısı geldiği an sayfayı yenile
+    live_info = get_live_metrics_from_file(acc_id)
+    if live_info.get("mt5_connected", False) and f"bot_started_at_{acc_id}" in st.session_state:
+        del st.session_state[f"bot_started_at_{acc_id}"]
+        st.rerun()
+
     ui_file = get_ui_state_path(acc_id)
     if not os.path.exists(ui_file):
         return
