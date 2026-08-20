@@ -67,6 +67,7 @@ def ensure_venv_and_requirements():
                     str(REQUIREMENTS_FILE),
                 ],
                 check=True,
+                capture_output=True,
             )
         else:
             # MetaTrader5 macOS'te kurulamaz, hatayı yakala ve diğerlerini kur
@@ -124,6 +125,21 @@ def main():
 
     # Portu çevre değişkeninden al (Statik PWA uyumluluğu için)
     port = os.getenv("STREAMLIT_PORT", "8501")
+
+    # 🛡️ GÜVENLİK: Arka planda takılı kalmış eski Streamlit botlarını temizle
+    import psutil
+
+    for p in psutil.process_iter(["cmdline"]):
+        try:
+            cmd = p.info.get("cmdline")
+            if (
+                cmd
+                and "streamlit" in " ".join(cmd).lower()
+                and str(port) in " ".join(cmd)
+            ):
+                p.kill()
+        except Exception:
+            pass
 
     # Tarayıcıyı sadece kullanıcı ilk tıkladığında aç (Güncellemelerde sekme spam'i yapmaz)
     open_browser = "--open-browser" in sys.argv

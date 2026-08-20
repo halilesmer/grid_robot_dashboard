@@ -10,72 +10,93 @@ def get_project_root():
 
 def ensure_git_repo(branch, project_root):
     """
-    Gizli .git klasörünü kontrol eder. Eğer yoksa (klasör taşınmış veya ZIP'ten
-    çıkarılmışsa), github_token.txt dosyasını okuyarak Git'i sıfırdan otonom olarak inşa eder.
+    Gizli .git klasörünü kontrol eder. Eğer yoksa sıfırdan kurar.
+    Eğer .git varsa ama yetkisizse, github_token.txt dosyasını okuyarak
+    linki kendi kendine tamir eder.
     """
     git_dir = os.path.join(project_root, ".git")
+    token_file = os.path.join(project_root, "github_token.txt")
+
+    repo_url = None
+    if os.path.exists(token_file):
+        try:
+            with open(token_file, "r", encoding="utf-8") as f:
+                repo_url = f.read().strip()
+            if not repo_url.startswith("http"):
+                return (
+                    False,
+                    "github_token.txt içindeki URL geçersiz. 'https://...' ile başlamalı.",
+                )
+        except Exception as e:
+            return False, f"Token dosyası okunamadı: {str(e)}"
+
+    # 1. Eğer klasörde .git ZATEN VARSA
     if os.path.isdir(git_dir):
+        if repo_url:
+            # Önce set-url yapmayı dene, eğer origin yoksa add yap
+            res = subprocess.run(
+                ["git", "remote", "set-url", "origin", repo_url],
+                cwd=project_root,
+                capture_output=True,
+                text=True,
+            )
+            if res.returncode != 0:
+                subprocess.run(
+                    ["git", "remote", "add", "origin", repo_url],
+                    cwd=project_root,
+                    capture_output=True,
+                    text=True,
+                )
         return True, ""
 
-    # Git klasörü yok, kendi kendini onarma (Self-Healing) sürecini başlat
-    token_file = os.path.join(project_root, "github_token.txt")
-    if not os.path.exists(token_file):
+    # 2. Eğer klasörde .git YOKSA ve Token da yoksa
+    if not repo_url:
         return (
             False,
             "Klasör Git'e bağlı değil ve 'github_token.txt' dosyası bulunamadı. Lütfen repo URL'nizi (Token dahil) içeren bu dosyayı ana klasöre oluşturun.",
         )
 
+    # 3. .git yok ama Token varsa, SIFIRDAN İNŞA ET
     try:
-        with open(token_file, "r", encoding="utf-8") as f:
-            repo_url = f.read().strip()
-
-        if not repo_url.startswith("http"):
-            return (
-                False,
-                "github_token.txt içindeki URL geçersiz. 'https://...' ile başlamalı.",
-            )
-
-        # 1. Klasörü Git deposu yap
         subprocess.run(
-            ["git", "init"], cwd=project_root, check=True, capture_output=True
+            ["git", "init"],
+            cwd=project_root,
+            check=True,
+            capture_output=True,
+            text=True,
         )
-
-        # 2. Uzak sunucuyu (GitHub) Token ile birlikte ekle
         subprocess.run(
             ["git", "remote", "add", "origin", repo_url],
             cwd=project_root,
             check=True,
             capture_output=True,
+            text=True,
         )
-
-        # 3. Sunucudaki verileri çek
         subprocess.run(
             ["git", "fetch", "origin"],
             cwd=project_root,
             check=True,
             capture_output=True,
+            text=True,
         )
-
-        # 4. Dosyaları sunucudaki branch ile zorla eşitle
         subprocess.run(
             ["git", "reset", "--hard", f"origin/{branch}"],
             cwd=project_root,
             check=True,
             capture_output=True,
+            text=True,
         )
-
-        # 5. Aktif dalı ayarla
         subprocess.run(
             ["git", "branch", "-M", branch],
             cwd=project_root,
             check=True,
             capture_output=True,
+            text=True,
         )
-
         return True, "Git deposu başarıyla onarıldı ve eşitlendi."
     except subprocess.CalledProcessError as e:
-        error_msg = e.stderr if e.stderr else e.stdout
-        return False, f"Otomatik Git onarımı başarısız oldu: {error_msg}"
+        error_msg = e.stderr.strip() if e.stderr else e.stdout.strip()
+        return False, f"Sıfırdan kurulum hatası: {error_msg}"
     except Exception as e:
         return False, f"Beklenmeyen onarım hatası: {str(e)}"
 
@@ -86,13 +107,11 @@ def execute_git_pull(branch="master"):
     """
     project_root = get_project_root()
 
-    # 🌟 OTONOM KALKAN: Önce Git'in sağlam olup olmadığına bak, değilse onar
     is_git_ok, error_message = ensure_git_repo(branch, project_root)
     if not is_git_ok:
         return False, error_message
 
     try:
-        # 1. Yerel dosya çakışmalarını ve satır sonu farklarını zorla temizle
         subprocess.run(
             ["git", "reset", "--hard"],
             cwd=project_root,
@@ -100,8 +119,6 @@ def execute_git_pull(branch="master"):
             capture_output=True,
             text=True,
         )
-
-        # 2. Önce fetch yapalım
         subprocess.run(
             ["git", "fetch", "origin", branch],
             cwd=project_root,
@@ -109,8 +126,6 @@ def execute_git_pull(branch="master"):
             capture_output=True,
             text=True,
         )
-
-        # 3. Sonra ilgili branch'e çekelim
         result = subprocess.run(
             ["git", "pull", "origin", branch],
             cwd=project_root,
@@ -120,8 +135,8 @@ def execute_git_pull(branch="master"):
         )
         return True, result.stdout
     except subprocess.CalledProcessError as e:
-        error_msg = e.stderr if e.stderr else e.stdout
-        return False, f"Git Kodu: {e.returncode} | Hata: {error_msg}"
+        error_msg = e.stderr.strip() if e.stderr else e.stdout.strip()
+        return False, f"Git Çekme Hatası: {error_msg}"
 
 
 def hard_restart_server():
@@ -137,13 +152,11 @@ def check_for_updates(branch="test"):
     """
     project_root = get_project_root()
 
-    # 🌟 OTONOM KALKAN: Önce Git'in sağlam olup olmadığına bak, değilse onar
     is_git_ok, error_message = ensure_git_repo(branch, project_root)
     if not is_git_ok:
         return False, error_message
 
     try:
-        # Önce GitHub'daki son bilgileri fetch ile çek (dosyaları değiştirmez, sadece bilgi alır)
         subprocess.run(
             ["git", "fetch", "origin", branch],
             cwd=project_root,
@@ -152,7 +165,6 @@ def check_for_updates(branch="test"):
             text=True,
         )
 
-        # Yerel commit kimliği (hash)
         local_hash = subprocess.run(
             ["git", "rev-parse", "HEAD"],
             cwd=project_root,
@@ -160,8 +172,6 @@ def check_for_updates(branch="test"):
             capture_output=True,
             text=True,
         ).stdout.strip()
-
-        # GitHub commit kimliği (hash)
         remote_hash = subprocess.run(
             ["git", "rev-parse", f"origin/{branch}"],
             cwd=project_root,
@@ -170,10 +180,8 @@ def check_for_updates(branch="test"):
             text=True,
         ).stdout.strip()
 
-        # Eğer hash'ler farklıysa yeni bir kod/güncelleme var demektir
         has_update = local_hash != remote_hash
 
-        # Sürüm numaralarını (VERSION) arayüze göstermek için oku
         try:
             version_file = os.path.join(project_root, "VERSION")
             with open(version_file, "r", encoding="utf-8") as f:
@@ -193,5 +201,9 @@ def check_for_updates(branch="test"):
             remote_ver = "Bilinmiyor"
 
         return True, (has_update, local_ver, remote_ver)
+    except subprocess.CalledProcessError as e:
+        # GERÇEK HATAYI BURADA YAKALIYORUZ!
+        error_msg = e.stderr.strip() if e.stderr else e.stdout.strip()
+        return False, f"Bağlantı Hatası: {error_msg}"
     except Exception as e:
-        return False, str(e)
+        return False, f"Sistem Hatası: {str(e)}"

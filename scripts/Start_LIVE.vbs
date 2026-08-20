@@ -20,7 +20,10 @@ If Not fso.FolderExists(venvPath) Then
     installCmd = "cmd.exe /c cd /d """ & strDir & """ && python -m venv .venv && .venv\Scripts\python.exe -m pip install -r requirements.txt && .venv\Scripts\pythonw.exe """ & launcherPath & """ --open-browser"
     WshShell.Run installCmd, 1, False
 Else
-    ' Eğer .venv zaten varsa: Siyah ekran OLMADAN tamamen sessiz başlatır!
-    pythonwPath = venvPath & "\Scripts\pythonw.exe"
-    WshShell.Run """" & pythonwPath & """ """ & launcherPath & """ --open-browser", 0, False
+    ' 1. Arka planda takılı kalan eski botları temizle (Port çakışmasını engeller)
+    WshShell.Run "cmd.exe /c taskkill /F /IM pythonw.exe /T", 0, True
+    
+    ' 2. Siyah ekran OLMADAN tamamen sessiz başlatır, ama otomatik kurulumların çökmemesi için python.exe kullanır
+    pythonPath = venvPath & "\Scripts\python.exe"
+    WshShell.Run """" & pythonPath & """ """ & launcherPath & """ --open-browser", 0, False
 End If
