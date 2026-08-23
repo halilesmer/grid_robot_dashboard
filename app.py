@@ -574,59 +574,53 @@ def remote_signal_watcher(acc_id, is_running):
     if not is_running:
         return
 
+    need_rerun = False
+
     live_info = get_live_metrics_from_file(acc_id)
     is_data_fresh = live_info.get("data_age", 999.0) < 30
-    
-    # Arayüzün (Main Thread) gördüğü "gerçek" bağlantı durumunu simüle et
     real_ui_connected = live_info.get("mt5_connected", False) if is_data_fresh else False
 
-    # 1. BAĞLANTI DURUMU DEĞİŞİM DEDEKTÖRÜ (Kırmızı afişin asılı kalmasını önler)
+    # 1. BAĞLANTI DURUMU DEĞİŞİM DEDEKTÖRÜ
     last_conn_state_key = f"last_conn_state_{acc_id}"
     last_conn_state = st.session_state.get(last_conn_state_key, None)
 
     if last_conn_state is not None and last_conn_state != real_ui_connected:
-        # Bağlantı Koptu -> Geldi veya Geldi -> Koptu geçişi varsa tüm sayfayı zorla yenile!
-        st.session_state[last_conn_state_key] = real_ui_connected
-        st.rerun()
+        need_rerun = True
     
     st.session_state[last_conn_state_key] = real_ui_connected
 
     # 2. İLK AÇILIŞ (HAZIRLANIYOR) AFİŞİNİ KAPATMA
-    if (
-        real_ui_connected
-        and f"bot_started_at_{acc_id}" in st.session_state
-    ):
+    if real_ui_connected and f"bot_started_at_{acc_id}" in st.session_state:
         del st.session_state[f"bot_started_at_{acc_id}"]
-        st.rerun()
+        need_rerun = True
 
+    # 3. BÖLGE DURUM KONTROLÜ
     ui_file = get_ui_state_path(acc_id)
-    if not os.path.exists(ui_file):
-        return
-    try:
-        with open(ui_file, "r", encoding="utf-8") as f:
-            disk_states = json.load(f)
+    if os.path.exists(ui_file):
+        try:
+            with open(ui_file, "r", encoding="utf-8") as f:
+                disk_states = json.load(f)
 
-        ui_state_key = f"ui_zone_states_{acc_id}"
-        zones_session_key = f"auto_grid_zones_{acc_id}"
+            ui_state_key = f"ui_zone_states_{acc_id}"
+            zones_session_key = f"auto_grid_zones_{acc_id}"
 
-        if zones_session_key in st.session_state and ui_state_key in st.session_state:
-            memory_states = st.session_state[ui_state_key]
-            need_rerun = False
+            if zones_session_key in st.session_state and ui_state_key in st.session_state:
+                memory_states = st.session_state[ui_state_key]
 
-            for i, z in enumerate(st.session_state[zones_session_key]):
-                disk_val = disk_states.get(str(i))
-                zone_id = z.get("id")
-                mem_val = memory_states.get(zone_id)
+                for i, z in enumerate(st.session_state[zones_session_key]):
+                    disk_val = disk_states.get(str(i))
+                    zone_id = z.get("id")
+                    mem_val = memory_states.get(zone_id)
 
-                # Sadece MT5'ten sinyal gelir ve diskteki durum hafızadakinden farklı olursa tetikle
-                if disk_val in ("AUTO_CLEAR", "PAUSE", "START") and disk_val != mem_val:
-                    st.session_state[ui_state_key][zone_id] = disk_val
-                    need_rerun = True
+                    if disk_val in ("AUTO_CLEAR", "PAUSE", "START") and disk_val != mem_val:
+                        st.session_state[ui_state_key][zone_id] = disk_val
+                        need_rerun = True
+        except Exception:
+            pass
 
-            if need_rerun:
-                st.rerun()
-    except Exception:
-        pass
+    # 4. TÜM GÜNCELLEMELERİ TEK BİR RERUN İLE UYGULA (Flicker Engeller)
+    if need_rerun:
+        st.rerun()
 
 
 # Bekçiyi panelden hemen önce çalıştır
@@ -635,6 +629,9 @@ remote_signal_watcher(account_id, account_is_running)
 # ==========================================
 # AYARLAR VE MAC SİMÜLATÖRÜ
 # ==========================================
+bot_started_at = st.session_state.get(f"bot_started_at_{account_id}")
+is_connecting = bool(account_is_running and not live_data.get("mt5_connected", False) and bot_started_at and (time.time() - bot_started_at) < 90)
+
 updated_settings = render_settings_panel(
     current_settings,
     "Auto Grid",
@@ -642,6 +639,7 @@ updated_settings = render_settings_panel(
     live_data,
     active_account,
     account_is_running,
+    is_connecting=is_connecting,
 )
 
 if updated_settings:

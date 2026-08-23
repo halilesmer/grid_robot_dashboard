@@ -2,7 +2,7 @@
 import streamlit as st
 
 
-def render_controls(is_running: bool, is_connected: bool, account_id: str = "default"):
+def render_controls(is_running: bool, is_connected: bool, is_connecting: bool = False, account_id: str = "default"):
     """
     MT5 Bağlantısı ve Robot Başlatma/Bekletme Kontrol Paneli
     """
@@ -13,7 +13,10 @@ def render_controls(is_running: bool, is_connected: bool, account_id: str = "def
     )
 
     with col_icon:
-        if is_running:
+        if is_connecting:
+            status_text = "Bağlanıyor..."
+            icon = "⏳"
+        elif is_running:
             status_text = "Robot İşlemde"
             icon = "🟢"
         elif is_connected:
@@ -72,13 +75,20 @@ def render_controls(is_running: bool, is_connected: bool, account_id: str = "def
 
     # --- 1. Bağlan / Kes Butonu ---
     with col_btn_connect:
-        connect_label = "🛑 Bağlantıyı Kes" if is_connected else "🔌 MT5'e Bağlan"
-        connect_type = "primary" if is_connected else "secondary"
+        if is_connecting:
+            connect_label = "⏳ Bağlanıyor..."
+            connect_type = "secondary"
+            btn_disabled = True
+        else:
+            connect_label = "🛑 Bağlantıyı Kes" if is_connected else "🔌 MT5'e Bağlan"
+            connect_type = "primary" if is_connected else "secondary"
+            btn_disabled = False
 
         if st.button(
             connect_label,
             type=connect_type,
             width="stretch",
+            disabled=btn_disabled,
             key=f"btn_conn_{account_id}",
         ):
             st.session_state[f"motor_toggle_{account_id}"] = True

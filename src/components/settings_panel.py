@@ -31,9 +31,10 @@ def render_settings_panel(
     live_data=None,
     active_account=None,
     is_running=False,
+    is_connecting=False,
 ):
     return render_auto_grid_settings(
-        current_settings, account_id, live_data, active_account, is_running
+        current_settings, account_id, live_data, active_account, is_running, is_connecting
     )
 
 
@@ -104,7 +105,7 @@ def _force_upper_symbol(key: str):
 
 
 def render_auto_grid_settings(
-    current_settings, account_id, live_data, active_account, is_running=False
+    current_settings, account_id, live_data, active_account, is_running=False, is_connecting=False
 ):
     zones_session_key = f"auto_grid_zones_{account_id}"
     ui_state_key = f"ui_zone_states_{account_id}"
@@ -179,7 +180,10 @@ def render_auto_grid_settings(
         mt5_connected = live_data.get("mt5_connected", False) if live_data else False
 
         # 🌟 DURUM HESAPLAMA (Bağlantı ve Motor Durumu)
-        if not is_running:
+        if is_connecting:
+            motor_status = "connecting"
+            emoji = "⏳"
+        elif not is_running:
             motor_status = "stopped"
             emoji = "🔴"
         elif not mt5_connected:
@@ -194,8 +198,17 @@ def render_auto_grid_settings(
             unsafe_allow_html=True,
         )
 
-        # Sadece Tek Buton: Bağlan / Bağlandı
-        if not is_running or not mt5_connected:
+        # Sadece Tek Buton: Bağlan / Bağlandı / Hazırlanıyor
+        btn_disabled = False
+        if is_connecting:
+            btn_label = "⏳ Hazırlanıyor..."
+            btn_type = "secondary"
+            btn_disabled = True
+        elif is_running and not mt5_connected:
+            # 🛠️ DÜZELTME: Motor çalışıyorken bağlantı koptuysa, tıklayınca kapatacağı için "Bağlan" diyemez!
+            btn_label = "🛑 Süreci Durdur"
+            btn_type = "secondary"
+        elif not is_running:
             btn_label = "🚀 MT5'e Bağlan"
             btn_type = "primary"
         else:
@@ -206,6 +219,7 @@ def render_auto_grid_settings(
             btn_label,
             type=btn_type,
             width="stretch",
+            disabled=btn_disabled,
             key=f"motor_main_{account_id}",
         ):
             st.session_state[f"motor_toggle_{account_id}"] = True
@@ -320,6 +334,7 @@ def render_auto_grid_settings(
                         "🗑️ Bölgeyi Sil",
                         key=f"del_{zone_id}_{account_id}",
                         width="stretch",
+                        disabled=disable_action_buttons,
                     ):
 
                         def remove_zone(target_id=zone_id):
