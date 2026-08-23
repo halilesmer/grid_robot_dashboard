@@ -217,8 +217,11 @@ def get_live_metrics_from_file(account_id):
             data.setdefault("startup_error", None)
             data.setdefault("market_open", False)
             data["data_age"] = age
-            # Eski (bayat) bir başlangıç hatası afişi, 30 saniyeden eskiyse gösterilmez
-            if data.get("startup_error") and age > 30:
+
+            # 🛠️ DÜZELTME: Bağlantı kurulduysa veya eski hata afişi 30 sn'den eskiyse temizle
+            if data.get("mt5_connected", False) or (
+                data.get("startup_error") and age > 30
+            ):
                 data["startup_error"] = None
             return data
         except Exception:
@@ -371,7 +374,8 @@ render_global_metrics(
 # ==========================================
 # PİYASA ROZETİ VE CANLILIK GÖSTERGESİ (HEARTBEAT)
 # ==========================================
-if not account_is_running or live_data.get("data_age", 999.0) > 10:
+# 🛠️ DÜZELTME: Tolerans 10'dan 30 saniyeye çıkarıldı (MT5 API gecikmelerinde false-positive vermemesi için)
+if not account_is_running or live_data.get("data_age", 999.0) > 30:
     # 🌟 KRİTİK HATA ÇÖZÜMÜ: Robot durduysa veya senkronizasyon koptuysa,
     # eski JSON'daki bayat veriler alt panellerde "Açık" görünmesin diye kaynağında temizle!
     live_data["market_open"] = False
@@ -380,7 +384,7 @@ if not account_is_running or live_data.get("data_age", 999.0) > 10:
 if account_is_running:
     m_open = live_data.get("market_open", False)
     d_age = live_data.get("data_age", 999.0)
-    is_live = d_age < 10
+    is_live = d_age < 30
 
     dot_color = "🟢" if is_live else "🔴"
     sync_text = (
@@ -388,7 +392,7 @@ if account_is_running:
         if is_live
         else "Senkronizasyon koptu!"
     )
-    
+
     if m_open:
         st.markdown(f"&nbsp; 🟢 **Piyasa Açık** &nbsp;|&nbsp; {dot_color} *{sync_text}*")
     else:
@@ -572,7 +576,15 @@ def remote_signal_watcher(acc_id, is_running):
 
     # 🚨 AFİŞİ OTOMATİK KAPATMA: MT5 bağlantısı geldiği an sayfayı yenile
     live_info = get_live_metrics_from_file(acc_id)
-    if live_info.get("mt5_connected", False) and f"bot_started_at_{acc_id}" in st.session_state:
+    is_connected = live_info.get("mt5_connected", False)
+    is_data_fresh = live_info.get("data_age", 999.0) < 30
+
+    # 🛠️ DÜZELTME: Yalnızca bağlantı varsa ve veri "YENİ" ise (data_age < 30) afişi kapat
+    if (
+        is_connected
+        and is_data_fresh
+        and f"bot_started_at_{acc_id}" in st.session_state
+    ):
         del st.session_state[f"bot_started_at_{acc_id}"]
         st.rerun()
 

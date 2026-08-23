@@ -1,6 +1,5 @@
 # src/components/controls.py
 import streamlit as st
-from src.constants.tooltips import SETTINGS_TOOLTIPS
 
 
 def render_controls(is_running: bool, is_connected: bool, account_id: str = "default"):
@@ -87,7 +86,7 @@ def render_controls(is_running: bool, is_connected: bool, account_id: str = "def
 
     # --- 2. Başlat Butonu ---
     with col_btn_start:
-        # 🚨 HATA DÜZELTİLDİ: Sadece bağlantı yoksa inaktif olmalı. 
+        # 🚨 HATA DÜZELTİLDİ: Sadece bağlantı yoksa inaktif olmalı.
         # Robot arka planda PAUSE olarak uyanacağı için Başlat'a basılabilmeli.
         start_disabled = not is_connected
 
