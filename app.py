@@ -574,15 +574,26 @@ def remote_signal_watcher(acc_id, is_running):
     if not is_running:
         return
 
-    # 🚨 AFİŞİ OTOMATİK KAPATMA: MT5 bağlantısı geldiği an sayfayı yenile
     live_info = get_live_metrics_from_file(acc_id)
-    is_connected = live_info.get("mt5_connected", False)
     is_data_fresh = live_info.get("data_age", 999.0) < 30
+    
+    # Arayüzün (Main Thread) gördüğü "gerçek" bağlantı durumunu simüle et
+    real_ui_connected = live_info.get("mt5_connected", False) if is_data_fresh else False
 
-    # 🛠️ DÜZELTME: Yalnızca bağlantı varsa ve veri "YENİ" ise (data_age < 30) afişi kapat
+    # 1. BAĞLANTI DURUMU DEĞİŞİM DEDEKTÖRÜ (Kırmızı afişin asılı kalmasını önler)
+    last_conn_state_key = f"last_conn_state_{acc_id}"
+    last_conn_state = st.session_state.get(last_conn_state_key, None)
+
+    if last_conn_state is not None and last_conn_state != real_ui_connected:
+        # Bağlantı Koptu -> Geldi veya Geldi -> Koptu geçişi varsa tüm sayfayı zorla yenile!
+        st.session_state[last_conn_state_key] = real_ui_connected
+        st.rerun()
+    
+    st.session_state[last_conn_state_key] = real_ui_connected
+
+    # 2. İLK AÇILIŞ (HAZIRLANIYOR) AFİŞİNİ KAPATMA
     if (
-        is_connected
-        and is_data_fresh
+        real_ui_connected
         and f"bot_started_at_{acc_id}" in st.session_state
     ):
         del st.session_state[f"bot_started_at_{acc_id}"]
