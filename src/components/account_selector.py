@@ -93,14 +93,14 @@ def account_management_dialog(edit_acc=None):
             value=edit_acc.get("account_name", "") if is_edit else "",
             placeholder="Örn: Canlı Hesap - 1",
             key=f"name{k_suf}",
-        )
+        ).strip()
         new_login = st.text_input(
             "Hesap No (Login) *",
             value=old_login if is_edit else "",
             placeholder="Örn: 12345678",
             help="Girdiğiniz bu numara aynı zamanda sistemde Hesap ID'si olarak kullanılacaktır.",
             key=f"login{k_suf}",
-        )
+        ).strip()
         env_opts = ["DEMO", "LIVE"]
         def_env_idx = (
             env_opts.index(edit_acc.get("env_type", "DEMO"))
@@ -118,13 +118,13 @@ def account_management_dialog(edit_acc=None):
             type="password",
             placeholder="MT5 Şifresi",
             key=f"pwd{k_suf}",
-        )
+        ).strip()
         new_server = st.text_input(
             "Sunucu *",
             value=edit_acc.get("server", "") if is_edit else "",
             placeholder="Örn: Eightcap-Demo",
             key=f"srv{k_suf}",
-        )
+        ).strip()
 
         def_term_idx = 0
         if is_edit and old_mt5_path:
@@ -160,7 +160,7 @@ def account_management_dialog(edit_acc=None):
                 value=old_mt5_path if is_edit else "",
                 placeholder="C:/Program Files/MetaTrader 5/terminal64.exe",
                 key=f"term_path{k_suf}",
-            )
+            ).strip()
         else:
             parsed_path = selected_terminal.split(" - ")[-1].strip()
             new_mt5_path = parsed_path
@@ -174,7 +174,7 @@ def account_management_dialog(edit_acc=None):
                 disabled=True,
                 help="Listeden seçim yaptığınız için otomatik doldurulmuştur.",
                 key=f"term_auto{k_suf}",
-            )
+            ).strip()
 
     new_notes = st.text_area(
         "📝 Hesap Notu (İsteğe Bağlı)",
@@ -183,7 +183,7 @@ def account_management_dialog(edit_acc=None):
         placeholder="Bu hesapla ilgili özel notlar... (Maks. 1000 karakter)",
         height=100,
         key=f"notes{k_suf}",
-    )
+    ).strip()
 
     btn_col1, btn_col2 = st.columns(2)
     with btn_col1:
@@ -214,19 +214,19 @@ def account_management_dialog(edit_acc=None):
                         )
                     else:
                         try:
-                            login_val = int(new_login)
+                            login_val = int(new_login.strip())
                         except ValueError:
-                            login_val = new_login
+                            login_val = new_login.strip()
 
                         new_account_data = {
-                            "id": str(new_login),
-                            "account_name": new_acc_name,
-                            "env_type": new_env,
+                            "id": str(new_login).strip(),
+                            "account_name": new_acc_name.strip(),
+                            "env_type": new_env.strip(),
                             "login": login_val,
-                            "password": new_password,
-                            "server": new_server,
-                            "mt5_path": new_mt5_path.replace("\\", "/"),
-                            "notes": new_notes,
+                            "password": new_password.strip(),
+                            "server": new_server.strip(),
+                            "mt5_path": new_mt5_path.strip().replace("\\", "/"),
+                            "notes": new_notes.strip(),
                         }
 
                         if is_edit:
