@@ -116,7 +116,7 @@ def get_live_metrics():
 # GÜVENLİ YÜKLEME VE LOGLAMA FONKSİYONLARI
 # ==========================================
 def load_dynamic_settings():
-    global ZONES, LOOP_INTERVAL_SECONDS, SYMBOL
+    global ZONES, LOOP_INTERVAL_SECONDS, SYMBOL, SYMBOL_INFO
 
     try:
         settings_file = get_settings_file("Auto Grid")
@@ -127,8 +127,16 @@ def load_dynamic_settings():
 
             # Dinamik sembol vizyonu için global sembolü de güncelliyoruz
             if ZONES and "symbol" in ZONES[0]:
-                # 🌟 MT5 Case Sensitivity Koruması: Sembolü BÜYÜK HARFE zorla
-                SYMBOL = str(ZONES[0]["symbol"]).upper().strip()
+                new_symbol = str(ZONES[0]["symbol"]).upper().strip()
+                
+                # 🌟 KRİTİK HATA ÇÖZÜMÜ: Sembol değiştiğinde arka plandaki matematik kurallarını (digits, point, lot) da MT5'ten güncelleyerek hafızaya al!
+                if new_symbol != SYMBOL or SYMBOL_INFO is None:
+                    SYMBOL = new_symbol
+                    try:
+                        mt5.symbol_select(SYMBOL, True)
+                        SYMBOL_INFO = mt5.symbol_info(SYMBOL)
+                    except Exception:
+                        pass
     except Exception:
         pass
 
@@ -1006,7 +1014,7 @@ def manage_dynamic_grid():
     z_type = ACTIVE_ZONE.get("order_type", "BUY")
     z_min = float(ACTIVE_ZONE.get("min_price", 0))
     z_max = float(ACTIVE_ZONE.get("max_price", 0))
-    grid_step = max(0.01, float(ACTIVE_ZONE.get("grid_step", 0.05)))
+    grid_step = max(0.00001, float(ACTIVE_ZONE.get("grid_step", 0.05)))
     lot_val = max(0.01, min(5.0, float(ACTIVE_ZONE.get("lot_size", 0.01))))
     tp_val = float(ACTIVE_ZONE.get("take_profit", 0.05))
     sl_val = float(ACTIVE_ZONE.get("stop_loss", 0.0))
@@ -1021,7 +1029,7 @@ def manage_dynamic_grid():
         sell_sl_val = sl_val
         sell_pullback_distance = float(ACTIVE_ZONE.get("pullback_distance", 0.50))
     else:
-        sell_grid_step = max(0.01, float(ACTIVE_ZONE.get("sell_grid_step", grid_step)))
+        sell_grid_step = max(0.00001, float(ACTIVE_ZONE.get("sell_grid_step", grid_step)))
         sell_lot_val = max(
             0.01, min(5.0, float(ACTIVE_ZONE.get("sell_lot_size", lot_val)))
         )
