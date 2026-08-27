@@ -473,7 +473,7 @@ def get_active_zone(tick_price):
         cond = zone.get("exit_condition", "Anlık Fiyat")
 
         if cond == "Anlık Fiyat":
-            if round(z_min, 4) <= round(tick_price, 4) <= round(z_max, 4):
+            if round(z_min, 5) <= round(tick_price, 5) <= round(z_max, 5):
                 return zone, i
         else:
             # Bölgenin kuralı "Mum Kapanışı" ise, giriş için de mum kapanışını kontrol et
@@ -500,7 +500,7 @@ def get_active_zone(tick_price):
                 else:
                     close_price = tick_price
 
-            if round(z_min, 4) <= round(close_price, 4) <= round(z_max, 4):
+            if round(z_min, 5) <= round(close_price, 5) <= round(z_max, 5):
                 return zone, i
 
     return None, None
@@ -862,7 +862,7 @@ def manage_dynamic_grid():
             pos_tp = pos.tp if pos.tp else 0.0
             pos_sl = pos.sl if pos.sl else 0.0
 
-            if abs(float(pos_tp) - float(expected_tp)) > 0.0001 or abs(float(pos_sl) - float(expected_sl)) > 0.0001:
+            if abs(float(pos_tp) - float(expected_tp)) > 0.00001 or abs(float(pos_sl) - float(expected_sl)) > 0.00001:
                 log_message(f"🔄 Açık Pozisyon Güncellemesi: Bölge {pos_zone_idx+1} | Bilet {pos.ticket} için yeni TP/SL ayarlanıyor.")
                 modify_position_tp_sl(pos, expected_tp, expected_sl)
 
@@ -871,19 +871,19 @@ def manage_dynamic_grid():
             sell_grid_step_tmp = float(z_data.get("sell_grid_step", grid_step_tmp))
             tolerance_step = grid_step_tmp * 0.4 if direction == "BUY" else sell_grid_step_tmp * 0.4
 
-            is_processed = any(direction == p_dir and abs(round(pos.price_open, 4) - round(p_price, 4)) <= round(tolerance_step, 4) for p_dir, p_price in processed_prices)
+            is_processed = any(direction == p_dir and abs(round(pos.price_open, 5) - round(p_price, 5)) <= round(tolerance_step, 5) for p_dir, p_price in processed_prices)
 
             if not is_processed:
                 processed_prices.add((direction, pos.price_open))
 
-                total_pos_volume = sum(p.volume for p in robot_positions if p.magic == pos.magic and p.type == pos.type and abs(round(p.price_open, 4) - round(pos.price_open, 4)) <= round(tolerance_step, 4))
+                total_pos_volume = sum(p.volume for p in robot_positions if p.magic == pos.magic and p.type == pos.type and abs(round(p.price_open, 5) - round(pos.price_open, 5)) <= round(tolerance_step, 5))
                 remaining_lot = round(target_lot - total_pos_volume, 8)
                 vol_min = SYMBOL_INFO.volume_min if SYMBOL_INFO else 0.01
 
                 if remaining_lot >= vol_min:
                     has_pending = any(
                         o.magic == pos.magic
-                        and abs(round(o.price_open, 4) - round(pos.price_open, 4)) <= round(tolerance_step, 4)
+                        and abs(round(o.price_open, 5) - round(pos.price_open, 5)) <= round(tolerance_step, 5)
                         for o in robot_orders
                     )
 
@@ -901,9 +901,9 @@ def manage_dynamic_grid():
         z_max = float(ACTIVE_ZONE.get("max_price", 0))
 
         if exit_cond == "Anlık Fiyat":
-            if round(current_avg_price, 4) < round(z_min, 4) or round(
-                current_avg_price, 4
-            ) > round(z_max, 4):
+            if round(current_avg_price, 5) < round(z_min, 5) or round(
+                current_avg_price, 5
+            ) > round(z_max, 5):
                 is_exited = True
         else:
             tf_str = ACTIVE_ZONE.get("exit_timeframe", "M15")
@@ -929,8 +929,8 @@ def manage_dynamic_grid():
                 else:
                     close_price = current_avg_price
 
-            if round(close_price, 4) < round(z_min, 4) or round(close_price, 4) > round(
-                z_max, 4
+            if round(close_price, 5) < round(z_min, 5) or round(close_price, 5) > round(
+                z_max, 5
             ):
                 is_exited = True
 
@@ -1106,19 +1106,19 @@ def manage_dynamic_grid():
         if not is_breakout:
             for i in range(1, levels_below + 1):
                 p = buy_anchor_price - (i * grid_step)
-                if round(z_min, 4) <= round(p, 4) <= round(z_max, 4):
+                if round(z_min, 5) <= round(p, 5) <= round(z_max, 5):
                     desired_buy_levels.append(normalize_price(p))
 
         # Üstteki emirler (Stop)
         for i in range(1, levels_above + 1):
             p = buy_anchor_price + (i * grid_step)
             # Pullback Kontrolü: Güncel fiyat, p seviyesinden 'pullback_distance' kadar aşağıda mı?
-            if is_breakout and round(p - current_avg_price, 4) < round(
-                pullback_distance, 4
+            if is_breakout and round(p - current_avg_price, 5) < round(
+                pullback_distance, 5
             ):
                 continue  # Fiyat yeterince geri çekilmedi, bu seviyeyi şimdilik pas geç
 
-            if round(z_min, 4) <= round(p, 4) <= round(z_max, 4):
+            if round(z_min, 5) <= round(p, 5) <= round(z_max, 5):
                 desired_buy_levels.append(normalize_price(p))
 
         # Toleranslı Kabul Bölgesi (Silinmeyecek Emirler)
@@ -1135,19 +1135,19 @@ def manage_dynamic_grid():
         if not is_breakout:
             for i in range(1, levels_above + 1):
                 p = sell_anchor_price + (i * sell_grid_step)
-                if round(z_min, 4) <= round(p, 4) <= round(z_max, 4):
+                if round(z_min, 5) <= round(p, 5) <= round(z_max, 5):
                     desired_sell_levels.append(normalize_price(p))
 
         # Alttaki emirler (Stop)
         for i in range(1, levels_below + 1):
             p = sell_anchor_price - (i * sell_grid_step)
             # Pullback Kontrolü (SELL için): Güncel fiyat, p seviyesinden 'sell_pullback_distance' kadar yukarıda mı?
-            if is_breakout and round(current_avg_price - p, 4) < round(
-                sell_pullback_distance, 4
+            if is_breakout and round(current_avg_price - p, 5) < round(
+                sell_pullback_distance, 5
             ):
                 continue  # Fiyat yeterince yukarı sekti mi? Hayır, o zaman pas geç.
 
-            if round(z_min, 4) <= round(p, 4) <= round(z_max, 4):
+            if round(z_min, 5) <= round(p, 5) <= round(z_max, 5):
                 desired_sell_levels.append(normalize_price(p))
 
         # Toleranslı Kabul Bölgesi (Silinmeyecek Emirler)
@@ -1174,7 +1174,7 @@ def manage_dynamic_grid():
 
         if order.type in [mt5.ORDER_TYPE_BUY_LIMIT, mt5.ORDER_TYPE_BUY_STOP]:
             is_valid = any(
-                abs(round(order_price, 4) - round(al, 4)) <= round(buy_tolerance, 4)
+                abs(round(order_price, 5) - round(al, 5)) <= round(buy_tolerance, 5)
                 for al in acceptable_buy_levels
             )
             # 🌟 YENİ: Arayüzden güncellenen Lot, TP veya SL değerleri mevcut emirle uyuşmuyorsa emri sil
@@ -1185,7 +1185,7 @@ def manage_dynamic_grid():
                 order_sl = order.sl if order.sl else 0.0
 
                 # Kısmi Dolum Koruması: O fiyatta zaten bir pozisyon varsa beklenen lot fark kadar olmalı
-                pos_vol = sum(p.volume for p in robot_positions if p.magic == target_magic and p.type == mt5.POSITION_TYPE_BUY and abs(round(normalize_price(p.price_open), 4) - round(order_price, 4)) <= round(buy_tolerance, 4))
+                pos_vol = sum(p.volume for p in robot_positions if p.magic == target_magic and p.type == mt5.POSITION_TYPE_BUY and abs(round(normalize_price(p.price_open), 5) - round(order_price, 5)) <= round(buy_tolerance, 5))
                 if pos_vol > 0:
                     expected_lot = round(float(lot_val) - pos_vol, 8)
                     if expected_lot < (SYMBOL_INFO.volume_min if SYMBOL_INFO else 0.01):
@@ -1196,14 +1196,14 @@ def manage_dynamic_grid():
                 expected_lot_norm = normalize_volume(expected_lot) if expected_lot > 0 else 0.0
 
                 if expected_lot_norm == 0.0 or \
-                   abs(float(order.volume_initial) - expected_lot_norm) > 0.0001 or \
-                   abs(float(order_tp) - float(expected_tp)) > 0.0001 or \
-                   abs(float(order_sl) - float(expected_sl)) > 0.0001:
+                   abs(float(order.volume_initial) - expected_lot_norm) > 0.00001 or \
+                   abs(float(order_tp) - float(expected_tp)) > 0.00001 or \
+                   abs(float(order_sl) - float(expected_sl)) > 0.00001:
                     is_valid = False
 
         elif order.type in [mt5.ORDER_TYPE_SELL_LIMIT, mt5.ORDER_TYPE_SELL_STOP]:
             is_valid = any(
-                abs(round(order_price, 4) - round(al, 4)) <= round(sell_tolerance, 4)
+                abs(round(order_price, 5) - round(al, 5)) <= round(sell_tolerance, 5)
                 for al in acceptable_sell_levels
             )
             # 🌟 YENİ: Arayüzden güncellenen Lot, TP veya SL değerleri mevcut emirle uyuşmuyorsa emri sil
@@ -1214,7 +1214,7 @@ def manage_dynamic_grid():
                 order_sl = order.sl if order.sl else 0.0
 
                 # Kısmi Dolum Koruması: O fiyatta zaten bir pozisyon varsa beklenen lot fark kadar olmalı
-                pos_vol = sum(p.volume for p in robot_positions if p.magic == target_magic and p.type == mt5.POSITION_TYPE_SELL and abs(round(normalize_price(p.price_open), 4) - round(order_price, 4)) <= round(sell_tolerance, 4))
+                pos_vol = sum(p.volume for p in robot_positions if p.magic == target_magic and p.type == mt5.POSITION_TYPE_SELL and abs(round(normalize_price(p.price_open), 5) - round(order_price, 5)) <= round(sell_tolerance, 5))
                 if pos_vol > 0:
                     expected_lot = round(float(sell_lot_val) - pos_vol, 8)
                     if expected_lot < (SYMBOL_INFO.volume_min if SYMBOL_INFO else 0.01):
@@ -1225,9 +1225,9 @@ def manage_dynamic_grid():
                 expected_lot_norm = normalize_volume(expected_lot) if expected_lot > 0 else 0.0
 
                 if expected_lot_norm == 0.0 or \
-                   abs(float(order.volume_initial) - expected_lot_norm) > 0.0001 or \
-                   abs(float(order_tp) - float(expected_tp)) > 0.0001 or \
-                   abs(float(order_sl) - float(expected_sl)) > 0.0001:
+                   abs(float(order.volume_initial) - expected_lot_norm) > 0.00001 or \
+                   abs(float(order_tp) - float(expected_tp)) > 0.00001 or \
+                   abs(float(order_sl) - float(expected_sl)) > 0.00001:
                     is_valid = False
 
         if not is_valid:
@@ -1252,7 +1252,7 @@ def manage_dynamic_grid():
     # BUY Eksikleri
     for level_price in desired_buy_levels:
         is_occupied = any(
-            abs(round(level_price, 4) - round(el, 4)) <= round(buy_fill_tolerance, 4)
+            abs(round(level_price, 5) - round(el, 5)) <= round(buy_fill_tolerance, 5)
             for el in exist_buy_levels
         )
         if not is_occupied:
@@ -1271,7 +1271,7 @@ def manage_dynamic_grid():
     # SELL Eksikleri
     for level_price in desired_sell_levels:
         is_occupied = any(
-            abs(round(level_price, 4) - round(el, 4)) <= round(sell_fill_tolerance, 4)
+            abs(round(level_price, 5) - round(el, 5)) <= round(sell_fill_tolerance, 5)
             for el in exist_sell_levels
         )
         if not is_occupied:
