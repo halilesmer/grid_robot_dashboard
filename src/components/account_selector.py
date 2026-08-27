@@ -315,83 +315,59 @@ def render_account_selector():
 
     is_running = st.session_state.get("robot_running", False)
 
-    # 1. Buton Renk Stili ve Üst Boşluk Temizliği
+    # 1. Üst Boşluk Temizliği
     st.markdown(
-        "<style>"
-        ".block-container { padding-top: 2rem !important; } "
-        "button[kind='primary'] { background-color: #198754 !important; border-color: #198754 !important; color: white !important; } "
-        "button[kind='primary']:hover { background-color: #157347 !important; border-color: #146c43 !important; }"
-        "</style>",
+        "<style>.block-container { padding-top: 2rem !important; }</style>",
         unsafe_allow_html=True,
     )
 
-    # 2. Temiz ve Şık Buton Menüsü
-    MAX_BUTTONS = 4
-    num_accounts = len(accounts)
-    has_extra = 1 if num_accounts > MAX_BUTTONS else 0
+    # 2. Tekli Selectbox (Açılır Menü) ve Ayarlar Butonu (Güvenli Oranlar)
+    cols = st.columns([0.92, 0.08], vertical_alignment="center")
 
-    col_ratios = [1] * (min(num_accounts, MAX_BUTTONS) + has_extra) + [0.15]
-    cols = st.columns(col_ratios)
+    account_options = {}
+    active_index = 0
 
-    for i, acc in enumerate(accounts[:MAX_BUTTONS]):
-        acc_type = acc.get("env_type", acc.get("type", "DEMO"))
-        acc_name = acc.get("account_name", acc.get("name", "Bilinmeyen Hesap"))
-        acc_login = acc.get("login", acc.get("id", "Bilinmeyen ID"))
+    for i, acc in enumerate(accounts):
+        a_type = acc.get("env_type", acc.get("type", "DEMO"))
+        a_name = acc.get("account_name", acc.get("name", "Bilinmeyen Hesap"))
+        a_login = acc.get("login", acc.get("id", "Bilinmeyen ID"))
+        
+        label = f"{'🔴' if a_type=='LIVE' else '🧪'} {a_login} - {a_name}"
+        account_options[label] = acc
+        
+        if str(a_login) == str(active_login):
+            active_index = i
 
-        btn_icon = "🔴" if acc_type == "LIVE" else "🧪"
-        btn_label = f"{btn_icon} {acc_login} - {acc_name}"
-        is_active = str(acc.get("login", acc.get("id"))) == str(active_login)
+    # Aktif hesabın notunu Tooltip (Yardım) için hazırla
+    raw_note = str(active_account.get("note", active_account.get("notes", "")))
+    if raw_note and raw_note.strip() != "None":
+        if len(raw_note) > 500:
+            raw_note = raw_note[:497] + "..."
+        formatted_tooltip = raw_note.replace("\r\n", "\n").replace("\n", "  \n")
+    else:
+        formatted_tooltip = "📌 Bu hesap için henüz bir not eklenmemiş."
 
-        # 🌟 TOOLTIP HAZIRLIĞI (Null Koruması + Markdown Alt Satır + Uzunluk Sınırı)
-        raw_note = str(acc.get("note", acc.get("notes", "")))
-        if raw_note and raw_note.strip() != "None":
-            # Ekranı kaplamasını önlemek için ilk 500 karakteri al
-            if len(raw_note) > 500:
-                raw_note = raw_note[:497] + "..."
-
-            # Windows ve Unix satır sonlarını Markdown alt satırına (iki boşluk + \n) çevir
-            formatted_tooltip = raw_note.replace("\r\n", "\n").replace("\n", "  \n")
-        else:
-            formatted_tooltip = "📌 Bu hesap için henüz bir not eklenmemiş."
-
-        if cols[i].button(
-            btn_label,
-            key=f"btn_{i}_{acc_login}",
-            type="primary" if is_active else "secondary",
-            use_container_width=True,
-            help=formatted_tooltip,  # 👈 Tooltip entegrasyonu
-        ):
-            st.session_state.selected_account = acc
-            st.rerun()
-
-    # Eğer 4'ten fazla hesap varsa, geri kalanı açılır menüye koy
-    if num_accounts > MAX_BUTTONS:
-        extra_accounts = accounts[MAX_BUTTONS:]
-        extra_options = {}
-        for a in extra_accounts:
-            a_type = a.get("env_type", a.get("type", "DEMO"))
-            a_name = a.get("account_name", a.get("name", "Bilinmeyen Hesap"))
-            a_login = a.get("login", a.get("id", "Bilinmeyen ID"))
-
-            extra_options[
-                f"{'🔴' if a_type=='LIVE' else '🧪'} {a_login} - {a_name}"
-            ] = a
-
-        selected_extra_name = cols[MAX_BUTTONS].selectbox(
-            "Diğer:",
-            options=["Diğer Hesaplar..."] + list(extra_options.keys()),
+    with cols[0]:
+        # 🚨 DÜZELTME: Hesap listesi boşsa index None olmalı (Streamlit Warning Koruması)
+        safe_index = active_index if account_options else None
+        
+        selected_label = st.selectbox(
+            "Hesap Seçimi",
+            options=list(account_options.keys()),
+            index=safe_index,
             label_visibility="collapsed",
+            help=formatted_tooltip,
         )
 
-        if selected_extra_name != "Diğer Hesaplar...":
-            selected_acc = extra_options[selected_extra_name]
-            selected_acc_login = selected_acc.get("login", selected_acc.get("id"))
-            if str(selected_acc_login) != str(active_login):
+        # Seçim değiştiyse State'i güncelle ve Rerun at
+        if selected_label:
+            selected_acc = account_options[selected_label]
+            if str(selected_acc.get("login", selected_acc.get("id"))) != str(active_login):
                 st.session_state.selected_account = selected_acc
                 st.rerun()
 
     # --- EN SAĞDAKİ ÜÇ NOKTA (POPOVER) MENÜSÜ ---
-    with cols[-1].popover("⋮", width="stretch"):
+    with cols[1].popover("⋮", width="stretch"):
 
         # 🌟 YENİ: En Güncel Log Dosyasını Klasör Tarayarak Bulma (Gelişmiş)
         try:
