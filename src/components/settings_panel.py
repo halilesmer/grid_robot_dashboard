@@ -393,8 +393,8 @@ def render_auto_grid_settings(
                     key=f"min_{zone_id}_{account_id}",
                     min_value=0.0,
                     value=max(0.0, float(zone.get("min_price", 0.0))),
-                    step=0.1,
-                    format="%.2f",
+                    step=0.001,
+                    format="%.4f",
                     help="💵 Robotun çalışacağı EN DÜŞÜK fiyat.",
                 )
             with zc4:
@@ -403,8 +403,8 @@ def render_auto_grid_settings(
                     key=f"max_{zone_id}_{account_id}",
                     min_value=0.0,
                     value=max(0.0, float(zone.get("max_price", 0.0))),
-                    step=0.1,
-                    format="%.2f",
+                    step=0.001,
+                    format="%.4f",
                     help="💵 Robotun çalışacağı EN YÜKSEK fiyat.",
                 )
 
@@ -460,10 +460,10 @@ def render_auto_grid_settings(
                         else "BUY Grid ($)"
                     ),
                     key=f"grid_{zone_id}_{account_id}",
-                    min_value=0.01,
-                    value=max(0.01, float(zone.get("grid_step", 0.05))),
-                    step=0.01,
-                    format="%.2f",
+                    min_value=0.0001,
+                    value=max(0.0001, float(zone.get("grid_step", 0.05))),
+                    step=0.001,
+                    format="%.4f",
                     help="📏 Emirlerin kaç aralıkla dizileceği.",
                 )
 
@@ -524,10 +524,10 @@ def render_auto_grid_settings(
                         else "BUY Kâr Al ($)"
                     ),
                     key=f"tp_{zone_id}_{account_id}",
-                    min_value=0.01,
-                    value=max(0.01, float(zone.get("take_profit", 0.05))),
-                    step=0.01,
-                    format="%.2f",
+                    min_value=0.0001,
+                    value=max(0.0001, float(zone.get("take_profit", 0.05))),
+                    step=0.001,
+                    format="%.4f",
                     help="🎯 Pozisyon başına hedeflenen kâr.",
                 )
             with zc8:
@@ -540,8 +540,8 @@ def render_auto_grid_settings(
                     key=f"sl_{zone_id}_{account_id}",
                     min_value=0.0,
                     value=max(0.0, float(zone.get("stop_loss", 0.0))),
-                    step=0.01,
-                    format="%.2f",
+                    step=0.001,
+                    format="%.4f",
                     help="🛡️ Zarar kes mesafesi (0 ise kapalıdır).",
                 )
 
@@ -562,15 +562,15 @@ def render_auto_grid_settings(
                     z_sell_grid = st.number_input(
                         "SELL Grid ($)",
                         key=f"s_grid_{zone_id}_{account_id}",
-                        min_value=0.01,
+                        min_value=0.0001,
                         value=max(
-                            0.01,
+                            0.0001,
                             float(
                                 zone.get("sell_grid_step", zone.get("grid_step", 0.05))
                             ),
                         ),
-                        step=0.01,
-                        format="%.2f",
+                        step=0.001,
+                        format="%.4f",
                     )
                 with zs2:
                     z_sell_lot = st.number_input(
@@ -597,17 +597,17 @@ def render_auto_grid_settings(
                     z_sell_tp = st.number_input(
                         "SELL Kâr Al ($)",
                         key=f"s_tp_{zone_id}_{account_id}",
-                        min_value=0.01,
+                        min_value=0.0001,
                         value=max(
-                            0.01,
+                            0.0001,
                             float(
                                 zone.get(
                                     "sell_take_profit", zone.get("take_profit", 0.05)
                                 )
                             ),
                         ),
-                        step=0.01,
-                        format="%.2f",
+                        step=0.001,
+                        format="%.4f",
                     )
                 with zs4:
                     z_sell_sl = st.number_input(
@@ -620,8 +620,8 @@ def render_auto_grid_settings(
                                 zone.get("sell_stop_loss", zone.get("stop_loss", 0.0))
                             ),
                         ),
-                        step=0.01,
-                        format="%.2f",
+                        step=0.001,
+                        format="%.4f",
                     )
 
             # 🌟 YENİ: Kırılım Ayarları ve Emir Seviyeleri Tek Bir Çerçeveli Kutuya Alındı
@@ -651,10 +651,10 @@ def render_auto_grid_settings(
                             else "BUY Geri Çekilme ($)"
                         ),
                         key=f"pb_{zone_id}_{account_id}",
-                        min_value=0.01,
+                        min_value=0.0,
                         value=float(zone.get("pullback_distance", 0.50)),
-                        step=0.05,
-                        format="%.2f",
+                        step=0.001,
+                        format="%.4f",
                         disabled=not z_breakout,
                     )
 
@@ -664,15 +664,15 @@ def render_auto_grid_settings(
                         z_sell_pullback = st.number_input(
                             "SELL Geri Çekilme ($)",
                             key=f"s_pb_{zone_id}_{account_id}",
-                            min_value=0.01,
+                            min_value=0.0,
                             value=float(
                                 zone.get(
                                     "sell_pullback_distance",
                                     zone.get("pullback_distance", 0.50),
                                 )
                             ),
-                            step=0.05,
-                            format="%.2f",
+                            step=0.001,
+                            format="%.4f",
                             disabled=not z_breakout,
                         )
 
